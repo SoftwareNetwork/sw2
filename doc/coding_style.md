@@ -17,7 +17,7 @@ type var{args...};
 ```
 * write pointers and references right to variable, not type
 ```
-void *var;//ok
-int &v;   // ok
-int& x;   // wrong
+void *var; //ok
+int &v; // ok
+int& x; // wrong
 ```
