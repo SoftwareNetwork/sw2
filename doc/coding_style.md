@@ -15,3 +15,8 @@ something {
 ```
 type var{args...};
 ```
+* write pointers and references right to variable, not type
+```
+void *var;
+int &v;
+```
