@@ -3,8 +3,8 @@
 * use the latest C++ (C++23/26 currently)
 * snake_case
 * `struct` instead of `class`
-* typename instead of class in templates
-* almost always auto &&
+* `typename` instead of `class` in templates
+* almost always `auto &&`
 * braces
 ```
 something {
