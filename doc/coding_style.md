@@ -11,3 +11,7 @@ something {
 }
 ```
 * write code in headers as must as possible
+* use {} style initialization where possible
+```
+type var{args...};
+```
