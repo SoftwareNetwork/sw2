@@ -10,7 +10,7 @@
 something {
 }
 ```
-* write code in headers as must as possible
+* write code in headers as much as possible
 * use {} style initialization where possible
 ```
 type var{args...};
