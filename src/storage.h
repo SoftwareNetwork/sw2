@@ -115,7 +115,7 @@ struct physical_file_storage_single_file {
 	}
 	auto add(const path& fn) {
 		auto s = read_file(fn);
-        record r{get_hash(fn), ftell(f), s.size()};
+        record r{get_hash(fn), (uint64_t)ftell(f), s.size()};
 		fwrite(s.data(), s.size(), 1, f);
         fflush(f);
 		fwrite(&r, sizeof(r), 1, fi);
