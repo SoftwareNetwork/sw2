@@ -34,7 +34,7 @@ std::string replace(const std::string &str, const std::string &oldstr, const std
 }
 
 struct file_regex {
-    std::string_view str;
+    std::string str;
     bool recursive;
 
     void op(auto &&rootdir, auto &&f) {
@@ -107,6 +107,18 @@ struct file_regex {
         } while (1);
     }
 };
+auto operator""_dir(const char *s, size_t len) {
+    return file_regex(std::string{s,len} + "/.*",false);
+}
+auto operator""_rdir(const char *s, size_t len) {
+    return file_regex(std::string{s,len} + "/.*", true);
+}
+auto operator""_r(const char *s, size_t len) {
+    return file_regex(std::string{s,len},false);
+}
+auto operator""_rr(const char *s, size_t len) {
+    return file_regex(std::string{s,len}, true);
+}
 
 template <typename F>
 struct appender {
@@ -121,23 +133,25 @@ struct files_target {
     // unordered?
     using files_t = std::set<path>;
     path source_dir;
-    files_t files;
+    files_t files_;
 
+    void files(auto &&f) {
+        for (auto &&p : files_) {
+            f(source_dir / p);
+        }
+    }
     void op(file_regex &r, auto &&f) {
         r.op(source_dir, [&](auto &&iter) {
             for (auto &&e : iter) {
                 if (fs::is_regular_file(e)) {
-                    f(files, e);
+                    f(files_, e);
                 }
             }
         });
     }
     void op(const path &p, auto &&f) {
-        f(files, p);
+        f(files_, p);
     }
-    /*void op(const char *s, auto &&f) {
-        op(path{s}, f);
-    }*/
     auto operator+=(auto &&iter) {
         op(iter, [](auto &&arr, auto &&f){arr.insert(f);});
         return appender{[&](auto &&v){operator+=(v);}};
@@ -147,18 +161,6 @@ struct files_target {
         return appender{[&](auto &&v){operator-=(v);}};
     }
 };
-auto operator""_dir(const char *dir, size_t) {
-    return fs::directory_iterator{dir};
-}
-auto operator""_rdir(const char *dir, size_t) {
-    return fs::recursive_directory_iterator{dir};
-}
-auto operator""_r(const char *s, size_t len) {
-    return file_regex(std::string_view{s,len},false);
-}
-auto operator""_rr(const char *s, size_t len) {
-    return file_regex(std::string_view{s,len}, true);
-}
 
 struct cl_binary {
     // rule
@@ -180,6 +182,7 @@ auto build_some_package(solution &s) {
     files_target tgt;
     tgt.source_dir = s.root;
     tgt +=
+        "src"_rdir,
         "src/main.cpp",
         "src/.*\\.cpp"_r,
         "src/.*\\.h"_rr
@@ -203,9 +206,7 @@ int main() {
     auto tgt = build_some_package(s);
     auto tgt2 = build_some_package2(s);
 	file_storage<physical_file_storage_single_file<basic_contents_hash>> fst{ {"single_file2.bin"} };
-    for (auto &&f : tgt.files) {
-		fst.add(f);
-    }
+    tgt.files([&](auto &&f){fst.add(f);});
 	for (auto&& handle : fst.physical_storage()) {
 		handle.copy("myfile.txt");
 	}
