@@ -200,6 +200,9 @@ struct file_storage {
     const auto &physical_storage() const {
         return ps;
     }
+    //operator const auto &() const { return physical_storage(); }
+    auto begin() const { return physical_storage().begin(); }
+    auto end() const { return physical_storage().end(); }
 
     bool contains(auto &&hash) {
         return ps.contains(hash);
@@ -213,5 +216,15 @@ struct file_storage {
     }
     void remove(auto &&hash) {
         ps.remove(hash);
+    }
+
+    void add_r(auto &&range) {
+        for (auto &&f : range) {
+            add(f);
+        }
+    }
+    auto &operator+=(auto &&f) {
+        add_r(f);
+        return *this;
     }
 };

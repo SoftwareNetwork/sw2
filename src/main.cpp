@@ -129,17 +129,23 @@ struct appender {
     }
 };
 
+template <typename T>
+struct iter_with_range {
+    T range;
+    std::ranges::iterator_t<T> i;
+
+    iter_with_range(T &&r) : range{r}, i{range.begin()} {}
+    auto operator*() const { return *i; }
+    void operator++() { ++i; }
+    bool operator==(auto &&) const { return i == std::end(range); }
+};
+
 struct files_target {
     // unordered?
     using files_t = std::set<path>;
     path source_dir;
     files_t files;
 
-    void for_each_file(auto &&f) {
-        for (auto &&p : files) {
-            f(source_dir / p);
-        }
-    }
     void op(file_regex &r, auto &&f) {
         r(source_dir, [&](auto &&iter) {
             for (auto &&e : iter) {
@@ -153,13 +159,16 @@ struct files_target {
         f(files, p);
     }
     auto operator+=(auto &&iter) {
-        op(iter, [](auto &&arr, auto &&f){arr.insert(f);});
+        op(iter, [&](auto &&arr, auto &&f){arr.insert(source_dir / f);});
         return appender{[&](auto &&v){operator+=(v);}};
     }
     auto operator-=(auto &&iter) {
-        op(iter, [](auto &&arr, auto &&f){arr.erase(f);});
+        op(iter, [&](auto &&arr, auto &&f){arr.erase(source_dir / f);});
         return appender{[&](auto &&v){operator-=(v);}};
     }
+    auto range() const { return files | std::views::transform([&](auto &&p){ return source_dir / p; }); }
+    auto begin() const { return iter_with_range{range()}; }
+    auto end() const { return files.end(); }
 };
 
 struct cl_binary {
@@ -206,8 +215,8 @@ int main() {
     auto tgt = build_some_package(s);
     auto tgt2 = build_some_package2(s);
 	file_storage<physical_file_storage_single_file<basic_contents_hash>> fst{ {"single_file2.bin"} };
-    tgt.for_each_file([&](auto &&f){fst.add(f);});
-	for (auto&& handle : fst.physical_storage()) {
+    fst += tgt;
+	for (auto &&handle : fst) {
 		handle.copy("myfile.txt");
 	}
 }
