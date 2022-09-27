@@ -1,18 +1,8 @@
 #pragma once
 
-#include <algorithm>
-#include <cassert>
-#include <filesystem>
-#include <fstream>
-#include <iostream>
-#include <limits>
-#include <ranges>
+#include "helpers.h"
 
-using namespace std;
-namespace fs = std::filesystem;
-using path = fs::path;
-
-string read_file(const path &fn) {
+auto read_file(const path &fn) {
     auto sz = fs::file_size(fn);
     string s(sz, 0);
     FILE *f = fopen(fn.string().c_str(), "rb");

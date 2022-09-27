@@ -1,11 +1,12 @@
+#include "command.h"
 #include "storage.h"
 
+#include <map>
 #include <regex>
 #include <set>
 
 void add_file_to_storage(auto &&s, auto &&f) {
 }
-
 void add_transform_to_storage(auto &&s, auto &&f) {
     add_file_to_storage(s,f);
 }
@@ -120,29 +121,8 @@ auto operator""_rr(const char *s, size_t len) {
     return file_regex(std::string{s,len}, true);
 }
 
-template <typename F>
-struct appender {
-    F f;
-    auto operator,(auto &&v) {
-        f(v);
-        return std::move(*this);
-    }
-};
-
-template <typename T>
-struct iter_with_range {
-    T range;
-    std::ranges::iterator_t<T> i;
-
-    iter_with_range(T &&r) : range{r}, i{range.begin()} {}
-    auto operator*() const { return *i; }
-    void operator++() { ++i; }
-    bool operator==(auto &&) const { return i == std::end(range); }
-};
-
 struct files_target {
-    // unordered?
-    using files_t = std::set<path>;
+    using files_t = std::set<path>; // unordered?
     path source_dir;
     files_t files;
 
@@ -171,15 +151,37 @@ struct files_target {
     auto end() const { return files.end(); }
 };
 
-struct cl_binary {
-    // rule
-    // command
+struct sources_rule {
+    void operator()(auto &&tgt) const {
+        for (auto &&f : tgt) {
+        }
+    }
 };
-struct mingw_binary {
+struct cl_exe {
+    void operator()(auto &&tgt) const {
+    }
+};
+struct link_exe {
+    void operator()(auto &&tgt) const {
+    }
 };
 
+using rule_types = types<sources_rule, cl_exe, link_exe>;
+using rule = decltype(make_variant(rule_types{}))::type;
+
 struct rule_target : files_target {
+    std::vector<rule> rules;
+    std::map<path, std::set<rule*>> processed_files;
     // commands?
+
+    void add_rule(const rule &r) {
+        std::visit([&](auto &&v){v(*this);}, r);
+    }
+    using files_target::operator+=;
+    auto operator+=(const rule &r) {
+        add_rule(r);
+        return appender{[&](auto &&v){operator+=(v);}};
+    }
 };
 
 struct solution {
@@ -201,12 +203,15 @@ auto build_some_package(solution &s) {
 
 auto build_some_package2(solution &s) {
     rule_target tgt;
-    /*tgt.root = s.root;
+    tgt.source_dir = s.root;
     tgt +=
+        "src"_rdir,
+        "src/main.cpp",
         "src/.*\\.cpp"_r,
         "src/.*\\.h"_rr
-        ;*/
-    //tgt += cl_binary{};
+        ;
+    tgt += sources_rule{};
+    tgt += cl_exe{};
     return tgt;
 }
 
