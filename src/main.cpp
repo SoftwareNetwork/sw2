@@ -151,18 +151,39 @@ struct files_target {
     auto end() const { return files.end(); }
 };
 
+template <typename T>
+auto get_rule_tag(T &&) {
+    static void *p;
+    return (const void *)&p;
+}
 struct sources_rule {
-    void operator()(auto &&tgt) const {
+    void operator()(auto &tgt) const {
         for (auto &&f : tgt) {
+            if (f.extension() == ".cpp") {
+                tgt.processed_files[f].insert(get_rule_tag(this));
+            }
         }
     }
 };
 struct cl_exe {
-    void operator()(auto &&tgt) const {
+    void operator()(auto &tgt) const {
+        for (auto &&[f,rules] : tgt.processed_files) {
+            if (!rules.contains(get_rule_tag(this))) {
+                command c;
+                c += R"(c:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.33.31629\bin\Hostx64\x64\cl.exe)",
+                    "-nologo",
+                    "-c",
+                    "-std:c++latest",
+                    "-EHsc",
+                    f;
+                tgt.commands.push_back(c);
+                rules.insert(get_rule_tag(this));
+            }
+        }
     }
 };
 struct link_exe {
-    void operator()(auto &&tgt) const {
+    void operator()(auto &tgt) const {
     }
 };
 
@@ -171,16 +192,26 @@ using rule = decltype(make_variant(rule_types{}))::type;
 
 struct rule_target : files_target {
     std::vector<rule> rules;
-    std::map<path, std::set<rule*>> processed_files;
-    // commands?
+    std::map<path, std::set<const void*>> processed_files;
+    std::vector<command> commands;
 
+    /*void add_rule(auto &&r) {
+        r(*this);
+    }*/
     void add_rule(const rule &r) {
         std::visit([&](auto &&v){v(*this);}, r);
     }
     using files_target::operator+=;
-    auto operator+=(const rule &r) {
+    template <typename T>
+    auto operator+=(T &&r) requires requires {requires rule_types::contains<T>();} {
         add_rule(r);
         return appender{[&](auto &&v){operator+=(v);}};
+    }
+
+    void operator()() {
+        for (auto &&c : commands) {
+            c.run();
+        }
     }
 };
 
@@ -212,6 +243,7 @@ auto build_some_package2(solution &s) {
         ;
     tgt += sources_rule{};
     tgt += cl_exe{};
+    tgt();
     return tgt;
 }
 
