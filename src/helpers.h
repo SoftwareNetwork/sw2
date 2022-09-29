@@ -1,0 +1,66 @@
+#pragma once
+
+#include <algorithm>
+#include <cassert>
+#include <filesystem>
+#include <fstream>
+#include <iostream>
+#include <limits>
+#include <ranges>
+#include <variant>
+
+namespace fs = std::filesystem;
+using path = fs::path;
+using std::string;
+using std::string_view;
+
+template <typename F>
+struct appender {
+    F f;
+    auto operator,(auto &&v) {
+        f(v);
+        return std::move(*this);
+    }
+};
+
+template <typename T>
+struct iter_with_range {
+    T range;
+    std::ranges::iterator_t<T> i;
+
+    iter_with_range(T &&r) : range{r}, i{range.begin()} {
+    }
+    auto operator*() const {
+        return *i;
+    }
+    void operator++() {
+        ++i;
+    }
+    bool operator==(auto &&) const {
+        return i == std::end(range);
+    }
+};
+
+template <typename T> struct type_ { using type = T; };
+template <typename ... Args> struct types {
+    template <typename T>
+    static constexpr bool contains() {
+        return (false || ... || std::same_as<Args, T>);
+    }
+};
+template <typename ... Args>
+constexpr auto make_variant(types<Args...>) {return type_<std::variant<Args...>>{};}
+
+#ifndef FWD
+#define FWD(x) std::forward<decltype(x)>(x)
+#endif
+
+template <typename... Ts>
+struct overload : Ts... {
+    overload(Ts... ts) : Ts(FWD(ts))... {    }
+    using Ts::operator()...;
+};
+
+decltype(auto) visit(auto &&var, auto && ... f) {
+    return std::visit(overload{f...}, var);
+}

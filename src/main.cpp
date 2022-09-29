@@ -151,16 +151,29 @@ struct files_target {
     auto end() const { return files.end(); }
 };
 
-template <typename T>
-auto get_rule_tag(T &&) {
-    static void *p;
-    return (const void *)&p;
-}
+struct rule_flag {
+    std::set<void *> rules;
+
+    template <typename T>
+    auto get_rule_tag() {
+        static void *p;
+        return (void *)&p;
+    }
+    template <typename T>
+    bool contains(T &&) {
+        return rules.contains(get_rule_tag<std::remove_cvref_t<std::remove_pointer_t<T>>>());
+    }
+    template <typename T>
+    auto insert(T &&) {
+        return rules.insert(get_rule_tag<std::remove_cvref_t<std::remove_pointer_t<T>>>());
+    }
+};
+
 struct sources_rule {
     void operator()(auto &tgt) const {
         for (auto &&f : tgt) {
             if (f.extension() == ".cpp") {
-                tgt.processed_files[f].insert(get_rule_tag(this));
+                tgt.processed_files[f].insert(this);
             }
         }
     }
@@ -168,16 +181,27 @@ struct sources_rule {
 struct cl_exe {
     void operator()(auto &tgt) const {
         for (auto &&[f,rules] : tgt.processed_files) {
-            if (!rules.contains(get_rule_tag(this))) {
-                command c;
-                c += R"(c:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.33.31629\bin\Hostx64\x64\cl.exe)",
+            if (!rules.contains(this)) {
+                auto out = f.filename() += ".obj";
+                command2 c;
+                c +=
+                    R"(c:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.33.31629\bin\Hostx64\x64\cl.exe)",
                     "-nologo",
                     "-c",
                     "-std:c++latest",
                     "-EHsc",
-                    f;
+                    f,
+                    "-Fo" + out.string()
+                    ;
+                for (auto &&d : tgt.compile_options.definitions) {
+                    c += (string)d;
+                }
+                for (auto &&i : tgt.compile_options.include_directories) {
+                }
+                c.inputs.insert(f);
+                c.outputs.insert(out);
                 tgt.commands.push_back(c);
-                rules.insert(get_rule_tag(this));
+                rules.insert(this);
             }
         }
     }
@@ -190,10 +214,31 @@ struct link_exe {
 using rule_types = types<sources_rule, cl_exe, link_exe>;
 using rule = decltype(make_variant(rule_types{}))::type;
 
+struct definition {
+    string key;
+    std::variant<string, bool> value; // value/undef
+
+    operator string() const {
+        return visit(value, overload{
+            [&](const string &v){ return "-D" + key + "=" + v; },
+            [&](bool){ return "-U" + key; }
+        });
+    }
+};
+struct compile_options_t {
+    std::vector<path> include_directories;
+    std::vector<definition> definitions;
+};
+struct link_options_t {
+};
+
 struct rule_target : files_target {
     std::vector<rule> rules;
-    std::map<path, std::set<const void*>> processed_files;
-    std::vector<command> commands;
+    std::map<path, rule_flag> processed_files;
+    std::vector<command2> commands;
+
+    compile_options_t compile_options;
+    link_options_t link_options;
 
     /*void add_rule(auto &&r) {
         r(*this);

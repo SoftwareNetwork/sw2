@@ -1,2 +1,5 @@
 .sw
 *.lnk
+*.o
+*.obj
+*.exe
