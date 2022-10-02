@@ -9,11 +9,10 @@
 #define NOMINMAX // Undefine min and max defined by windows.h
 #endif
 
+#include "vs_instance_helpers.h"
+
 // Published by Visual Studio Setup team
 #include "Setup.Configuration.h"
-
-#include <string>
-#include <vector>
 
 #include <windows.h>
 
@@ -104,23 +103,6 @@ public:
   ~SmartBSTR() throw() { ::SysFreeString(str); }
 private:
   BSTR str;
-};
-
-struct VSInstanceInfo
-{
-  std::wstring InstanceId;
-  std::wstring VSInstallLocation;
-  std::wstring Version;
-  ULONGLONG ullVersion;
-  bool IsWin10SDKInstalled;
-  bool IsWin81SDKInstalled;
-
-  VSInstanceInfo()
-  {
-    InstanceId = VSInstallLocation = Version = L"";
-    ullVersion = 0;
-    IsWin10SDKInstalled = IsWin81SDKInstalled = false;
-  }
 };
 
 struct cmVSSetupAPIHelper

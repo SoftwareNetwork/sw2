@@ -56,7 +56,12 @@ BOOL CreateProcessW(
 
         std::wstring s;
         for (auto &&a : arguments) {
-            s += path{a}.wstring() + L" ";
+            auto as = path{a}.wstring();
+            if (as.contains(L" ")) {
+                s += L"\"" + as + L"\" ";
+            } else {
+                s += as + L" ";
+            }
         }
         auto r = CreateProcessW(
             0,

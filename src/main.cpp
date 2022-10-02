@@ -1,5 +1,7 @@
 #include "command.h"
 #include "storage.h"
+#include "vs_instance_helpers.h"
+#include "package.h"
 
 #include <map>
 #include <regex>
@@ -169,6 +171,49 @@ struct rule_flag {
     }
 };
 
+struct definition {
+    string key;
+    std::variant<string, bool> value; // value/undef
+
+    operator string() const {
+        return visit(value, overload{
+            [&](const string &v){ return "-D" + key + "=" + v; },
+            [&](bool){ return "-U" + key; }
+        });
+    }
+};
+struct compile_options_t {
+    std::vector<definition> definitions;
+    std::vector<path> include_directories;
+};
+struct link_options_t {};
+
+// binary_target_package?
+struct cl_binary_target : compile_options_t, link_options_t {
+    sw::package_id package;
+    path exe;
+};
+
+auto detect_cl_compilers() {
+    static auto instances = enumerate_vs_instances();
+    std::vector<cl_binary_target> cls;
+    for (auto &&i : instances) {
+        path root = i.VSInstallLocation;
+        auto msvc = root / "VC" / "Tools" / "MSVC";
+        auto i = fs::directory_iterator{msvc};
+        if (i == fs::directory_iterator{}) {
+            continue;
+        }
+        auto &t = cls.emplace_back();
+        t.package = sw::package_id{"com.Microsoft.VisualStudio.VC.cl"s,i->path().string()};
+        t.exe = msvc / i->path() / "bin" / "Hostx64" / "x64" / "cl.exe";
+        //i.VSInstallLocation.contains(L"Preview");
+
+        t.include_directories.push_back(msvc / i->path() / "include");
+    }
+    return cls;
+}
+
 struct sources_rule {
     void operator()(auto &tgt) const {
         for (auto &&f : tgt) {
@@ -178,14 +223,26 @@ struct sources_rule {
         }
     }
 };
-struct cl_exe {
+struct cl_exe : compile_options_t {
+    cl_binary_target compiler;
+
+    cl_exe() {
+        auto instances = detect_cl_compilers();
+        if (instances.empty()) {
+            throw std::runtime_error("empty compilers");
+        }
+        compiler = *instances.begin();
+    }
+    void init(const path &p) {
+    }
+
     void operator()(auto &tgt) const {
         for (auto &&[f,rules] : tgt.processed_files) {
             if (!rules.contains(this)) {
                 auto out = f.filename() += ".obj";
                 command2 c;
                 c +=
-                    R"(c:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.33.31629\bin\Hostx64\x64\cl.exe)",
+                    compiler.exe,
                     "-nologo",
                     "-c",
                     "-std:c++latest",
@@ -197,6 +254,13 @@ struct cl_exe {
                     c += (string)d;
                 }
                 for (auto &&i : tgt.compile_options.include_directories) {
+                    c += "-I" + i.string();
+                }
+                for (auto &&d : compiler.definitions) {
+                    c += (string)d;
+                }
+                for (auto &&i : compiler.include_directories) {
+                    c += "-I" + i.string();
                 }
                 c.inputs.insert(f);
                 c.outputs.insert(out);
@@ -213,24 +277,6 @@ struct link_exe {
 
 using rule_types = types<sources_rule, cl_exe, link_exe>;
 using rule = decltype(make_variant(rule_types{}))::type;
-
-struct definition {
-    string key;
-    std::variant<string, bool> value; // value/undef
-
-    operator string() const {
-        return visit(value, overload{
-            [&](const string &v){ return "-D" + key + "=" + v; },
-            [&](bool){ return "-U" + key; }
-        });
-    }
-};
-struct compile_options_t {
-    std::vector<path> include_directories;
-    std::vector<definition> definitions;
-};
-struct link_options_t {
-};
 
 struct rule_target : files_target {
     std::vector<rule> rules;
@@ -292,7 +338,7 @@ auto build_some_package2(solution &s) {
     return tgt;
 }
 
-int main() {
+int main1() {
     solution s{"d:/dev/cppan2/client4"};
     auto tgt = build_some_package(s);
     auto tgt2 = build_some_package2(s);
@@ -301,4 +347,14 @@ int main() {
 	for (auto &&handle : fst) {
 		handle.copy("myfile.txt");
 	}
+    return 0;
+}
+
+int main() {
+    try { return main1();
+    } catch (std::exception &e) {
+        std::cerr << e.what();
+    } catch (...) {
+        std::cerr << "unknown exception";
+    }
 }
