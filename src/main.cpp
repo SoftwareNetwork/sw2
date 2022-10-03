@@ -183,12 +183,11 @@ struct sources_rule {
 };
 struct cl_exe : compile_options_t {
     msvc_instance msvc;
+    win_sdk_info sdk;
 
     cl_exe() {
         msvc = detect_msvc().at(0);
-        detect_winsdk();
-    }
-    void init(const path &p) {
+        sdk = detect_winsdk();
     }
 
     void operator()(auto &tgt) const {
@@ -216,6 +215,8 @@ struct cl_exe : compile_options_t {
                 };
                 add(tgt.compile_options);
                 add(msvc.stdlib_target());
+                add(sdk.ucrt);
+                add(sdk.um);
                 c.inputs.insert(f);
                 c.outputs.insert(out);
                 tgt.commands.push_back(c);
@@ -225,7 +226,40 @@ struct cl_exe : compile_options_t {
     }
 };
 struct link_exe {
+    msvc_instance msvc;
+    win_sdk_info sdk;
+
+    link_exe() {
+        msvc = detect_msvc().at(0);
+        sdk = detect_winsdk();
+    }
+
     void operator()(auto &tgt) const {
+        path out = "out.exe";
+        auto linker = msvc.link_target();
+        io_command c;
+        c += linker.exe, "-nologo", "-OUT:" + out.string();
+        for (auto &&[f, rules] : tgt.processed_files) {
+            if (f.extension() == ".obj") {
+                c += f;
+                c.inputs.insert(f);
+                rules.insert(this);
+            }
+        }
+        auto add = [&](auto &&tgt) {
+            for (auto &&i : tgt.link_directories) {
+                c += "-LIBPATH:" + i.string();
+            }
+            for (auto &&d : tgt.link_libraries) {
+                c += d.string();
+            }
+        };
+        add(tgt.link_options);
+        add(msvc.stdlib_target());
+        add(sdk.ucrt);
+        add(sdk.um);
+        c.outputs.insert(out);
+        tgt.commands.push_back(c);
     }
 };
 
@@ -235,7 +269,7 @@ using rule = decltype(make_variant(rule_types{}))::type;
 struct rule_target : files_target {
     std::vector<rule> rules;
     std::map<path, rule_flag> processed_files;
-    std::vector<command2> commands;
+    std::vector<command> commands;
 
     compile_options_t compile_options;
     link_options_t link_options;
@@ -245,6 +279,13 @@ struct rule_target : files_target {
     }*/
     void add_rule(const rule &r) {
         std::visit([&](auto &&v){v(*this);}, r);
+        for (auto &&c : commands) {
+            visit(c, [&](auto &&c) {
+                for (auto &&o : c.outputs) {
+                    processed_files[o];
+                }
+            });
+        }
     }
     using files_target::operator+=;
     template <typename T>
@@ -255,7 +296,9 @@ struct rule_target : files_target {
 
     void operator()() {
         for (auto &&c : commands) {
-            c.run();
+            visit(c, [&](auto &&c) {
+                c.run();
+            });
         }
     }
 };
@@ -286,8 +329,12 @@ auto build_some_package2(solution &s) {
         "src/.*\\.cpp"_r,
         "src/.*\\.h"_rr
         ;
+    tgt.link_options.link_libraries.push_back("advapi32.lib");
+    tgt.link_options.link_libraries.push_back("ole32.lib");
+    tgt.link_options.link_libraries.push_back("OleAut32.lib");
     tgt += sources_rule{};
     tgt += cl_exe{};
+    tgt += link_exe{};
     tgt();
     return tgt;
 }

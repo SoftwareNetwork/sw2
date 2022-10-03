@@ -12,11 +12,18 @@ struct msvc_instance {
         t.exe = root / "bin" / "Hostx64" / "x64" / "cl.exe";
         return t;
     }
+    auto link_target() const {
+        cl_binary_target t;
+        t.package = sw::package_id{"com.Microsoft.VisualStudio.VC.cl"s, root.filename().string()};
+        t.exe = root / "bin" / "Hostx64" / "x64" / "link.exe";
+        return t;
+    }
     auto vcruntime_target() const {
     }
     auto stdlib_target() const {
         binary_library_target t;
         t.include_directories.push_back(root / "include");
+        t.link_directories.push_back(root / "lib" / "x64");
         return t;
     }
 };
@@ -39,7 +46,7 @@ auto detect_msvc1() {
     }
     return cls;
 }
-auto detect_msvc() {
+const auto &detect_msvc() {
     static auto msvc = detect_msvc1();
     return msvc;
 }
@@ -83,7 +90,9 @@ struct win_kit {
                 t.include_directories.push_back(idir / name);
                 for (auto &i : idirs)
                     t.include_directories.push_back(idir / i);
+                t.link_directories.push_back(libdir);
                 //t.public_ts["properties"]["6"]["system_link_directories"].push_back(libdir);
+                return t;
                 targets.push_back(t);
             /*} else if (without_ldir) {
                 auto &t = sw::addTarget<sw::PredefinedTarget>(
@@ -99,6 +108,7 @@ struct win_kit {
                 //LOG_TRACE(logger, "Libdir " << libdir << " not found for library: " << name);
             }
         }
+        return {};
         return targets[0];
     }
 
@@ -242,6 +252,9 @@ struct win_sdk_info {
     files win10_sdk_roots;
     files win81_sdk_roots;
 
+    binary_library_target ucrt;
+    binary_library_target um;
+
     win_sdk_info() {
         default_sdk_roots = get_default_sdk_roots();
         win10_sdk_roots = get_windows_kit_root_from_reg(L"10");
@@ -298,7 +311,7 @@ struct win_sdk_info {
     // shared - some of these and some of these
     //
 
-    void add10Kit(const path &kr, const std::wstring &v) const {
+    void add10Kit(const path &kr, const std::wstring &v) {
         //LOG_TRACE(logger, "Found Windows Kit " + v.toString() + " at " + to_string(normalize_path(kr)));
 
         // ucrt
@@ -308,19 +321,24 @@ struct win_sdk_info {
             wk.kit_root = kr;
             wk.idir_subversion = v;
             wk.ldir_subversion = v;
-            wk.add(v);
+            if (auto o = wk.add(v); o) {
+                ucrt = *o;
+            }
         }
 
         // um + shared
-        /*{
+        {
             win_kit wk;
             wk.name = "um";
             wk.kit_root = kr;
-            wk.idir_subversion = v.toString();
-            wk.ldir_subversion = v.toString();
-            wk.idirs.push_back("shared");
-            for (auto t : wk.add(DETECT_ARGS_PASS, settings, v))
-                t->public_ts["properties"]["6"]["system_link_libraries"].push_back("KERNEL32.LIB");
+            wk.idir_subversion = v;
+            wk.ldir_subversion = v;
+            wk.idirs.push_back(L"shared");
+            if (auto o = wk.add(v); o) {
+                um = *o;
+            }
+            //for (auto t : wk.add(v))
+                //t->public_ts["properties"]["6"]["system_link_libraries"].push_back("KERNEL32.LIB");
         }
 
         // km
@@ -328,9 +346,9 @@ struct win_sdk_info {
             win_kit wk;
             wk.name = "km";
             wk.kit_root = kr;
-            wk.idir_subversion = v.toString();
-            wk.ldir_subversion = v.toString();
-            wk.add(DETECT_ARGS_PASS, settings, v);
+            wk.idir_subversion = v;
+            wk.ldir_subversion = v;
+            wk.add(v);
         }
 
         // winrt
@@ -338,9 +356,9 @@ struct win_sdk_info {
             win_kit wk;
             wk.name = "winrt";
             wk.kit_root = kr;
-            wk.idir_subversion = v.toString();
+            wk.idir_subversion = v;
             wk.without_ldir = true;
-            wk.add(DETECT_ARGS_PASS, settings, v);
+            wk.add(v);
         }
 
         // cppwinrt
@@ -348,13 +366,13 @@ struct win_sdk_info {
             win_kit wk;
             wk.name = "cppwinrt";
             wk.kit_root = kr;
-            wk.idir_subversion = v.toString();
+            wk.idir_subversion = v;
             wk.without_ldir = true;
-            wk.add(DETECT_ARGS_PASS, settings, v);
+            wk.add(v);
         }
 
         // tools
-        {
+        /*{
             win_kit wk;
             wk.kit_root = kr;
             wk.bdir_subversion = v.toString();
@@ -453,30 +471,28 @@ struct win_sdk_info {
         return dirs;
     }
     static files get_windows_kit_root_from_reg(const std::wstring &key) {
-        auto get_windows_kit_root_from_reg = [&](auto &&root, int access) -> path {
-            if (reg r{HKEY_LOCAL_MACHINE, root, access}; r) {
+        files dirs;
+        for (auto access : reg_access_list) {
+            if (reg r{HKEY_LOCAL_MACHINE, reg_root, access}; r) {
                 if (auto v = r.string_value(L"KitsRoot" + key); v) {
-                    return *v;
+                    path p = *v;
+                    // in registry path are written like 'C:\\Program Files (x86)\\Windows Kits\\10\\'
+                    if (p.filename().empty())
+                        p = p.parent_path();
+                    dirs.insert(p);
                 }
             }
-            return {};
-        };
-
-        files dirs;
-        for (auto k : reg_access_list) {
-            auto p = get_windows_kit_root_from_reg(reg_root, k);
-            if (p.empty())
-                continue;
-            // in registry path are written like 'C:\\Program Files (x86)\\Windows Kits\\10\\'
-            if (p.filename().empty())
-                p = p.parent_path();
-            dirs.insert(p);
         }
         return dirs;
     }
 };
 
-auto detect_winsdk() {
+auto detect_winsdk1() {
     win_sdk_info sdk;
     sdk.list_windows_kits();
+    return sdk;
+}
+const auto &detect_winsdk() {
+    static auto sdk = detect_winsdk1();
+    return sdk;
 }

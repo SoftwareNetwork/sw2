@@ -18,7 +18,10 @@ struct compile_options_t {
     std::vector<definition> definitions;
     std::vector<path> include_directories;
 };
-struct link_options_t {};
+struct link_options_t {
+    std::vector<path> link_directories;
+    std::vector<path> link_libraries;
+};
 
 // binary_target_package?
 struct cl_binary_target : compile_options_t, link_options_t {

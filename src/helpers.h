@@ -7,6 +7,7 @@
 #include <iostream>
 #include <limits>
 #include <ranges>
+#include <set>
 #include <variant>
 
 namespace fs = std::filesystem;
@@ -30,14 +31,9 @@ struct iter_with_range {
     T range;
     std::ranges::iterator_t<T> i;
 
-    iter_with_range(T &&r) : range{r}, i{range.begin()} {
-    }
-    auto operator*() const {
-        return *i;
-    }
-    void operator++() {
-        ++i;
-    }
+    iter_with_range(T &&r) : range{r}, i{range.begin()} {}
+    auto operator*() const { return *i; }
+    void operator++() { ++i; }
     bool operator==(auto &&) const {
         return i == std::end(range);
     }
