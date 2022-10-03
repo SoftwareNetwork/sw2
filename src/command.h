@@ -12,10 +12,9 @@ namespace fs = std::filesystem;
 using path = fs::path;
 
 struct command {
-    using string = std::string;
-    std::vector<string> arguments;
-    // arguments
-    // working_directory
+    using argument = variant<string,string_view,path>;
+    std::vector<argument> arguments;
+    path working_directory;
     // environment
 
     // exit_code
@@ -49,30 +48,46 @@ BOOL CreateProcessW(
         */
         DWORD flags = 0;
         STARTUPINFOW si = { 0 };
+        //STARTUPINFOEXW si = { 0 };
         PROCESS_INFORMATION pi = { 0 };
         LPVOID env = 0;
         LPCWSTR dir = 0;
-        LPWSTR lpCommandLine = 0;
+        int inherit_handles = 1;
+
+        //flags |= NORMAL_PRIORITY_CLASS;
+        //flags |= CREATE_UNICODE_ENVIRONMENT;
+        //flags |= EXTENDED_STARTUPINFO_PRESENT;
 
         std::wstring s;
         for (auto &&a : arguments) {
-            auto as = path{a}.wstring();
-            if (as.contains(L" ")) {
-                s += L"\"" + as + L"\" ";
-            } else {
-                s += as + L" ";
-            }
+            auto quote = [&](auto &&as) {
+                if (as.contains(L" ")) {
+                    s += L"\"" + as + L"\" ";
+                } else {
+                    s += as + L" ";
+                }
+            };
+            visit(a, overload{
+                [&](string &s){
+                    quote(path{s}.wstring());
+                },
+                [&](string_view &s){
+                    quote(path{string{s.data(),s.size()}}.wstring());
+                },
+                [&](path &p){
+                    quote(p.wstring());
+                }});
         }
         auto r = CreateProcessW(
             0,
             s.data(),
             0,
             0,
-            TRUE, // bInheritHandles?
+            inherit_handles,
             flags,
             env,
             dir,
-            &si,
+            (LPSTARTUPINFOW)&si,
             &pi
         );
         if (!r) {
@@ -96,8 +111,8 @@ BOOL CreateProcessW(
     void add(auto &&p) {
         arguments.push_back(p);
     }
-    void add(const path &p) {
-        arguments.push_back(p.string());
+    void add(const char *p) {
+        arguments.push_back(string{p});
     }
     auto operator+=(auto &&arg) {
         add(arg);
@@ -108,4 +123,12 @@ BOOL CreateProcessW(
 struct command2 : command {
     std::set<path> inputs;
     std::set<path> outputs;
+};
+
+struct cl_exe_command : command2 {
+    void run() {
+        add("/showIncludes");
+        scope_exit se{[&]{arguments.pop_back();}};
+        command2::run();
+    }
 };

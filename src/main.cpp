@@ -2,6 +2,7 @@
 #include "storage.h"
 #include "vs_instance_helpers.h"
 #include "package.h"
+#include "detect.h"
 
 #include <map>
 #include <regex>
@@ -171,76 +172,31 @@ struct rule_flag {
     }
 };
 
-struct definition {
-    string key;
-    std::variant<string, bool> value; // value/undef
-
-    operator string() const {
-        return visit(value, overload{
-            [&](const string &v){ return "-D" + key + "=" + v; },
-            [&](bool){ return "-U" + key; }
-        });
-    }
-};
-struct compile_options_t {
-    std::vector<definition> definitions;
-    std::vector<path> include_directories;
-};
-struct link_options_t {};
-
-// binary_target_package?
-struct cl_binary_target : compile_options_t, link_options_t {
-    sw::package_id package;
-    path exe;
-};
-
-auto detect_cl_compilers() {
-    static auto instances = enumerate_vs_instances();
-    std::vector<cl_binary_target> cls;
-    for (auto &&i : instances) {
-        path root = i.VSInstallLocation;
-        auto msvc = root / "VC" / "Tools" / "MSVC";
-        auto i = fs::directory_iterator{msvc};
-        if (i == fs::directory_iterator{}) {
-            continue;
-        }
-        auto &t = cls.emplace_back();
-        t.package = sw::package_id{"com.Microsoft.VisualStudio.VC.cl"s,i->path().string()};
-        t.exe = msvc / i->path() / "bin" / "Hostx64" / "x64" / "cl.exe";
-        //i.VSInstallLocation.contains(L"Preview");
-
-        t.include_directories.push_back(msvc / i->path() / "include");
-    }
-    return cls;
-}
-
 struct sources_rule {
     void operator()(auto &tgt) const {
         for (auto &&f : tgt) {
-            if (f.extension() == ".cpp") {
+            if (f.extension() == ".cpp" || f.extension() == ".cxx") {
                 tgt.processed_files[f].insert(this);
             }
         }
     }
 };
 struct cl_exe : compile_options_t {
-    cl_binary_target compiler;
+    msvc_instance msvc;
 
     cl_exe() {
-        auto instances = detect_cl_compilers();
-        if (instances.empty()) {
-            throw std::runtime_error("empty compilers");
-        }
-        compiler = *instances.begin();
+        msvc = detect_msvc().at(0);
+        detect_winsdk();
     }
     void init(const path &p) {
     }
 
     void operator()(auto &tgt) const {
+        auto compiler = msvc.cl_target();
         for (auto &&[f,rules] : tgt.processed_files) {
             if (!rules.contains(this)) {
                 auto out = f.filename() += ".obj";
-                command2 c;
+                cl_exe_command c;
                 c +=
                     compiler.exe,
                     "-nologo",
@@ -250,18 +206,16 @@ struct cl_exe : compile_options_t {
                     f,
                     "-Fo" + out.string()
                     ;
-                for (auto &&d : tgt.compile_options.definitions) {
-                    c += (string)d;
-                }
-                for (auto &&i : tgt.compile_options.include_directories) {
-                    c += "-I" + i.string();
-                }
-                for (auto &&d : compiler.definitions) {
-                    c += (string)d;
-                }
-                for (auto &&i : compiler.include_directories) {
-                    c += "-I" + i.string();
-                }
+                auto add = [&](auto &&tgt) {
+                    for (auto &&d : tgt.definitions) {
+                        c += (string)d;
+                    }
+                    for (auto &&i : tgt.include_directories) {
+                        c += "-I" + i.string();
+                    }
+                };
+                add(tgt.compile_options);
+                add(msvc.stdlib_target());
                 c.inputs.insert(f);
                 c.outputs.insert(out);
                 tgt.commands.push_back(c);

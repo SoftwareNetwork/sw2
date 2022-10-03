@@ -13,6 +13,7 @@ namespace fs = std::filesystem;
 using path = fs::path;
 using std::string;
 using std::string_view;
+using std::variant;
 using namespace std::literals;
 
 template <typename F>
@@ -40,6 +41,12 @@ struct iter_with_range {
     bool operator==(auto &&) const {
         return i == std::end(range);
     }
+};
+
+template <typename F>
+struct scope_exit {
+    F &&f;
+    ~scope_exit() {f();}
 };
 
 template <typename T> struct type_ { using type = T; };
