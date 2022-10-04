@@ -23,6 +23,7 @@ struct handle {
         operator=(std::move(rhs));
     }
     handle &operator=(handle &&rhs) noexcept {
+        this->~handle();
         h = rhs.h;
         rhs.h = INVALID_HANDLE_VALUE;
         return *this;
@@ -44,8 +45,8 @@ struct handle {
 
 struct io_callback {
     OVERLAPPED o{};
-    std::function<void(size_t)> f;
-    std::vector<uint8_t> buf;
+    std::move_only_function<void(size_t)> f;
+    string buf;
 };
 
 HANDLE default_job_object() {
@@ -83,6 +84,11 @@ struct pipe {
             throw std::runtime_error{"cannot add fd to port"};
         }
     }
+    //pipe(const pipe &) = delete;
+    //pipe &operator=(const pipe &) = delete;
+    //pipe(pipe &&) noexcept = default;
+    //pipe &operator=(pipe &&) noexcept = default;
+
     void init(bool inherit) {
         DWORD sz = 0;
         auto s = std::format(L"\\\\.\\pipe\\swpipe.{}.{}", GetCurrentProcessId(), pipe_id++);
@@ -96,7 +102,7 @@ struct pipe {
     void read_async(auto &&f) {
         auto cb = new io_callback;
         cb->buf.resize(4096);
-        cb->f = [cb, f](size_t sz) mutable {
+        cb->f = [cb, f = std::move(f)](size_t sz) mutable {
             if (sz == 0) {
                 f(cb->buf, std::error_code(1, std::generic_category()));
                 return;
@@ -120,6 +126,7 @@ struct executor {
     handle port;
     std::atomic_bool stopped{false};
     std::atomic_int jobs{0};
+    std::map<DWORD, std::move_only_function<void()>> process_callbacks;
 
     executor() {
         port = CreateIoCompletionPort(INVALID_HANDLE_VALUE, 0, 0, 0);
@@ -129,7 +136,7 @@ struct executor {
         PostQueuedCompletionStatus(port, 0, 0, 0);
     }
     void run() {
-        while (!stopped && jobs) {
+        while (!stopped && (jobs || !process_callbacks.empty())) {
             run_one();
         }
     }
@@ -148,16 +155,16 @@ struct executor {
             }
         }
         if (key == 10) {
-            int a = 5;
             switch (bytes) {
             case JOB_OBJECT_MSG_NEW_PROCESS:
-                a++;
                 break;
             case JOB_OBJECT_MSG_EXIT_PROCESS:
-                a++;
+                if (auto it = process_callbacks.find(static_cast<DWORD>((uint64_t)o)); it != process_callbacks.end()) {
+                    it->second();
+                    process_callbacks.erase(it);
+                }
                 break;
             default:
-                a++;
                 break;
             }
             return;
@@ -168,6 +175,9 @@ struct executor {
         --jobs;
         o->f(bytes);
         delete o;
+    }
+    void watch_process(auto &&pid, auto &&f) {
+        process_callbacks.emplace(pid, FWD(f));
     }
 };
 

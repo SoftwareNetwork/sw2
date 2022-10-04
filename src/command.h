@@ -142,6 +142,17 @@ struct raw_command {
     }
     void run_win32(auto &&ex) {
 #ifdef _WIN32
+        auto job = win32::default_job_object();
+
+        JOBOBJECT_ASSOCIATE_COMPLETION_PORT jcp{};
+        jcp.CompletionPort = ex.port;
+        jcp.CompletionKey = (void *)10;
+        if (!SetInformationJobObject(job, JobObjectAssociateCompletionPortInformation, &jcp, sizeof(jcp))) {
+            throw std::runtime_error{"cannot SetInformationJobObject"};
+        }
+
+        std::wcout << printw() << "\n";
+
         DWORD flags = 0;
         STARTUPINFOEXW si = {0};
         si.StartupInfo.cb = sizeof(si);
@@ -157,22 +168,21 @@ struct raw_command {
 
         si.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
 
-        win32::executor e;
-        win32::pipe<win32::executor> out{e, true}, err{e, true};
+        win32::pipe<win32::executor> pout{ex, true}, perr{ex, true};
 
-        //si.StartupInfo.hStdOutput = out.w;
-        //si.StartupInfo.hStdError = err.w;
+        auto set_stream = [&](auto &&s, auto &&h, auto &&stdh, auto &&pipe) {
+            visit(
+                s,
+                [&](std::monostate) {
+                    h = GetStdHandle(stdh);
+                },
+                [&](auto &) {
+                    h = pipe.w;
+                });
+        };
+        set_stream(out, si.StartupInfo.hStdOutput, STD_OUTPUT_HANDLE, pout);
+        set_stream(err, si.StartupInfo.hStdError, STD_ERROR_HANDLE, perr);
 
-        auto job = win32::default_job_object();
-
-        JOBOBJECT_ASSOCIATE_COMPLETION_PORT jcp{};
-        jcp.CompletionPort = e.port;
-        jcp.CompletionKey = (void *)10;
-        if (!SetInformationJobObject(job, JobObjectAssociateCompletionPortInformation, &jcp, sizeof(jcp))) {
-            throw std::runtime_error{"cannot SetInformationJobObject"};
-        }
-
-        std::wcout << printw() << "\n";
         auto r = CreateProcessW(0, printw().data(), 0, 0, inherit_handles, flags, env, dir, (LPSTARTUPINFOW)&si, &pi);
         if (!r) {
             auto err = GetLastError();
@@ -182,33 +192,38 @@ struct raw_command {
             throw std::runtime_error{"cannot AssignProcessToJobObject"};
         }
         CloseHandle(pi.hThread);
-        scope_exit se{[&]{CloseHandle(pi.hProcess);}};
-        out.w.reset();
-        err.w.reset();
+        pout.w.reset();
+        perr.w.reset();
 
-        out.read_async([&](this auto &&f, auto &&buf, auto &&ec) {
-            if (ec) {
-                out.r.reset();
-                return;
-            }
-            // std::cout << string{buf.data(), buf.data()+buf.size()};
-            out.read_async(f);
-        });
-        err.read_async([&](this auto &&f, auto &&buf, auto &&ec) {
-            if (ec) {
-                err.r.reset();
-                return;
-            }
-            err.read_async(f);
-        });
-        e.run();
+        auto set_stream2 = [&](auto &&s, auto &&pipe) {
+            visit(
+                s,
+                [&](std::monostate) {
+                },
+                [&](string &s) {
+                    pipe.read_async([&s, pipe = std::move(pipe)](this auto &&f, auto &&buf, auto &&ec) {
+                        if (!ec) {
+                            s += buf;
+                            pipe.read_async(f);
+                        }
+                    });
+                },
+                [&](stream_callback &cb) {
+                    pipe.read_async(cb);
+                }
+            );
+        };
+        set_stream2(out, pout);
+        set_stream2(err, perr);
 
-        WaitForSingleObject(pi.hProcess, INFINITE);
-        DWORD exit_code;
-        GetExitCodeProcess(pi.hProcess, &exit_code);
-        if (exit_code) {
-            throw std::runtime_error(std::format("process exit code: {}", exit_code));
-        }
+        ex.watch_process(pi.dwProcessId, [this, pid = pi.hProcess]() {
+            DWORD exit_code;
+            GetExitCodeProcess(pid, &exit_code);
+            CloseHandle(pid);
+            if (exit_code) {
+                throw std::runtime_error(std::format("process exit code: {}", exit_code));
+            }
+        });
 #endif
     }
     void run_linux() {
@@ -255,7 +270,7 @@ struct cl_exe_command : io_command {
             auto fo = path{base} += ".obj";
 
             std::ofstream{fh};
-            std::ofstream{fc} << "#include \"sw_msvc_prefix.h\"\r\nint dummy;";
+            std::ofstream{fc} << "#include \"sw_msvc_prefix.h\"\nint dummy;";
 
             scope_exit se{[&] {
                 fs::remove(fh);
@@ -272,12 +287,19 @@ struct cl_exe_command : io_command {
             c += "/showIncludes";
             c += L"\"/Fo"s + fo.wstring() + L"\"";
 
-            c.run();
+            c.out = c.err = ""s;
 
-            // check out, then err as well
+            win32::executor e;
+            c.run(e);
+            e.run();
 
-            string s;
-            return s;
+            auto &str = std::get<string>(c.out).empty() ? std::get<string>(c.err) : std::get<string>(c.out);
+            if (auto p1 = str.find("\n"); p1 != -1) {
+                if (auto p2 = str.find((const char *)fo.u8string().c_str(), p1 + 1); p2 != -1) {
+                    return str.substr(p1 + 1, p2 - (p1 + 1));
+                }
+            }
+            throw std::runtime_error{"cannot find msvc prefix"};
         }();
 
         add("/showIncludes");
