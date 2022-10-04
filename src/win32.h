@@ -8,12 +8,18 @@
 
 namespace sw::win32 {
 
+struct io_callback {
+    OVERLAPPED o{};
+    std::move_only_function<void(size_t)> f;
+    string buf;
+};
+
 struct handle {
     HANDLE h{INVALID_HANDLE_VALUE};
 
     handle() = default;
     handle(HANDLE h) : h{h} {
-        if (h == INVALID_HANDLE_VALUE) {
+        if (h == INVALID_HANDLE_VALUE || !h) {
             throw std::runtime_error{"bad handle"};
         }
     }
@@ -43,53 +49,36 @@ struct handle {
     }
 };
 
-struct io_callback {
-    OVERLAPPED o{};
-    std::move_only_function<void(size_t)> f;
-    string buf;
-};
+auto create_job_object() {
+    handle job = CreateJobObject(0, 0);
+    /*if (!AssignProcessToJobObject(job, GetCurrentProcess())) {
+        throw std::runtime_error{"cannot AssignProcessToJobObject"};
+    }*/
 
+    JOBOBJECT_EXTENDED_LIMIT_INFORMATION ji;
+    if (!QueryInformationJobObject(job, JobObjectExtendedLimitInformation, &ji, sizeof(ji), 0)) {
+        throw std::runtime_error{"cannot QueryInformationJobObject"};
+    }
+    ji.BasicLimitInformation.LimitFlags |= JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+    if (!SetInformationJobObject(job, JobObjectExtendedLimitInformation, &ji, sizeof(ji))) {
+        throw std::runtime_error{"cannot SetInformationJobObject"};
+    }
+    return job;
+}
 HANDLE default_job_object() {
-    static handle job = []() {
-        auto job = CreateJobObject(0, 0);
-        if (!job) {
-            throw std::runtime_error{"cannot CreateJobObject"};
-        }
-        /*if (!AssignProcessToJobObject(job, GetCurrentProcess())) {
-            throw std::runtime_error{"cannot AssignProcessToJobObject"};
-        }*/
-
-        JOBOBJECT_EXTENDED_LIMIT_INFORMATION ji;
-        if (!QueryInformationJobObject(job, JobObjectExtendedLimitInformation, &ji, sizeof(ji), 0)) {
-            throw std::runtime_error{"cannot QueryInformationJobObject"};
-        }
-        ji.BasicLimitInformation.LimitFlags |= JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
-        if (!SetInformationJobObject(job, JobObjectExtendedLimitInformation, &ji, sizeof(ji))) {
-            throw std::runtime_error{"cannot SetInformationJobObject"};
-        }
-        return job;
-    }();
+    static handle job = create_job_object();
     return job;
 }
 
-template <typename Executor>
 struct pipe {
     static inline std::atomic_int pipe_id{0};
     handle r, w;
-    Executor &ex;
 
-    pipe(auto &&ex, bool inherit = false) : ex{ex} {
+    pipe() = default;
+    pipe(bool inherit) {
         init(inherit);
-        if (!CreateIoCompletionPort(r, ex.port, 0, 0)) {
-            throw std::runtime_error{"cannot add fd to port"};
-        }
     }
-    //pipe(const pipe &) = delete;
-    //pipe &operator=(const pipe &) = delete;
-    //pipe(pipe &&) noexcept = default;
-    //pipe &operator=(pipe &&) noexcept = default;
-
-    void init(bool inherit) {
+    void init(bool inherit = false) {
         DWORD sz = 0;
         auto s = std::format(L"\\\\.\\pipe\\swpipe.{}.{}", GetCurrentProcessId(), pipe_id++);
         r = CreateNamedPipeW(s.c_str(), PIPE_ACCESS_INBOUND | FILE_FLAG_OVERLAPPED, 0, 1, sz, sz, 0, 0);
@@ -98,28 +87,6 @@ struct pipe {
         sa.bInheritHandle = !!inherit;
         w = CreateFileW(s.c_str(), GENERIC_WRITE, 0, &sa, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED, 0);
     }
-
-    void read_async(auto &&f) {
-        auto cb = new io_callback;
-        cb->buf.resize(4096);
-        cb->f = [cb, f = std::move(f)](size_t sz) mutable {
-            if (sz == 0) {
-                f(cb->buf, std::error_code(1, std::generic_category()));
-                return;
-            }
-            cb->buf.resize(sz);
-            f(cb->buf, std::error_code{});
-        };
-        ++ex.jobs;
-        if (!ReadFile(r, cb->buf.data(), cb->buf.size(), 0, (OVERLAPPED*)cb)) {
-            auto err = GetLastError();
-            if (err != ERROR_IO_PENDING) {
-                --ex.jobs;
-                f(cb->buf, std::error_code(err, std::generic_category()));
-                return;
-            }
-        }
-    }
 };
 
 struct executor {
@@ -127,6 +94,7 @@ struct executor {
     std::atomic_bool stopped{false};
     std::atomic_int jobs{0};
     std::map<DWORD, std::move_only_function<void()>> process_callbacks;
+    HANDLE job{INVALID_HANDLE_VALUE};
 
     executor() {
         port = CreateIoCompletionPort(INVALID_HANDLE_VALUE, 0, 0, 0);
@@ -176,8 +144,49 @@ struct executor {
         o->f(bytes);
         delete o;
     }
-    void watch_process(auto &&pid, auto &&f) {
+
+    void register_handle(auto &&h) {
+        if (!CreateIoCompletionPort(h, port, 0, 0)) {
+            throw std::runtime_error{"cannot add fd to port"};
+        }
+    }
+    void register_job(auto &&job) {
+        JOBOBJECT_ASSOCIATE_COMPLETION_PORT jcp{};
+        jcp.CompletionPort = port;
+        jcp.CompletionKey = (void *)10;
+        if (!SetInformationJobObject(job, JobObjectAssociateCompletionPortInformation, &jcp, sizeof(jcp))) {
+            throw std::runtime_error{"cannot SetInformationJobObject"};
+        }
+        this->job = job;
+    }
+    void register_process(auto &&h, auto &&pid, auto &&f) {
+        if (!AssignProcessToJobObject(job, h)) {
+            throw std::runtime_error{"cannot AssignProcessToJobObject"};
+        }
         process_callbacks.emplace(pid, FWD(f));
+    }
+
+    void read_async(auto &&h, auto &&f) {
+        auto cb = new io_callback;
+        cb->buf.resize(4096);
+        cb->f = [cb, f = std::move(f)](size_t sz) mutable {
+            if (sz == 0) {
+                f(cb->buf, std::error_code(1, std::generic_category()));
+                return;
+            }
+            cb->buf.resize(sz);
+            f(cb->buf, std::error_code{});
+        };
+        ++jobs;
+        if (!ReadFile(h, cb->buf.data(), cb->buf.size(), 0, (OVERLAPPED *)cb)) {
+            auto err = GetLastError();
+            if (err != ERROR_IO_PENDING) {
+                --jobs;
+                f(cb->buf, std::error_code(err, std::generic_category()));
+                delete cb;
+                return;
+            }
+        }
     }
 };
 
