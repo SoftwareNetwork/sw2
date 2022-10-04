@@ -34,7 +34,7 @@ struct handle {
     }
 
     operator HANDLE() { return h; }
-    operator PHANDLE() { return &h; }
+    operator HANDLE*() { return &h; }
 
     void reset() {
         CloseHandle(h);
@@ -47,6 +47,29 @@ struct io_callback {
     std::function<void(size_t)> f;
     std::vector<uint8_t> buf;
 };
+
+HANDLE default_job_object() {
+    static handle job = []() {
+        auto job = CreateJobObject(0, 0);
+        if (!job) {
+            throw std::runtime_error{"cannot CreateJobObject"};
+        }
+        /*if (!AssignProcessToJobObject(job, GetCurrentProcess())) {
+            throw std::runtime_error{"cannot AssignProcessToJobObject"};
+        }*/
+
+        JOBOBJECT_EXTENDED_LIMIT_INFORMATION ji;
+        if (!QueryInformationJobObject(job, JobObjectExtendedLimitInformation, &ji, sizeof(ji), 0)) {
+            throw std::runtime_error{"cannot QueryInformationJobObject"};
+        }
+        ji.BasicLimitInformation.LimitFlags |= JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+        if (!SetInformationJobObject(job, JobObjectExtendedLimitInformation, &ji, sizeof(ji))) {
+            throw std::runtime_error{"cannot SetInformationJobObject"};
+        }
+        return job;
+    }();
+    return job;
+}
 
 template <typename Executor>
 struct pipe {
@@ -63,17 +86,24 @@ struct pipe {
     void init(bool inherit) {
         DWORD sz = 0;
         auto s = std::format(L"\\\\.\\pipe\\swpipe.{}.{}", GetCurrentProcessId(), pipe_id++);
-        r = CreateNamedPipeW(s.c_str(), PIPE_ACCESS_INBOUND | FILE_FLAG_OVERLAPPED, 0, 2, sz, sz, 0, 0);
+        r = CreateNamedPipeW(s.c_str(), PIPE_ACCESS_INBOUND | FILE_FLAG_OVERLAPPED, 0, 1, sz, sz, 0, 0);
 
         SECURITY_ATTRIBUTES sa = {0};
         sa.bInheritHandle = !!inherit;
-        w = CreateFileW(s.c_str(), GENERIC_WRITE, 0, &sa, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED,
-                        0);
+        w = CreateFileW(s.c_str(), GENERIC_WRITE, 0, &sa, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED, 0);
     }
 
     void read_async(auto &&f) {
         auto cb = new io_callback;
         cb->buf.resize(4096);
+        cb->f = [cb, f](size_t sz) mutable {
+            if (sz == 0) {
+                f(cb->buf, std::error_code(1, std::generic_category()));
+                return;
+            }
+            cb->buf.resize(sz);
+            f(cb->buf, std::error_code{});
+        };
         ++ex.jobs;
         if (!ReadFile(r, cb->buf.data(), cb->buf.size(), 0, (OVERLAPPED*)cb)) {
             auto err = GetLastError();
@@ -83,14 +113,6 @@ struct pipe {
                 return;
             }
         }
-        cb->f = [cb, f](size_t sz) mutable {
-            if (sz == 0) {
-                f(cb->buf, std::error_code(1, std::generic_category()));
-                return;
-            }
-            cb->buf.resize(sz);
-            f(cb->buf, std::error_code{});
-        };
     }
 };
 

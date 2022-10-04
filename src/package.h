@@ -19,6 +19,13 @@ struct package_name {
     }
     package_name(const string &s) : elements{s} {
     }
+
+    operator string() const {
+        if (!elements.empty()) {
+            return elements[0];
+        }
+        return "";
+    }
 };
 
 struct package_version {
@@ -38,6 +45,17 @@ struct package_version {
 struct package_id {
     package_name name;
     package_version version;
+
+    package_id() = default;
+    package_id(const string &s) : name{s} {
+    }
+    package_id(const string &p, const string &v) : name{p}, version{v} {
+    }
+    void operator=(const string &s) {
+        name = s;
+    }
+
+    operator string() const { return name; }
 };
 
 }

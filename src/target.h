@@ -2,6 +2,9 @@
 
 #include "helpers.h"
 #include "package.h"
+#include "suffix.h"
+
+namespace sw {
 
 struct definition {
     string key;
@@ -30,3 +33,52 @@ struct cl_binary_target : compile_options_t, link_options_t {
 };
 struct binary_library_target : compile_options_t, link_options_t {
 };
+
+struct files_target {
+    using files_t = std::set<path>; // unordered?
+    package_id name;
+    path source_dir;
+    files_t files;
+
+    void op(file_regex &r, auto &&f) {
+        r(source_dir, [&](auto &&iter) {
+            for (auto &&e : iter) {
+                if (fs::is_regular_file(e)) {
+                    f(files, e);
+                }
+            }
+        });
+    }
+    void op(const path &p, auto &&f) {
+        f(files, p);
+    }
+    auto operator+=(auto &&iter) {
+        op(iter, [&](auto &&arr, auto &&f) {
+            arr.insert(source_dir / f);
+        });
+        return appender{[&](auto &&v) {
+            operator+=(v);
+        }};
+    }
+    auto operator-=(auto &&iter) {
+        op(iter, [&](auto &&arr, auto &&f) {
+            arr.erase(source_dir / f);
+        });
+        return appender{[&](auto &&v) {
+            operator-=(v);
+        }};
+    }
+    auto range() const {
+        return files | std::views::transform([&](auto &&p) {
+                   return source_dir / p;
+               });
+    }
+    auto begin() const {
+        return iter_with_range{range()};
+    }
+    auto end() const {
+        return files.end();
+    }
+};
+
+}

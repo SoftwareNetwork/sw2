@@ -8,7 +8,9 @@
 #include <functional>
 #include <iostream>
 #include <limits>
+#include <map>
 #include <ranges>
+#include <regex>
 #include <set>
 #include <variant>
 
@@ -69,4 +71,27 @@ struct overload : Ts... {
 
 decltype(auto) visit(auto &&var, auto && ... f) {
     return std::visit(overload{f...}, var);
+}
+
+[[nodiscard]] std::string replace(const std::string &str, const std::string &oldstr, const std::string &newstr,
+                                  int count = -1) {
+    int sofar = 0;
+    int cursor = 0;
+    std::string s(str);
+    std::string::size_type oldlen = oldstr.size(), newlen = newstr.size();
+    cursor = s.find(oldstr, cursor);
+    while (cursor != -1 && cursor <= (int)s.size()) {
+        if (count > -1 && sofar >= count) {
+            break;
+        }
+        s.replace(cursor, oldlen, newstr);
+        cursor += (int)newlen;
+        if (oldlen != 0) {
+            cursor = s.find(oldstr, cursor);
+        } else {
+            ++cursor;
+        }
+        ++sofar;
+    }
+    return s;
 }

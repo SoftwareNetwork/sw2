@@ -3,18 +3,20 @@
 #include "helpers.h"
 #include "target.h"
 
+namespace sw {
+
 struct msvc_instance {
     path root;
 
     auto cl_target() const {
         cl_binary_target t;
-        t.package = sw::package_id{"com.Microsoft.VisualStudio.VC.cl"s, root.filename().string()};
+        t.package = package_id{"com.Microsoft.VisualStudio.VC.cl"s, root.filename().string()};
         t.exe = root / "bin" / "Hostx64" / "x64" / "cl.exe";
         return t;
     }
     auto link_target() const {
         cl_binary_target t;
-        t.package = sw::package_id{"com.Microsoft.VisualStudio.VC.cl"s, root.filename().string()};
+        t.package = package_id{"com.Microsoft.VisualStudio.VC.cl"s, root.filename().string()};
         t.exe = root / "bin" / "Hostx64" / "x64" / "link.exe";
         return t;
     }
@@ -495,4 +497,6 @@ auto detect_winsdk1() {
 const auto &detect_winsdk() {
     static auto sdk = detect_winsdk1();
     return sdk;
+}
+
 }
