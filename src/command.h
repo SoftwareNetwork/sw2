@@ -45,10 +45,35 @@ struct raw_command {
 
         si.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
 
-        win32::pipe out{true}, err{true};
+        win32::executor e;
+        win32::pipe<win32::executor> out{e,true}, err{e,true};
 
         si.StartupInfo.hStdOutput = out.w;
         si.StartupInfo.hStdError = err.w;
+
+        auto job = CreateJobObject(0, 0);
+        if (!job) {
+            throw std::runtime_error{"cannot CreateJobObject"};
+        }
+        /*if (!AssignProcessToJobObject(job, GetCurrentProcess())) {
+            throw std::runtime_error{"cannot AssignProcessToJobObject"};
+        }*/
+
+        JOBOBJECT_EXTENDED_LIMIT_INFORMATION ji;
+        if (!QueryInformationJobObject(job, JobObjectExtendedLimitInformation, &ji, sizeof(ji), 0)) {
+            throw std::runtime_error{"cannot QueryInformationJobObject"};
+        }
+        ji.BasicLimitInformation.LimitFlags |= JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+        if (!SetInformationJobObject(job, JobObjectExtendedLimitInformation, &ji, sizeof(ji))) {
+            throw std::runtime_error{"cannot SetInformationJobObject"};
+        }
+
+        JOBOBJECT_ASSOCIATE_COMPLETION_PORT jcp{};
+        jcp.CompletionPort = e.port;
+        jcp.CompletionKey = (void *)10;
+        if (!SetInformationJobObject(job, JobObjectAssociateCompletionPortInformation, &jcp, sizeof(jcp))) {
+            throw std::runtime_error{"cannot SetInformationJobObject"};
+        }
 
         std::wstring s;
         for (auto &&a : arguments) {
@@ -82,12 +107,30 @@ struct raw_command {
             auto err = GetLastError();
             throw std::runtime_error("CreateProcessW failed, code = " + std::to_string(err));
         }
+        if (!AssignProcessToJobObject(job, pi.hProcess)) {
+            throw std::runtime_error{"cannot AssignProcessToJobObject"};
+        }
         CloseHandle(pi.hThread);
-        char buf[1024] = {0};
-        DWORD bytes;
-        //ReadFile(rp, buf, 10, &bytes, 0);
-        WaitForSingleObject(pi.hProcess, INFINITE);
         CloseHandle(pi.hProcess);
+        out.w.reset();
+        err.w.reset();
+
+        out.read_async([&](this auto &&f, auto &&buf, auto &&ec) {
+            if (ec) {
+                out.r.reset();
+                return;
+            }
+            std::cout << string{buf.data(), buf.data()+buf.size()};
+            out.read_async(f);
+        });
+        err.read_async([&](this auto &&f, auto &&buf, auto &&ec) {
+            if (ec) {
+                err.r.reset();
+                return;
+            }
+            err.read_async(f);
+        });
+        e.run();
 #endif
     }
     void run_linux() {

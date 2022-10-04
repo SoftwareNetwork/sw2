@@ -3,7 +3,9 @@
 #include <algorithm>
 #include <cassert>
 #include <filesystem>
+#include <format>
 #include <fstream>
+#include <functional>
 #include <iostream>
 #include <limits>
 #include <ranges>

@@ -6,7 +6,8 @@
 
 #include <map>
 #include <regex>
-#include <set>
+
+namespace sw {
 
 void add_file_to_storage(auto &&s, auto &&f) {
 }
@@ -339,6 +340,10 @@ auto build_some_package2(solution &s) {
     return tgt;
 }
 
+} // namespace sw
+
+using namespace sw;
+
 int main1() {
     solution s{"d:/dev/cppan2/client4"};
     auto tgt = build_some_package(s);
@@ -352,7 +357,8 @@ int main1() {
 }
 
 int main() {
-    try { return main1();
+    try {
+        return main1();
     } catch (std::exception &e) {
         std::cerr << e.what();
     } catch (...) {
