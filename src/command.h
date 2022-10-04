@@ -19,7 +19,7 @@ struct raw_command {
     // pid, pidfd
 
     // stdin,stdout,stderr
-    using stream_callback = std::function<void(const string &, const std::error_code &)>;
+    using stream_callback = std::function<void(string_view)>;
     using stream = variant<std::monostate, string, stream_callback>;
     //stream in;
     stream out,err;
@@ -52,94 +52,9 @@ struct raw_command {
     }
 
     // execute?
-    void start_job_object() {
+    void shell_execute() {
         //ShellExecuteA(NULL, "open", "C:\\WINDOWS\\system32\\calc.exe", "/k ipconfig", 0, SW_SHOWNORMAL);
         //run_win32{}
-    }
-    void run_win32() {
-#ifdef _WIN32
-        DWORD flags = 0;
-        STARTUPINFOEXW si = { 0 };
-        si.StartupInfo.cb = sizeof(si);
-        PROCESS_INFORMATION pi = { 0 };
-        LPVOID env = 0;
-        LPCWSTR dir = 0;
-        int inherit_handles = 1; // must be 1
-
-        flags |= NORMAL_PRIORITY_CLASS;
-        flags |= CREATE_UNICODE_ENVIRONMENT;
-        flags |= EXTENDED_STARTUPINFO_PRESENT;
-        // flags |= CREATE_NO_WINDOW;
-
-        si.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
-
-        win32::executor e;
-        win32::pipe out{true}, err{true};
-
-        si.StartupInfo.hStdOutput = out.w;
-        si.StartupInfo.hStdError = err.w;
-
-        auto job = CreateJobObject(0, 0);
-        if (!job) {
-            throw std::runtime_error{"cannot CreateJobObject"};
-        }
-        if (!AssignProcessToJobObject(job, GetCurrentProcess())) {
-            throw std::runtime_error{"cannot AssignProcessToJobObject"};
-        }
-
-        JOBOBJECT_EXTENDED_LIMIT_INFORMATION ji;
-        if (!QueryInformationJobObject(job, JobObjectExtendedLimitInformation, &ji, sizeof(ji), 0)) {
-            throw std::runtime_error{"cannot QueryInformationJobObject"};
-        }
-        ji.BasicLimitInformation.LimitFlags |= JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
-        if (!SetInformationJobObject(job, JobObjectExtendedLimitInformation, &ji, sizeof(ji))) {
-            throw std::runtime_error{"cannot SetInformationJobObject"};
-        }
-
-        JOBOBJECT_ASSOCIATE_COMPLETION_PORT jcp{};
-        jcp.CompletionPort = e.port;
-        jcp.CompletionKey = (void *)10;
-        if (!SetInformationJobObject(job, JobObjectAssociateCompletionPortInformation, &jcp, sizeof(jcp))) {
-            throw std::runtime_error{"cannot SetInformationJobObject"};
-        }
-
-        std::wcout << printw() << "\n";
-        auto r = CreateProcessW(0, printw().data(), 0, 0,
-            inherit_handles,
-            flags,
-            env,
-            dir,
-            (LPSTARTUPINFOW)&si, &pi
-        );
-        if (!r) {
-            auto err = GetLastError();
-            throw std::runtime_error("CreateProcessW failed, code = " + std::to_string(err));
-        }
-        if (!AssignProcessToJobObject(job, pi.hProcess)) {
-            throw std::runtime_error{"cannot AssignProcessToJobObject"};
-        }
-        CloseHandle(pi.hThread);
-        CloseHandle(pi.hProcess);
-        out.w.reset();
-        err.w.reset();
-
-        /*out.r.read_async(ex, [&](this auto &&f, auto &&buf, auto &&ec) {
-            if (ec) {
-                out.r.reset();
-                return;
-            }
-            //std::cout << string{buf.data(), buf.data()+buf.size()};
-            out.read_async(f);
-        });
-        err.r.read_async(ex, [&](this auto &&f, auto &&buf, auto &&ec) {
-            if (ec) {
-                err.r.reset();
-                return;
-            }
-            err.read_async(f);
-        });*/
-        e.run();
-#endif
     }
     void run_win32(auto &&ex, auto &&cb) {
 #ifdef _WIN32
@@ -198,7 +113,17 @@ struct raw_command {
                     });
                 },
                 [&](stream_callback &cb) {
-                    //pipe.read_async(cb);
+                    ex.read_async(pipe.r, [&, cb, s = string()](this auto &&f, auto &&buf, auto &&ec) {
+                        if (!ec) {
+                            s += buf;
+                            if (auto p = s.find_first_of("\r\n"); p != -1) {
+                                cb(string_view(s.data(), p));
+                                p = s.find("\n", p);
+                                s = s.substr(p + 1);
+                            }
+                            ex.read_async(pipe.r, f);
+                        }
+                    });
                 }
             );
         };
@@ -218,11 +143,6 @@ struct raw_command {
     }
     void run_macos() {
         //
-    }
-    void run() {
-#ifdef _WIN32
-        run_win32();
-#endif
     }
     void run(auto &&ex, auto &&cb) {
 #ifdef _WIN32
@@ -293,18 +213,21 @@ struct cl_exe_command : io_command {
             throw std::runtime_error{"cannot find msvc prefix"};
         }();
 
-        out = err = ""s;
+        err = ""s;
+        out = [&](auto sv) {
+            size_t p = 0;
+            while ((p = sv.find(msvc_prefix, p)) != -1) {
+                p += msvc_prefix.size();
+                auto fn = sv.substr(p, sv.find_first_of("\r\n", p) - p);
+                implicit_inputs.insert(string{fn.data(),fn.data()+fn.size()});
+            }
+        };
         add("/showIncludes");
         scope_exit se{[&]{arguments.pop_back();}};
+
         io_command::run(ex, [&](auto exit_code) {
             if (exit_code) {
-                throw std::runtime_error(std::format("process exit code: {}", exit_code));
-            }
-            auto &str = std::get<string>(out);
-            size_t p = 0;
-            while ((p = str.find(msvc_prefix, p)) != -1) {
-                p += msvc_prefix.size();
-                implicit_inputs.insert(str.substr(p, str.find_first_of("\r\n", p) - p));
+                throw std::runtime_error(std::format("process exit code: {}\nerror: {}", exit_code, std::get<string>(err)));
             }
         });
     }
