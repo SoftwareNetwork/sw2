@@ -3,7 +3,13 @@
 #include <algorithm>
 #include <cassert>
 #include <filesystem>
+#if __has_include(<format>)
 #include <format>
+using std::format;
+#else
+#include <fmt/format.h>
+using fmt::format;
+#endif
 #include <fstream>
 #include <functional>
 #include <iostream>

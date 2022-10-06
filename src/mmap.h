@@ -4,6 +4,7 @@
 
 #ifdef _WIN32
 #else
+#include <fcntl.h>
 #include <sys/mman.h>
 #endif
 
@@ -11,6 +12,7 @@ namespace sw {
 
 template <typename T = uint8_t>
 struct mmap_file {
+#ifdef _WIN32
     struct ro{
         static inline constexpr auto access = GENERIC_READ;
         static inline constexpr auto share_mode = FILE_SHARE_READ;
@@ -25,6 +27,10 @@ struct mmap_file {
         static inline constexpr auto page_mode = PAGE_READWRITE;
         static inline constexpr auto map_mode = FILE_MAP_READ | FILE_MAP_WRITE;
     };
+#else
+    struct ro{};
+    struct rw{};
+#endif
 
     using size_type = uint64_t;
 
@@ -59,13 +65,13 @@ struct mmap_file {
             throw std::runtime_error{"cannot map file"};
         }
 #else
-        fd = open(fn.string().c_str(), O_RDONLY);
+        fd = ::open(fn.string().c_str(), O_RDONLY);
         if (fd == -1) {
             throw std::runtime_error{"cannot open file: " + fn.string()};
         }
         p = (T *)mmap(0, sz, PROT_READ, MAP_PRIVATE, fd, 0);
         if (p == MAP_FAILED) {
-            close(fd);
+            ::close(fd);
             throw std::runtime_error{"cannot create file mapping"};
         }
 #endif
@@ -140,22 +146,22 @@ struct mmap_file {
             return stream{m,oldoff};
         }
 
-        template <typename T>
-        stream &operator>>(T &v) {
-            if (!has_room(sizeof(T))) {
+        template <typename U>
+        stream &operator>>(U &v) {
+            if (!has_room(sizeof(U))) {
                 throw std::runtime_error{"no more data"};
             }
-            v = *(T*)(m.p + offset);
-            offset += sizeof(T);
+            v = *(U*)(m.p + offset);
+            offset += sizeof(U);
             return *this;
         }
-        template <typename T>
-        stream &operator<<(const T &v) {
-            if (!has_room(sizeof(T))) {
+        template <typename U>
+        stream &operator<<(const U &v) {
+            if (!has_room(sizeof(U))) {
                 throw std::runtime_error{"no more room"};
             }
-            *(T *)(m.p + offset) = v;
-            offset += sizeof(T);
+            *(U *)(m.p + offset) = v;
+            offset += sizeof(U);
             return *this;
         }
     };

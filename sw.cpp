@@ -5,9 +5,11 @@ void build(Solution &s) {
         t.PackageDefinitions = true;
         t += cpp23;
         t += "src/.*"_rr;
-        t += "ole32.lib"_slib;
-        t += "OleAut32.lib"_slib;
-        t += "advapi32.lib"_slib;
+        if (t.getBuildSettings().TargetOS.Type == OSType::Windows) {
+            t += "ole32.lib"_slib;
+            t += "OleAut32.lib"_slib;
+            t += "advapi32.lib"_slib;
+        }
     }
 }
 

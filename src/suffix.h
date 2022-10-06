@@ -32,9 +32,9 @@ struct file_regex {
                 ;
         };
         if (recursive) {
-            f(range.operator()<fs::recursive_directory_iterator>());
+            f(range.template operator()<fs::recursive_directory_iterator>());
         } else {
-            f(range.operator()<fs::directory_iterator>());
+            f(range.template operator()<fs::directory_iterator>());
         }
     }
     static auto extract_dir_regex(std::string_view fn) {

@@ -37,6 +37,7 @@ struct sources_rule {
         }
     }
 };
+#ifdef _WIN32
 struct cl_exe_rule {
     msvc_instance msvc;
     win_sdk_info sdk;
@@ -110,8 +111,13 @@ struct link_exe_rule {
         tgt.commands.emplace_back(std::move(c));
     }
 };
+#endif
 
-using rule_types = types<sources_rule, cl_exe_rule, link_exe_rule>;
+using rule_types = types<sources_rule
+#ifdef _WIN32
+    , cl_exe_rule, link_exe_rule
+#endif
+>;
 using rule = decltype(make_variant(rule_types{}))::type;
 
 }

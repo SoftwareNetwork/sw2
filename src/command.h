@@ -24,7 +24,9 @@ struct raw_command {
     using stream = variant<std::monostate, string, stream_callback>;
     //stream in;
     stream out,err;
+#ifdef _WIN32
     win32::pipe pout, perr;
+#endif
 
     // sync()
     // async()
@@ -40,13 +42,13 @@ struct raw_command {
                 }
             };
             visit(a, overload{[&](string &s) {
-                                  quote(path{s});
+                                  quote(path{s}.wstring());
                               },
                               [&](string_view &s) {
-                                  quote(path{string{s.data(), s.size()}});
+                                  quote(path{string{s.data(), s.size()}}.wstring());
                               },
                               [&](path &p) {
-                                  quote(p);
+                                  quote(p.wstring());
                               }});
         }
         return s;
@@ -192,7 +194,7 @@ struct io_command : raw_command {
             end = clock::now();
             if (exit_code) {
                 throw std::runtime_error(
-                    std::format("process exit code: {}\nerror: {}", exit_code, std::get<string>(err)));
+                    format("process exit code: {}\nerror: {}", exit_code, std::get<string>(err)));
             }
             cs.add(*this);
         });
@@ -327,6 +329,7 @@ struct command_storage {
 struct command_executor {
     void run(auto &&tgt) {
         command_storage cs;
+#ifdef _WIN32
         win32::executor ex;
         auto job = win32::create_job_object();
         ex.register_job(job);
@@ -337,6 +340,7 @@ struct command_executor {
                 ex.run();
             });
         }
+#endif
     }
 };
 

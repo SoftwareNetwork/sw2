@@ -48,8 +48,11 @@ auto build_some_package2(solution &s) {
     tgt.link_options.link_libraries.push_back("ole32.lib");
     tgt.link_options.link_libraries.push_back("OleAut32.lib");
     tgt += sources_rule{};
+#ifdef _WIN32
     tgt += cl_exe_rule{};
     tgt += link_exe_rule{};
+#else
+#endif
     tgt();
     return tgt;
 }
@@ -59,7 +62,11 @@ auto build_some_package2(solution &s) {
 using namespace sw;
 
 int main1() {
+#ifdef _WIN32
     solution s{"d:/dev/cppan2/client4"};
+#else
+    solution s{"/home/egor/dev/sw4"};
+#endif
     auto tgt = build_some_package(s);
     auto tgt2 = build_some_package2(s);
 	file_storage<physical_file_storage_single_file<basic_contents_hash>> fst{ {"single_file2.bin"} };

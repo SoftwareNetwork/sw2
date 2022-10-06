@@ -5,6 +5,8 @@
 
 namespace sw {
 
+#ifdef _WIN32
+
 struct msvc_instance {
     path root;
 
@@ -36,11 +38,11 @@ auto detect_msvc1() {
     for (auto &&i : instances) {
         path root = i.VSInstallLocation;
         auto msvc = root / "VC" / "Tools" / "MSVC";
-        auto i = fs::directory_iterator{msvc};
+        auto it = fs::directory_iterator{msvc};
         if (i == fs::directory_iterator{}) {
             continue;
         }
-        auto &t = cls.emplace_back(msvc / i->path());
+        auto &t = cls.emplace_back(msvc / it->path());
         // i.VSInstallLocation.contains(L"Preview");
     }
     if (cls.empty()) {
@@ -498,5 +500,7 @@ const auto &detect_winsdk() {
     static auto sdk = detect_winsdk1();
     return sdk;
 }
+
+#endif
 
 }
