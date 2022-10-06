@@ -134,8 +134,8 @@ struct raw_command {
         ex.register_process(pi.hProcess, pi.dwProcessId, [this, cb, h = pi.hProcess]() {
             DWORD exit_code;
             GetExitCodeProcess(h, &exit_code);
-            CloseHandle(h);
             cb(exit_code);
+            CloseHandle(h); // we may want to use h in the callback
         });
 #endif
     }
@@ -169,31 +169,56 @@ struct raw_command {
 };
 
 struct io_command : raw_command {
+    using clock = std::chrono::system_clock;
+    using time_point = clock::time_point;
+
     bool always{false};
     std::set<path> inputs;
     std::set<path> outputs;
     std::set<path> implicit_inputs;
+    mutable uint64_t h{0};
+    time_point start, end;
 
-    bool outdated() const {
-        return always || true;
+    bool outdated(auto &&cs) const {
+        return always || cs.outdated(*this);
     }
-
-    void run(auto &&ex, auto &&cb) {
-        if (!outdated()) {
+    void run(auto &&ex, auto &&cs) {
+        if (!outdated(cs)) {
             return;
         }
-        raw_command::run(ex, [&, cb](auto exit_code) {
+        // use GetProcessTimes or similar for time
+        start = clock::now();
+        raw_command::run(ex, [&](auto exit_code) {
+            end = clock::now();
             if (exit_code) {
                 throw std::runtime_error(
                     std::format("process exit code: {}\nerror: {}", exit_code, std::get<string>(err)));
             }
-            cb();
+            cs.add(*this);
         });
+    }
+    auto hash1() const {
+        size_t h{0};
+        for (auto &&a : arguments) {
+            visit(a, [&]<typename T>(const T &s) { h ^= std::hash<T>()(s); });
+        }
+        h ^= std::hash<path>()(working_directory);
+        for (auto &&[k, v] : environment) {
+            h ^= std::hash<string>()(k);
+            h ^= std::hash<string>()(v);
+        }
+        return h;
+    }
+    auto hash() const {
+        if (!h) {
+            h = hash1();
+        }
+        return h;
     }
 };
 
 struct cl_exe_command : io_command {
-    void run(auto &&ex, auto &&cb) {
+    void run(auto &&ex, auto &&cs) {
         static const auto msvc_prefix = [&]() -> string {
             path base = fs::temp_directory_path() / "sw_msvc_prefix";
             auto fc = path{base} += ".c";
@@ -245,7 +270,7 @@ struct cl_exe_command : io_command {
         add("/showIncludes");
         scope_exit se{[&]{arguments.pop_back();}};
 
-        io_command::run(ex, cb);
+        io_command::run(ex, cs);
     }
 };
 
@@ -254,12 +279,38 @@ using command = variant<io_command, cl_exe_command>;
 struct command_storage {
     using mmap_type = mmap_file<>;
 
-    mmap_type commands, files;
+    mmap_type f_commands, f_files;
+    std::unordered_set<path> files;
+    mmap_type::stream cmd_stream;
 
     command_storage() : command_storage{"commands.bin"} {}
-    command_storage(const path &fn) : commands{fn, mmap_type::rw{}}, files{path{fn} += ".files", mmap_type::rw{}} {}
+    command_storage(const path &fn)
+            : f_commands{fn, mmap_type::rw{}}
+            , f_files{path{fn} += ".files", mmap_type::rw{}}
+            , cmd_stream{f_commands.get_stream()} {
+        if (cmd_stream.size() == 0) {
+            return;
+        }
+        uint64_t record_size;
+        cmd_stream >> record_size;
+    }
 
+    bool outdated(auto &&cmd) const {
+        return true;
+    }
+    void add(auto &&cmd) {
+        files.insert(cmd.inputs.begin(), cmd.inputs.end());
+        files.insert(cmd.implicit_inputs.begin(), cmd.implicit_inputs.end());
+        files.insert(cmd.outputs.begin(), cmd.outputs.end());
 
+        uint64_t h = cmd.hash();
+        auto t = *(uint64_t*)&cmd.end; // on mac it's 128 bit
+        uint64_t sz = sizeof(h) + sizeof(t) + (cmd.inputs.size() + cmd.implicit_inputs.size() + cmd.outputs.size()) * sizeof(h);
+        cmd_stream.alloc(sz);
+        //p = f_commands.alloc(sz);
+        //*(uint64_t*)p++ = h;
+        //*(uint64_t*)p++ = t;
+    }
 };
 
 struct command_executor {
@@ -271,8 +322,7 @@ struct command_executor {
 
         for (auto &&c : tgt.commands) {
             visit(c, [&](auto &&c) {
-                c.run(ex, [&] {
-                });
+                c.run(ex, cs);
                 ex.run();
             });
         }

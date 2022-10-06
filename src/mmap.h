@@ -28,6 +28,7 @@ struct mmap_file {
 
     using size_type = uint64_t;
 
+    path fn;
 #ifdef _WIN32
     win32::handle f, m;
 #else
@@ -43,6 +44,7 @@ struct mmap_file {
         open(fn, v);
     }
     void open(const path &fn, auto mode) {
+        this->fn = fn;
         sz = !fs::exists(fn) ? 0 : fs::file_size(fn) / sizeof(T);
         if (sz == 0) {
             return;
@@ -68,14 +70,17 @@ struct mmap_file {
         }
 #endif
     }
-    ~mmap_file() {
+    void close() {
 #ifdef _WIN32
         if (p) {
             UnmapViewOfFile(p);
         }
 #else
-        close(fd);
+        ::close(fd);
 #endif
+    }
+    ~mmap_file() {
+        close();
     }
     auto &operator[](int i) { return p[i]; }
     const auto &operator[](int i) const { return p[i]; }
@@ -86,6 +91,51 @@ struct mmap_file {
 
     auto begin() const { return p; }
     auto end() const { return p+sz; }
+
+    T *alloc(size_t sz) {
+        close();
+        auto oldsz = this->sz;
+        if (!fs::exists(fn)) {
+            std::ofstream{fn};
+        }
+        fs::resize_file(fn, oldsz ? this->sz * 2 + sz : sz * 2);
+        open(fn, rw{});
+        return p + oldsz;
+    }
+
+    struct stream {
+        mmap_file &m;
+        size_t offset{0};
+
+        auto size() const { return m.sz; }
+        auto left() const { return m.sz - offset; }
+
+        auto alloc(size_t sz) {
+            if (offset + sz > m.sz) {
+                m.alloc(sz);
+            }
+        }
+
+        stream &operator>>(uint64_t &v) {
+            if (left() < 8) {
+                throw std::runtime_error{"no more data"};
+            }
+            v = *(uint64_t*)p;
+            p += 8;
+            return *this;
+        }
+        stream &operator<<(uint64_t &v) {
+            if (left() < 8) {
+
+            }
+            v = *(uint64_t *)p;
+            p += 8;
+            return *this;
+        }
+    };
+    auto get_stream() {
+        return stream{*this};
+    }
 };
 
 } // namespace primitives::templates2

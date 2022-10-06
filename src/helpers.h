@@ -12,6 +12,7 @@
 #include <ranges>
 #include <regex>
 #include <set>
+#include <unordered_set>
 #include <variant>
 
 namespace fs = std::filesystem;
@@ -77,8 +78,8 @@ decltype(auto) visit(auto &&var, auto && ... f) {
                                   int count = -1) {
     int sofar = 0;
     int cursor = 0;
-    std::string s(str);
-    std::string::size_type oldlen = oldstr.size(), newlen = newstr.size();
+    string s(str);
+    string::size_type oldlen = oldstr.size(), newlen = newstr.size();
     cursor = s.find(oldstr, cursor);
     while (cursor != -1 && cursor <= (int)s.size()) {
         if (count > -1 && sofar >= count) {
