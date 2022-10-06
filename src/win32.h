@@ -191,6 +191,12 @@ struct executor {
     }
 };
 
+} // namespace sw::win32
+
+namespace sw {
+
+using win32::executor;
+
 }
 
 #endif

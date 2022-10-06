@@ -44,14 +44,17 @@ auto build_some_package2(solution &s) {
         "src/.*\\.cpp"_r,
         "src/.*\\.h"_rr
         ;
+#ifdef _WIN32
     tgt.link_options.link_libraries.push_back("advapi32.lib");
     tgt.link_options.link_libraries.push_back("ole32.lib");
     tgt.link_options.link_libraries.push_back("OleAut32.lib");
+#endif
     tgt += sources_rule{};
 #ifdef _WIN32
     tgt += cl_exe_rule{};
     tgt += link_exe_rule{};
 #else
+    tgt += gcc_rule{};
 #endif
     tgt();
     return tgt;

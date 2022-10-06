@@ -12,5 +12,7 @@ std::vector<VSInstanceInfo> enumerate_vs_instances() {
         throw std::runtime_error("can't enumerate vs instances");
     }
     return h.instances;
+#else
+    return {};
 #endif
 }

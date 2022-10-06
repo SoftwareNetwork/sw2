@@ -111,11 +111,68 @@ struct link_exe_rule {
         tgt.commands.emplace_back(std::move(c));
     }
 };
+#else
+struct gcc_instance {
+    path bin;
+
+    auto cl_target() const {
+        cl_binary_target t;
+        t.package = package_id{"org.gnu.gcc"s, "0.0.1"};
+        t.exe = bin;
+        return t;
+    }
+    auto link_target() const {
+        cl_binary_target t;
+        t.package = package_id{"org.gnu.gcc"s, "0.0.1"};
+        t.exe = bin;
+        return t;
+    }
+};
+
+auto detect_gcc_clang() {
+    std::vector<gcc_instance> cls;
+    cls.emplace_back("/usr/bin/g++"s);
+    return cls;
+}
+
+struct gcc_rule {
+    gcc_instance gcc;
+
+    gcc_rule() {
+        gcc = detect_gcc_clang().at(0);
+    }
+
+    void operator()(auto &tgt) const {
+        auto compiler = gcc.cl_target();
+        for (auto &&[f, rules] : tgt.processed_files) {
+            if (is_cpp_file(f) && !rules.contains(this)) {
+                auto out = f.filename() += ".obj";
+                gcc_command c;
+                c += compiler.exe, "-c", "-std=c++2b", f, "-o", out;
+                auto add = [&](auto &&tgt) {
+                    for (auto &&d : tgt.definitions) {
+                        c += (string)d;
+                    }
+                    for (auto &&i : tgt.include_directories) {
+                        c += "-I" + i.string();
+                    }
+                };
+                add(tgt.compile_options);
+                c.inputs.insert(f);
+                c.outputs.insert(out);
+                tgt.commands.emplace_back(std::move(c));
+                rules.insert(this);
+            }
+        }
+    }
+};
 #endif
 
 using rule_types = types<sources_rule
 #ifdef _WIN32
     , cl_exe_rule, link_exe_rule
+#else
+    , gcc_rule
 #endif
 >;
 using rule = decltype(make_variant(rule_types{}))::type;

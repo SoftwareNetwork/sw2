@@ -2,11 +2,8 @@
 
 #include "helpers.h"
 #include "win32.h"
+#include "linux.h"
 #include "mmap.h"
-
-#ifdef _WIN32
-#include <windows.h>
-#endif
 
 namespace sw {
 
@@ -141,8 +138,57 @@ struct raw_command {
         });
 #endif
     }
-    void run_linux() {
-        // clone3()
+    void run_linux(auto &&ex, auto &&cb) {
+#if defined(__linux__)
+        std::vector<string> args;
+        args.reserve(arguments.size());
+        for (auto &&a : arguments) {
+            visit(a, overload{[&](string &s) {
+                args.push_back(s);
+            },
+                              [&](string_view &s) {
+                                  args.push_back(string{s.data(), s.size()});
+                              },
+                              [&](path &p) {
+                                  args.push_back(p.string());
+                              }});
+        }
+        std::vector<char *> args2;
+        args2.reserve(args.size() + 1);
+        for (auto &&a : args) {
+            args2.push_back(a.data());
+        }
+        args2.push_back(0);
+
+        clone_args cargs{};
+        cargs.flags |= CLONE_PIDFD;
+        cargs.flags |= CLONE_VFORK; // ?
+        //cargs.exit_signal = SIGCHLD;
+        int pidfd;
+        cargs.pidfd = &pidfd;
+        auto pid = clone3(&cargs, sizeof(cargs));
+        if (pid == -1) {
+            throw std::runtime_error{"cant clone3: "s + std::to_string(errno)};
+        }
+        if (pid == 0) {
+            // child
+            if (execve(args2[0], args2.data(), environ) == -1) {
+                std::cerr << "execve error: " << errno << "\n";
+                exit(1);
+            }
+        }
+        ex.register_process(pidfd, [pid, pidfd](){
+            scope_exit se{[&] { close(pidfd); }};
+
+            int wstatus;
+            if (waitpid(pid, &wstatus, 0) == -1) {
+                throw std::runtime_error{"error waitpid: " + std::to_string(errno)};
+            }
+            if (WIFEXITED(wstatus)) {
+                int exit_code = WEXITSTATUS(wstatus);;;
+            }
+        });
+#endif
     }
     void run_macos() {
         //
@@ -150,11 +196,15 @@ struct raw_command {
     void run(auto &&ex, auto &&cb) {
 #ifdef _WIN32
         run_win32(ex, cb);
+#elif defined(__linux__)
+        run_linux(ex, cb);
 #endif
     }
     void run(auto &&ex) {
 #ifdef _WIN32
         run(ex, [](auto){});
+#elif defined(__linux__)
+        run_linux(ex, [](auto){});
 #endif
     }
 
@@ -277,7 +327,16 @@ struct cl_exe_command : io_command {
     }
 };
 
-using command = variant<io_command, cl_exe_command>;
+struct gcc_command : io_command {
+    void run(auto &&ex, auto &&cs) {
+        err = ""s;
+        out = ""s;
+
+        io_command::run(ex, cs);
+    }
+};
+
+using command = variant<io_command, cl_exe_command, gcc_command>;
 
 struct command_storage {
     using mmap_type = mmap_file<>;
@@ -329,10 +388,11 @@ struct command_storage {
 struct command_executor {
     void run(auto &&tgt) {
         command_storage cs;
+        executor ex;
 #ifdef _WIN32
-        win32::executor ex;
         auto job = win32::create_job_object();
         ex.register_job(job);
+#endif
 
         for (auto &&c : tgt.commands) {
             visit(c, [&](auto &&c) {
@@ -340,7 +400,6 @@ struct command_executor {
                 ex.run();
             });
         }
-#endif
     }
 };
 
