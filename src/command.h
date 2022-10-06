@@ -50,6 +50,28 @@ struct raw_command {
         }
         return s;
     }
+    std::string print() {
+        std::string s;
+        for (auto &&a : arguments) {
+            auto quote = [&](const std::string &as) {
+                if (as.contains(" ")) {
+                    s += "\"" + as + "\" ";
+                } else {
+                    s += as + " ";
+                }
+            };
+            visit(a, overload{[&](string &s) {
+                quote(s);
+            },
+                              [&](string_view &s) {
+                                  quote(string{s.data(), s.size()});
+                              },
+                              [&](path &p) {
+                                  quote(p.string());
+                              }});
+        }
+        return s;
+    }
 
     // execute?
     void shell_execute() {
@@ -140,6 +162,8 @@ struct raw_command {
     }
     void run_linux(auto &&ex, auto &&cb) {
 #if defined(__linux__)
+        std::wcout << printw() << "\n";
+
         std::vector<string> args;
         args.reserve(arguments.size());
         for (auto &&a : arguments) {

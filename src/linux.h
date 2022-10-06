@@ -85,7 +85,6 @@ struct executor {
                 //handle_child_process_output(buffer, count);
                 int a = 5;
                 a++;
-                a = 1ULL<<40;
             }
         }
     }

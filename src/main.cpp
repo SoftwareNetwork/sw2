@@ -54,7 +54,8 @@ auto build_some_package2(solution &s) {
     tgt += cl_exe_rule{};
     tgt += link_exe_rule{};
 #else
-    tgt += gcc_rule{};
+    tgt += gcc_compile_rule{};
+    tgt += gcc_link_rule{};
 #endif
     tgt();
     return tgt;

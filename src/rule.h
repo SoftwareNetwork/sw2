@@ -135,10 +135,10 @@ auto detect_gcc_clang() {
     return cls;
 }
 
-struct gcc_rule {
+struct gcc_compile_rule {
     gcc_instance gcc;
 
-    gcc_rule() {
+    gcc_compile_rule() {
         gcc = detect_gcc_clang().at(0);
     }
 
@@ -146,7 +146,7 @@ struct gcc_rule {
         auto compiler = gcc.cl_target();
         for (auto &&[f, rules] : tgt.processed_files) {
             if (is_cpp_file(f) && !rules.contains(this)) {
-                auto out = f.filename() += ".obj";
+                auto out = f.filename() += ".o";
                 gcc_command c;
                 c += compiler.exe, "-c", "-std=c++2b", f, "-o", out;
                 auto add = [&](auto &&tgt) {
@@ -166,13 +166,45 @@ struct gcc_rule {
         }
     }
 };
+struct gcc_link_rule {
+    gcc_instance gcc;
+
+    gcc_link_rule() {
+        gcc = detect_gcc_clang().at(0);
+    }
+
+    void operator()(auto &tgt) const {
+        path out = (string)tgt.name;
+        auto linker = gcc.link_target();
+        io_command c;
+        c += linker.exe, "-o", out.string();
+        for (auto &&[f, rules] : tgt.processed_files) {
+            if (f.extension() == ".o") {
+                c += f;
+                c.inputs.insert(f);
+                rules.insert(this);
+            }
+        }
+        auto add = [&](auto &&tgt) {
+            for (auto &&i : tgt.link_directories) {
+                c += "-L", i;
+            }
+            for (auto &&d : tgt.link_libraries) {
+                c += d.string();
+            }
+        };
+        add(tgt.link_options);
+        c.outputs.insert(out);
+        tgt.commands.emplace_back(std::move(c));
+    }
+};
 #endif
 
 using rule_types = types<sources_rule
 #ifdef _WIN32
     , cl_exe_rule, link_exe_rule
 #else
-    , gcc_rule
+    , gcc_compile_rule, gcc_link_rule
 #endif
 >;
 using rule = decltype(make_variant(rule_types{}))::type;
