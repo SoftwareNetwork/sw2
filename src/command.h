@@ -262,6 +262,7 @@ struct cl_exe_command : io_command {
             size_t p = 0;
             while ((p = sv.find(msvc_prefix, p)) != -1) {
                 p += msvc_prefix.size();
+                p = sv.find_first_not_of(' ', p);
                 auto fn = sv.substr(p, sv.find_first_of("\r\n", p) - p);
                 implicit_inputs.insert(string{fn.data(),fn.data()+fn.size()});
             }
@@ -291,25 +292,35 @@ struct command_storage {
         if (cmd_stream.size() == 0) {
             return;
         }
-        uint64_t record_size;
-        cmd_stream >> record_size;
+        while (auto s = cmd_stream.read_record()) {
+        }
     }
 
     bool outdated(auto &&cmd) const {
         return true;
     }
     void add(auto &&cmd) {
-        files.insert(cmd.inputs.begin(), cmd.inputs.end());
-        files.insert(cmd.implicit_inputs.begin(), cmd.implicit_inputs.end());
-        files.insert(cmd.outputs.begin(), cmd.outputs.end());
+        auto ins = [&](auto &&v) {
+            files.insert(v.begin(), v.end());
+        };
+        ins(cmd.inputs);
+        ins(cmd.implicit_inputs);
+        ins(cmd.outputs);
 
         uint64_t h = cmd.hash();
         auto t = *(uint64_t*)&cmd.end; // on mac it's 128 bit
         uint64_t sz = sizeof(h) + sizeof(t) + (cmd.inputs.size() + cmd.implicit_inputs.size() + cmd.outputs.size()) * sizeof(h);
-        cmd_stream.alloc(sz);
-        //p = f_commands.alloc(sz);
-        //*(uint64_t*)p++ = h;
-        //*(uint64_t*)p++ = t;
+        auto r = cmd_stream.write_record(sz);
+        r << h << t;
+        auto write_h = [&](auto &&v) {
+            for (auto &&f : v) {
+                r << (uint64_t)std::hash<path>()(f);
+            }
+        };
+        write_h(cmd.inputs);
+        write_h(cmd.implicit_inputs);
+        write_h(cmd.outputs);
+        // flush
     }
 };
 

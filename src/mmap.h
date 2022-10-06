@@ -20,7 +20,7 @@ struct mmap_file {
     };
     struct rw {
         static inline constexpr auto access = GENERIC_READ | GENERIC_WRITE;
-        static inline constexpr auto share_mode = FILE_SHARE_READ | FILE_SHARE_WRITE;
+        static inline constexpr auto share_mode = FILE_SHARE_READ;// | FILE_SHARE_WRITE;
         static inline constexpr auto disposition = OPEN_ALWAYS;
         static inline constexpr auto page_mode = PAGE_READWRITE;
         static inline constexpr auto map_mode = FILE_MAP_READ | FILE_MAP_WRITE;
@@ -75,6 +75,8 @@ struct mmap_file {
         if (p) {
             UnmapViewOfFile(p);
         }
+        f.reset();
+        m.reset();
 #else
         ::close(fd);
 #endif
@@ -92,7 +94,7 @@ struct mmap_file {
     auto begin() const { return p; }
     auto end() const { return p+sz; }
 
-    T *alloc(size_t sz) {
+    T *alloc(size_type sz) {
         close();
         auto oldsz = this->sz;
         if (!fs::exists(fn)) {
@@ -105,31 +107,55 @@ struct mmap_file {
 
     struct stream {
         mmap_file &m;
-        size_t offset{0};
+        size_type offset{0};
 
         auto size() const { return m.sz; }
-        auto left() const { return m.sz - offset; }
+        bool has_room(auto sz) const { return offset + sz <= m.sz; }
+        explicit operator bool() const { return offset != -1; }
 
-        auto alloc(size_t sz) {
-            if (offset + sz > m.sz) {
+        auto write_record(size_type sz) {
+            if (!has_room(sz)) {
                 m.alloc(sz);
             }
+            *this << sz;
+            auto oldoff = offset;
+            offset += sz;
+            return stream{m,oldoff};
+        }
+        auto read_record() {
+            size_type sz;
+            if (!has_room(sizeof(sz))) {
+                return stream{m, (size_type)-1};
+            }
+            *this >> sz;
+            if (sz == 0) {
+                offset -= sizeof(sz);
+                return stream{m, (size_type)-1};
+            }
+            if (!has_room(sz)) {
+                return stream{m, (size_type)-1};
+            }
+            auto oldoff = offset;
+            offset += sz;
+            return stream{m,oldoff};
         }
 
-        stream &operator>>(uint64_t &v) {
-            if (left() < 8) {
+        template <typename T>
+        stream &operator>>(T &v) {
+            if (!has_room(sizeof(T))) {
                 throw std::runtime_error{"no more data"};
             }
-            v = *(uint64_t*)p;
-            p += 8;
+            v = *(T*)(m.p + offset);
+            offset += sizeof(T);
             return *this;
         }
-        stream &operator<<(uint64_t &v) {
-            if (left() < 8) {
-
+        template <typename T>
+        stream &operator<<(const T &v) {
+            if (!has_room(sizeof(T))) {
+                throw std::runtime_error{"no more room"};
             }
-            v = *(uint64_t *)p;
-            p += 8;
+            *(T *)(m.p + offset) = v;
+            offset += sizeof(T);
             return *this;
         }
     };
