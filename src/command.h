@@ -160,6 +160,15 @@ struct raw_command {
         }
         args2.push_back(0);
 
+        auto mkpipe = [](int my_pipe[2]) {
+            if (pipe2(my_pipe, 0) == -1) {
+                fprintf(stderr, "Error creating pipe\n");
+            }
+            return my_pipe;
+        };
+        int pout[2]; mkpipe(pout);
+        int perr[2]; mkpipe(perr);
+
         clone_args cargs{};
         cargs.flags |= CLONE_PIDFD;
         cargs.flags |= CLONE_VFORK; // ?
@@ -171,14 +180,35 @@ struct raw_command {
             throw std::runtime_error{"cant clone3: "s + std::to_string(errno)};
         }
         if (pid == 0) {
+            auto setup_pipe = [](auto my_pipe, auto fd) {
+                //while ((dup2(my_pipe[1], STDERR_FILENO) == -1) && (errno == EINTR)) {}
+                if (dup2(my_pipe[1], fd) == -1) {
+                    std::cerr << "dup2 error: " << errno << "\n";
+                    exit(1);
+                }
+                close(my_pipe[0]);
+                close(my_pipe[1]);
+            };
+            setup_pipe(pout, STDOUT_FILENO);
+            setup_pipe(perr, STDERR_FILENO);
             // child
             if (execve(args2[0], args2.data(), environ) == -1) {
                 std::cerr << "execve error: " << errno << "\n";
                 exit(1);
             }
         }
-        ex.register_process(pidfd, [pid, pidfd](){
-            scope_exit se{[&] { close(pidfd); }};
+        auto postsetup_pipe = [&](auto my_pipe) {
+            close(my_pipe[1]);
+            ex.register_read_handle(my_pipe[0]);
+        };
+        postsetup_pipe(pout);
+        postsetup_pipe(perr);
+        ex.register_process(pidfd, [pid, pidfd, pout = pout[0], perr = perr[0]](){
+            scope_exit se{[&] {
+                close(pout);
+                close(perr);
+                close(pidfd);
+            }};
 
             int wstatus;
             if (waitpid(pid, &wstatus, 0) == -1) {

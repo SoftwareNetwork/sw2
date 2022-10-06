@@ -69,6 +69,34 @@ struct executor {
             process_callbacks.erase(it);
             return;
         }
+        char buffer[4096];
+        while (1) {
+            auto count = read(ev.data.fd, buffer, sizeof(buffer));
+            if (count == -1) {
+                if (errno == EINTR) {
+                    continue;
+                } else {
+                    perror("read");
+                    exit(1);
+                }
+            } else if (count == 0) {
+                break;
+            } else {
+                //handle_child_process_output(buffer, count);
+                int a = 5;
+                a++;
+                a = 1ULL<<40;
+            }
+        }
+    }
+
+    void register_read_handle(auto &&fd) {
+        epoll_event ev{};
+        ev.events = EPOLLIN;
+        ev.data.fd = fd;
+        if (epoll_ctl(efd, EPOLL_CTL_ADD, fd, &ev) == -1) {
+            throw std::runtime_error{"error epoll_ctl: " + std::to_string(errno)};
+        }
     }
     void register_process(auto &&fd, auto &&f) {
         process_callbacks.emplace(fd, std::move(f));
