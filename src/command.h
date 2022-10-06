@@ -2,6 +2,7 @@
 
 #include "helpers.h"
 #include "win32.h"
+#include "mmap.h"
 
 #ifdef _WIN32
 #include <windows.h>
@@ -168,13 +169,31 @@ struct raw_command {
 };
 
 struct io_command : raw_command {
+    bool always{false};
     std::set<path> inputs;
     std::set<path> outputs;
     std::set<path> implicit_inputs;
+
+    bool outdated() const {
+        return always || true;
+    }
+
+    void run(auto &&ex, auto &&cb) {
+        if (!outdated()) {
+            return;
+        }
+        raw_command::run(ex, [&, cb](auto exit_code) {
+            if (exit_code) {
+                throw std::runtime_error(
+                    std::format("process exit code: {}\nerror: {}", exit_code, std::get<string>(err)));
+            }
+            cb();
+        });
+    }
 };
 
 struct cl_exe_command : io_command {
-    void run(auto &&ex) {
+    void run(auto &&ex, auto &&cb) {
         static const auto msvc_prefix = [&]() -> string {
             path base = fs::temp_directory_path() / "sw_msvc_prefix";
             auto fc = path{base} += ".c";
@@ -222,28 +241,38 @@ struct cl_exe_command : io_command {
                 implicit_inputs.insert(string{fn.data(),fn.data()+fn.size()});
             }
         };
+
         add("/showIncludes");
         scope_exit se{[&]{arguments.pop_back();}};
 
-        io_command::run(ex, [&](auto exit_code) {
-            if (exit_code) {
-                throw std::runtime_error(std::format("process exit code: {}\nerror: {}", exit_code, std::get<string>(err)));
-            }
-        });
+        io_command::run(ex, cb);
     }
 };
 
 using command = variant<io_command, cl_exe_command>;
 
+struct command_storage {
+    using mmap_type = mmap_file<>;
+
+    mmap_type commands, files;
+
+    command_storage() : command_storage{"commands.bin"} {}
+    command_storage(const path &fn) : commands{fn, mmap_type::rw{}}, files{path{fn} += ".files", mmap_type::rw{}} {}
+
+
+};
+
 struct command_executor {
-    void run(auto &&commands) {
+    void run(auto &&tgt) {
+        command_storage cs;
         win32::executor ex;
         auto job = win32::create_job_object();
         ex.register_job(job);
 
-        for (auto &&c : commands) {
+        for (auto &&c : tgt.commands) {
             visit(c, [&](auto &&c) {
-                c.run(ex);
+                c.run(ex, [&] {
+                });
                 ex.run();
             });
         }

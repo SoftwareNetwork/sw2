@@ -10,3 +10,5 @@ void build(Solution &s) {
         t += "advapi32.lib"_slib;
     }
 }
+
+// cl -nologo -std:c++latest -EHsc *.cpp advapi32.lib ole32.lib OleAut32.lib -link -OUT:sw.exe

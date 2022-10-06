@@ -34,7 +34,7 @@ struct rule_target : files_target {
 
     void operator()() {
         command_executor ce;
-        ce.run(commands);
+        ce.run(*this);
     }
 };
 

@@ -3,6 +3,7 @@
 #include "helpers.h"
 
 #ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #endif
 
@@ -18,10 +19,12 @@ struct handle {
     HANDLE h{INVALID_HANDLE_VALUE};
 
     handle() = default;
-    handle(HANDLE h) : h{h} {
+    handle(HANDLE h, auto &&err) : h{h} {
         if (h == INVALID_HANDLE_VALUE || !h) {
-            throw std::runtime_error{"bad handle"};
+            err();
         }
+    }
+    handle(HANDLE h) : handle{h,[]{throw std::runtime_error{"bad handle"};}} {
     }
     handle(const handle &) = delete;
     handle &operator=(const handle &) = delete;
@@ -36,7 +39,6 @@ struct handle {
     }
     ~handle() {
         if (!CloseHandle(h)) {
-            int a = 5;
         }
     }
 
