@@ -3,3 +3,6 @@
 *.o
 *.obj
 *.exe
+.idea
+CMake*
+cmake-*
