@@ -33,7 +33,7 @@ jobs:
     steps:
     - uses: actions/checkout@v1
     - name: install
-      run: brew install gcc
+      run: brew install fmt
     - name: build
       run: |
         export PATH="/usr/local/opt/gcc/bin:$PATH"
