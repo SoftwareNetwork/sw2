@@ -16,7 +16,7 @@ jobs:
 
   linux:
     runs-on: ubuntu-22.04
-    container: fedora:37
+    container: fedora:36
     steps:
     - uses: actions/checkout@v3
     - name: prepare
@@ -24,9 +24,8 @@ jobs:
         sudo dnf -y update
         sudo dnf -y install gcc g++ fmt
     - run: ls /usr/include
-    - run: ls /usr/include/fmt
     - run: ls /usr/local/include
-    - run: g++ -std=c++2b src/*.cpp -o sw
+    - run: g++ -std=c++2b src/*.cpp -o sw -I/usr/local/include
     - uses: actions/upload-artifact@v3
       with:
         name: sw
