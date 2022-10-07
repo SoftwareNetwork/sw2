@@ -23,6 +23,9 @@ jobs:
       run: |
         sudo dnf -y update
         sudo dnf -y install gcc g++ fmt
+    - run: ls /usr/include
+    - run: ls /usr/include/fmt
+    - run: ls /usr/local/include
     - run: g++ -std=c++2b src/*.cpp -o sw
     - uses: actions/upload-artifact@v3
       with:
