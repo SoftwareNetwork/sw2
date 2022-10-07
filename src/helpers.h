@@ -10,6 +10,9 @@
 #if __has_include(<format>)
 #include <format>
 using std::format;
+#elif __has_include(<format.h>)
+#include <format.h>
+using fmt::format;
 #else
 #include <fmt/format.h>
 using fmt::format;
