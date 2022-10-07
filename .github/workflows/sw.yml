@@ -21,7 +21,7 @@ jobs:
     - name: prepare
       run: |
         sudo dnf -y update
-        sudo dnf -y install gcc
+        sudo dnf -y install gcc g++
     - run: g++ -std=c++2b src/*.cpp -o sw
     - uses: actions/upload-artifact@v3
       with:
