@@ -39,6 +39,7 @@ int clone3(clone_args *args, size_t size) {
 
 namespace sw::linux {
 
+#ifdef __linux__
 struct executor {
     int efd;
     std::atomic_bool stopped{false};
@@ -108,9 +109,14 @@ struct executor {
         }
     }
 };
+#endif
 
 } // namespace sw::linux
 
 namespace sw {
+
+#ifdef __linux__
 using linux::executor;
+#endif
+
 }

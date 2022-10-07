@@ -39,7 +39,7 @@ auto detect_msvc1() {
         path root = i.VSInstallLocation;
         auto msvc = root / "VC" / "Tools" / "MSVC";
         auto it = fs::directory_iterator{msvc};
-        if (i == fs::directory_iterator{}) {
+        if (it == fs::directory_iterator{}) {
             continue;
         }
         auto &t = cls.emplace_back(msvc / it->path());
