@@ -6,7 +6,7 @@ jobs:
   windows:
     runs-on: windows-2022    
     steps:
-    - uses: actions/checkout@3
+    - uses: actions/checkout@1
     - run: cl -nologo -std:c++latest -EHsc src/*.cpp advapi32.lib ole32.lib OleAut32.lib -link -OUT:sw.exe
     - uses: actions/upload-artifact@v3
       with:
@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-20.04
     container: fedora:36
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v1
     - name: prepare
       run: |
         sudo dnf -y update
@@ -31,7 +31,7 @@ jobs:
   macos:
     runs-on: macos-12
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v1
     - name: install
       run: brew install gcc
     - name: build
