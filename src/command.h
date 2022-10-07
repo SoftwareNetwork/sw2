@@ -322,7 +322,8 @@ struct io_command : raw_command {
             end = clock::now();
             if (exit_code) {
                 throw std::runtime_error(
-                    format("process exit code: {}\nerror: {}", exit_code, std::get<string>(err)));
+                    format("process exit code: {}\nerror: {}", exit_code, std::get<string>(err))
+                );
             }
             cs.add(*this);
         });

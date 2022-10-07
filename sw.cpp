@@ -13,4 +13,5 @@ void build(Solution &s) {
     }
 }
 
-// cl -nologo -std:c++latest -EHsc *.cpp advapi32.lib ole32.lib OleAut32.lib -link -OUT:sw.exe
+// cl -nologo -std:c++latest -EHsc src/*.cpp advapi32.lib ole32.lib OleAut32.lib -link -OUT:sw.exe
+// g++ -std=c++2b src/*.cpp -o sw
