@@ -22,9 +22,7 @@ jobs:
     - name: prepare
       run: |
         sudo dnf -y install gcc g++ fmt-devel
-    - run: ls /usr/include
-    - run: ls /usr/local/include
-    - run: g++ -std=c++2b src/*.cpp -o sw
+    - run: g++ -std=c++2b src/*.cpp -o sw -lfmt
     - uses: actions/upload-artifact@v3
       with:
         name: sw
