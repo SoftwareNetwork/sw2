@@ -7,6 +7,7 @@ jobs:
     runs-on: windows-2022    
     steps:
     - uses: actions/checkout@v3
+    - uses: ilammy/msvc-dev-cmd@v1
     - run: cl -nologo -std:c++latest -EHsc src/*.cpp advapi32.lib ole32.lib OleAut32.lib -link -OUT:sw.exe
     - uses: actions/upload-artifact@v3
       with:
