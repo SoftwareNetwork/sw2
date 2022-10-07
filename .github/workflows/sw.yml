@@ -21,10 +21,10 @@ jobs:
     - uses: actions/checkout@v3
     - name: prepare
       run: |
-        sudo dnf -y install gcc g++ fmt
+        sudo dnf -y install gcc g++ fmt-devel
     - run: ls /usr/include
     - run: ls /usr/local/include
-    - run: g++ -std=c++2b src/*.cpp -o sw -I/usr/local/include
+    - run: g++ -std=c++2b src/*.cpp -o sw
     - uses: actions/upload-artifact@v3
       with:
         name: sw
