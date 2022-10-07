@@ -442,7 +442,7 @@ struct command_storage {
         ins(cmd.implicit_inputs);
         ins(cmd.outputs);
 
-        uint64_t h = cmd.hash();
+        auto h = cmd.hash();
         auto t = *(uint64_t*)&cmd.end; // on mac it's 128 bit
         uint64_t sz = sizeof(h) + sizeof(t) + n * sizeof(h) + sizeof(n);
         auto r = cmd_stream.write_record(sz);
