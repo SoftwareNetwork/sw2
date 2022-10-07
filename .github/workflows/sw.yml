@@ -1,0 +1,44 @@
+name: sw
+
+on: [push, pull_request]
+
+jobs:
+  windows:
+    runs-on: windows-2022    
+    steps:
+    - uses: actions/checkout@3
+    - run: cl -nologo -std:c++latest -EHsc src/*.cpp advapi32.lib ole32.lib OleAut32.lib -link -OUT:sw.exe
+    - uses: actions/upload-artifact@v3
+      with:
+        name: sw
+        path: "*.exe"
+
+  linux:
+    runs-on: ubuntu-20.04
+    container: fedora:36
+    steps:
+    - uses: actions/checkout@v3
+    - name: prepare
+      run: |
+        sudo dnf -y update
+        sudo dnf -y install gcc
+    - run: g++ -std=c++2b src/*.cpp -o sw
+    - uses: actions/upload-artifact@v3
+      with:
+        name: sw
+        path: sw
+                
+  macos:
+    runs-on: macos-12
+    steps:
+    - uses: actions/checkout@v3
+    - name: install
+      run: brew install gcc
+    - name: build
+      run: |
+        export PATH="/usr/local/opt/gcc/bin:$PATH"
+        g++ -std=c++2b src/*.cpp -o sw
+    - uses: actions/upload-artifact@v3
+      with:
+        name: sw
+        path: sw
