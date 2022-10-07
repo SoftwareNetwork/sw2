@@ -3,9 +3,9 @@
 
 #pragma once
 
+#ifdef __linux__
 #include "helpers.h"
 
-#ifdef __linux__
 #include <signal.h>
 #include <sys/epoll.h>
 #include <sys/syscall.h>
@@ -38,11 +38,9 @@ struct clone_args {
 int clone3(clone_args *args, size_t size) {
     return syscall(SYS_clone3, args, size);
 }
-#endif
 
 namespace sw::linux {
 
-#ifdef __linux__
 struct executor {
     int efd;
     std::atomic_bool stopped{false};
@@ -112,14 +110,13 @@ struct executor {
         }
     }
 };
-#endif
 
 } // namespace sw::linux
 
 namespace sw {
 
-#ifdef __linux__
 using linux::executor;
-#endif
 
 }
+
+#endif

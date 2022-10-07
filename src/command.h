@@ -6,6 +6,7 @@
 #include "helpers.h"
 #include "win32.h"
 #include "linux.h"
+#include "macos.h"
 #include "mmap.h"
 
 namespace sw {
