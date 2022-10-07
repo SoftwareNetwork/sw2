@@ -37,7 +37,7 @@ jobs:
     - name: build
       run: |
         export PATH="/usr/local/opt/gcc/bin:$PATH"
-        g++-12 -std=c++2b src/*.cpp -o sw -I/opt/homebrew/include
+        g++-12 -std=c++2b src/*.cpp -o sw -I/usr/local/include
     - uses: actions/upload-artifact@v3
       with:
         name: sw
