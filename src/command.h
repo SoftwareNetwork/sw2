@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2022 Egor Pugin <egor.pugin@gmail.com>
+
 #pragma once
 
 #include "helpers.h"
@@ -227,7 +230,7 @@ struct raw_command {
         };
         postsetup_pipe(pout);
         postsetup_pipe(perr);
-        ex.register_process(pidfd, [pid, pidfd, pout = pout[0], perr = perr[0]](){
+        ex.register_process(pidfd, [pid, pidfd, pout = pout[0], perr = perr[0], cb](){
             scope_exit se{[&] {
                 close(pout);
                 close(perr);
@@ -239,7 +242,8 @@ struct raw_command {
                 throw std::runtime_error{"error waitpid: " + std::to_string(errno)};
             }
             if (WIFEXITED(wstatus)) {
-                int exit_code = WEXITSTATUS(wstatus);;;
+                int exit_code = WEXITSTATUS(wstatus);
+                cb(exit_code);
             }
         });
 #endif
@@ -274,15 +278,35 @@ struct raw_command {
     }
 };
 
+struct command_hash {
+    uint64_t h{0};
+
+    void operator()(auto &&cmd) {
+        h = 0;
+        for (auto &&a : cmd.arguments) {
+            visit(a, [&]<typename T>(const T &s) {
+                h ^= std::hash<T>()(s);
+            });
+        }
+        h ^= std::hash<path>()(cmd.working_directory);
+        for (auto &&[k, v] : cmd.environment) {
+            h ^= std::hash<string>()(k);
+            h ^= std::hash<string>()(v);
+        }
+    }
+    explicit operator bool() const { return h; }
+};
+
 struct io_command : raw_command {
     using clock = std::chrono::system_clock;
     using time_point = clock::time_point;
+    using hash_type = command_hash;
 
     bool always{false};
     std::set<path> inputs;
     std::set<path> outputs;
     std::set<path> implicit_inputs;
-    mutable uint64_t h{0};
+    mutable hash_type h;
     time_point start, end;
 
     bool outdated(auto &&cs) const {
@@ -303,21 +327,9 @@ struct io_command : raw_command {
             cs.add(*this);
         });
     }
-    auto hash1() const {
-        size_t h{0};
-        for (auto &&a : arguments) {
-            visit(a, [&]<typename T>(const T &s) { h ^= std::hash<T>()(s); });
-        }
-        h ^= std::hash<path>()(working_directory);
-        for (auto &&[k, v] : environment) {
-            h ^= std::hash<string>()(k);
-            h ^= std::hash<string>()(v);
-        }
-        return h;
-    }
     auto hash() const {
         if (!h) {
-            h = hash1();
+            h(*this);
         }
         return h;
     }
@@ -393,11 +405,17 @@ struct gcc_command : io_command {
 using command = variant<io_command, cl_exe_command, gcc_command>;
 
 struct command_storage {
+    struct command_data {
+        fs::file_time_type mtime;
+        io_command::hash_type hash;
+    };
+
     using mmap_type = mmap_file<>;
 
     mmap_type f_commands, f_files;
     std::unordered_set<path> files;
     mmap_type::stream cmd_stream;
+    std::unordered_map<uint64_t, command_data> commands;
 
     command_storage() : command_storage{"commands.bin"} {}
     command_storage(const path &fn)
@@ -415,8 +433,10 @@ struct command_storage {
         return true;
     }
     void add(auto &&cmd) {
+        uint64_t n{0};
         auto ins = [&](auto &&v) {
             files.insert(v.begin(), v.end());
+            n += v.size();
         };
         ins(cmd.inputs);
         ins(cmd.implicit_inputs);
@@ -424,9 +444,9 @@ struct command_storage {
 
         uint64_t h = cmd.hash();
         auto t = *(uint64_t*)&cmd.end; // on mac it's 128 bit
-        uint64_t sz = sizeof(h) + sizeof(t) + (cmd.inputs.size() + cmd.implicit_inputs.size() + cmd.outputs.size()) * sizeof(h);
+        uint64_t sz = sizeof(h) + sizeof(t) + n * sizeof(h) + sizeof(n);
         auto r = cmd_stream.write_record(sz);
-        r << h << t;
+        r << h << t << n;
         auto write_h = [&](auto &&v) {
             for (auto &&f : v) {
                 r << (uint64_t)std::hash<path>()(f);

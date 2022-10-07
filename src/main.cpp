@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2022 Egor Pugin <egor.pugin@gmail.com>
+
 #include "command.h"
 #include "storage.h"
 #include "vs_instance_helpers.h"
