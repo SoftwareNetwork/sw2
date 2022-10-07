@@ -21,7 +21,6 @@ jobs:
     - uses: actions/checkout@v3
     - name: prepare
       run: |
-        #sudo dnf -y update
         sudo dnf -y install gcc g++ fmt
     - run: ls /usr/include
     - run: ls /usr/local/include
