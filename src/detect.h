@@ -12,6 +12,7 @@ namespace sw {
 
 struct msvc_instance {
     path root;
+    package_version version;
 
     auto cl_target() const {
         cl_binary_target t;
@@ -33,6 +34,7 @@ struct msvc_instance {
         t.link_directories.push_back(root / "lib" / "x64");
         return t;
     }
+    //auto root() const { return install_location / "VC" / "Tools" / "MSVC"; }
 };
 
 auto detect_msvc1() {
@@ -40,13 +42,12 @@ auto detect_msvc1() {
     std::vector<msvc_instance> cls;
     for (auto &&i : instances) {
         path root = i.VSInstallLocation;
+        auto preview = i.VSInstallLocation.contains(L"Preview");
         auto msvc = root / "VC" / "Tools" / "MSVC";
-        auto it = fs::directory_iterator{msvc};
-        if (it == fs::directory_iterator{}) {
-            continue;
+        for (auto &&p : fs::directory_iterator{msvc}) {
+            cls.emplace_back(msvc / p.path(),
+                package_version{package_version::number_version{path{i.Version}.string(), "preview"s}});
         }
-        auto &t = cls.emplace_back(msvc / it->path());
-        // i.VSInstallLocation.contains(L"Preview");
     }
     if (cls.empty()) {
         throw std::runtime_error("empty compilers");

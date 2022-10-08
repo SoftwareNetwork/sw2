@@ -984,12 +984,12 @@ private:
 };
 
 struct VSInstanceInfo {
-    std::wstring InstanceId;
+    //std::wstring InstanceId;
     std::wstring VSInstallLocation;
     std::wstring Version;
-    uint64_t ullVersion{0};
-    bool IsWin10SDKInstalled{false};
-    bool IsWin81SDKInstalled{false};
+    //uint64_t ullVersion{0};
+    //bool IsWin10SDKInstalled{false};
+    //bool IsWin81SDKInstalled{false};
 };
 
 struct cmVSSetupAPIHelper
@@ -1117,7 +1117,7 @@ bool cmVSSetupAPIHelper::GetVSInstanceInfo(SmartCOMPtr<ISetupInstance2> pInstanc
 
     SmartBSTR bstrId;
     if (SUCCEEDED(pInstance->GetInstanceId(&bstrId))) {
-        vsInstanceInfo.InstanceId = std::wstring(bstrId);
+        //vsInstanceInfo.InstanceId = std::wstring(bstrId);
     } else {
         return false;
     }
@@ -1134,9 +1134,9 @@ bool cmVSSetupAPIHelper::GetVSInstanceInfo(SmartCOMPtr<ISetupInstance2> pInstanc
     } else {
         vsInstanceInfo.Version = std::wstring(bstrVersion);
         if (FAILED(setupHelper->ParseVersion(bstrVersion, &ullVersion))) {
-            vsInstanceInfo.ullVersion = 0;
+            //vsInstanceInfo.ullVersion = 0;
         } else {
-            vsInstanceInfo.ullVersion = ullVersion;
+            //vsInstanceInfo.ullVersion = ullVersion;
         }
     }
 
@@ -1176,8 +1176,8 @@ bool cmVSSetupAPIHelper::GetVSInstanceInfo(SmartCOMPtr<ISetupInstance2> pInstanc
             bool ret = CheckInstalledComponent(package, vcToolsetInstalled, win10SDKInstalled, win81SDkInstalled);
             if (ret) {
                 isVCToolSetInstalled |= vcToolsetInstalled;
-                vsInstanceInfo.IsWin10SDKInstalled |= win10SDKInstalled;
-                vsInstanceInfo.IsWin81SDKInstalled |= win81SDkInstalled;
+                //vsInstanceInfo.IsWin10SDKInstalled |= win10SDKInstalled;
+                //vsInstanceInfo.IsWin81SDKInstalled |= win81SDkInstalled;
             }
         }
 
@@ -1245,7 +1245,9 @@ bool cmVSSetupAPIHelper::Initialize() {
 }
 
 inline std::vector<VSInstanceInfo> enumerate_vs_instances() {
-    CoInitializeEx(0, 0);
+    auto r = CoInitializeEx(0, 0);
+    if (r != S_OK) {
+    }
     scope_exit se{[]{ CoUninitialize(); }};
 
     cmVSSetupAPIHelper h;

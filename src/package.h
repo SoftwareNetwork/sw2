@@ -31,17 +31,54 @@ struct package_name {
     }
 };
 
+auto split_string(const string &s, string_view split) {
+    std::vector<string_view> r;
+    size_t p = 0;
+    while ((p = s.find(split)) != -1) {
+    }
+    return r;
+}
+
 struct package_version {
     struct number_version {
-        using numbers = std::vector<int>;
+        struct numbers {
+            std::vector<int> value;
+
+            numbers() = default;
+            numbers(const std::initializer_list<int> &s) : value{s} {}
+            numbers(const string &s) {
+                for (auto &&e : split_string(s, "."sv)) {
+
+                }
+            }
+        };
         numbers elements;
         string extra;
+
+        bool is_pre_release() const { return !extra.empty(); }
+        bool is_release() const { return !is_pre_release(); }
     };
-    std::variant<number_version, string> version;
+    using version_type = std::variant<number_version, string>;
+    version_type version;
 
     package_version() : version{number_version{{0,0,1}}} {
     }
     package_version(const string &s) {
+    }
+    package_version(const version_type &s) : version{s} {
+    }
+
+    bool is_pre_release() const {
+        return std::holds_alternative<number_version>(version) && std::get<number_version>(version).is_pre_release();
+    }
+    bool is_release() const {
+        return std::holds_alternative<number_version>(version) && std::get<number_version>(version).is_release();
+    }
+    bool is_version() const {
+        return std::holds_alternative<number_version>(version);
+    }
+    bool is_branch() const {
+        return std::holds_alternative<string>(version);
     }
 };
 
