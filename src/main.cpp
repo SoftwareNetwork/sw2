@@ -88,4 +88,5 @@ int main() {
     } catch (...) {
         std::cerr << "unknown exception";
     }
+    return 1;
 }
