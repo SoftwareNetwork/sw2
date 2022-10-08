@@ -16,8 +16,10 @@ jobs:
         path: "*.exe"
 
   linux:
-    runs-on: ubuntu-20.04
-    container: fedora:36
+    runs-on: ubuntu-22.04
+    container:
+      image: fedora:36
+      options: --security-opt seccomp=unconfined
     steps:
     - uses: actions/checkout@v3
     - name: prepare
