@@ -340,7 +340,7 @@ struct io_command : raw_command {
 
 struct cl_exe_command : io_command {
     void run(auto &&ex, auto &&cs) {
-        static const auto msvc_prefix = [&]() -> string {
+        /*static const auto msvc_prefix = [&]() -> string {
             path base = fs::temp_directory_path() / "sw_msvc_prefix";
             auto fc = path{base} += ".c";
             auto fh = path{base} += ".h";
@@ -378,10 +378,8 @@ struct cl_exe_command : io_command {
             throw std::runtime_error{"cannot find msvc prefix"};
         }();
 
-        err = ""s;
-
         // < 14.27  1927 (version 16.7)
-        /*add("/showIncludes");
+        add("/showIncludes");
         scope_exit se{[&]{arguments.pop_back();}};
         out = [&](auto sv) {
             size_t p = 0;
@@ -398,6 +396,8 @@ struct cl_exe_command : io_command {
         add("/sourceDependencies-");
         scope_exit se{[&]{arguments.pop_back();}};
         out = ""s;
+
+        err = ""s;
 
         io_command::run(ex, cs);
     }

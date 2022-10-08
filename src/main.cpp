@@ -69,11 +69,7 @@ auto build_some_package2(solution &s) {
 using namespace sw;
 
 int main1() {
-#ifdef _WIN32
-    solution s{"d:/dev/cppan2/client4"};
-#else
-    solution s{"/home/egor/dev/sw4"};
-#endif
+    solution s{"."};
     auto tgt = build_some_package(s);
     auto tgt2 = build_some_package2(s);
 	file_storage<physical_file_storage_single_file<basic_contents_hash>> fst{ {"single_file2.bin"} };
