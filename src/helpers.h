@@ -7,7 +7,7 @@
 #include <atomic>
 #include <cassert>
 #include <filesystem>
-#if __has_include(<format>)
+/*#if __has_include(<format>)
 #include <format>
 using std::format;
 #elif __has_include(<format.h>)
@@ -16,7 +16,7 @@ using fmt::format;
 #else
 #include <fmt/format.h>
 using fmt::format;
-#endif
+#endif*/
 #include <fstream>
 #include <functional>
 #include <iostream>

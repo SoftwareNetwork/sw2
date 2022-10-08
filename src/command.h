@@ -323,7 +323,8 @@ struct io_command : raw_command {
             end = clock::now();
             if (exit_code) {
                 throw std::runtime_error(
-                    format("process exit code: {}\nerror: {}", exit_code, std::get<string>(err))
+                    //format("process exit code: {}\nerror: {}", exit_code, std::get<string>(err))
+                    "process exit code: " + std::to_string(exit_code) + "\nerror: " + std::get<string>(err) + ""
                 );
             }
             cs.add(*this);
@@ -378,18 +379,25 @@ struct cl_exe_command : io_command {
         }();
 
         err = ""s;
+
+        // < 14.27  1927 (version 16.7)
+        /*add("/showIncludes");
+        scope_exit se{[&]{arguments.pop_back();}};
         out = [&](auto sv) {
             size_t p = 0;
             while ((p = sv.find(msvc_prefix, p)) != -1) {
                 p += msvc_prefix.size();
                 p = sv.find_first_not_of(' ', p);
                 auto fn = sv.substr(p, sv.find_first_of("\r\n", p) - p);
-                implicit_inputs.insert(string{fn.data(),fn.data()+fn.size()});
+                implicit_inputs.insert(string{fn.data(), fn.data() + fn.size()});
             }
-        };
+        };*/
 
-        add("/showIncludes");
+        // >= 14.27  1927 (version 16.7)
+        // https://learn.microsoft.com/en-us/cpp/build/reference/sourcedependencies?view=msvc-170
+        add("/sourceDependencies-");
         scope_exit se{[&]{arguments.pop_back();}};
+        out = ""s;
 
         io_command::run(ex, cs);
     }

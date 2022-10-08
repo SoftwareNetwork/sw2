@@ -75,7 +75,6 @@ HANDLE default_job_object() {
 }
 
 struct pipe {
-    static inline std::atomic_int pipe_id{0};
     handle r, w;
 
     pipe() = default;
@@ -83,8 +82,10 @@ struct pipe {
         init(inherit);
     }
     void init(bool inherit = false) {
+        static std::atomic_int pipe_id{0};
         DWORD sz = 0;
-        auto s = std::format(L"\\\\.\\pipe\\swpipe.{}.{}", GetCurrentProcessId(), pipe_id++);
+        //auto s = std::format(L"\\\\.\\pipe\\swpipe.{}.{}", GetCurrentProcessId(), pipe_id++);
+        auto s = L"\\\\.\\pipe\\swpipe."s + std::to_wstring(GetCurrentProcessId()) + L"."s + std::to_wstring(pipe_id++) + L"";
         r = CreateNamedPipeW(s.c_str(), PIPE_ACCESS_INBOUND | FILE_FLAG_OVERLAPPED, 0, 1, sz, sz, 0, 0);
 
         SECURITY_ATTRIBUTES sa = {0};
