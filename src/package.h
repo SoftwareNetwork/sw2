@@ -34,8 +34,12 @@ struct package_name {
 auto split_string(const string &s, string_view split) {
     std::vector<string_view> r;
     size_t p = 0;
-    while ((p = s.find(split)) != -1) {
+    size_t pold = 0;
+    while ((p = s.find(split, pold)) != -1) {
+        r.emplace_back(s.data() + pold, s.data() + p);
+        pold = p + split.size();
     }
+    r.emplace_back(s.data() + pold, s.data() + s.size());
     return r;
 }
 
@@ -47,9 +51,18 @@ struct package_version {
             numbers() = default;
             numbers(const std::initializer_list<int> &s) : value{s} {}
             numbers(const string &s) {
-                for (auto &&e : split_string(s, "."sv)) {
+                std::ranges::copy(split_string(s, "."sv) | std::views::transform([&](auto &&v) {
+                    int i;
+                    auto [_,ec] = std::from_chars(v.data(), v.data() + v.size(), i);
+                    if (ec != std::errc{}) {
+                        throw std::runtime_error{"bad version"};
+                    }
+                    return i;
+                }), std::back_inserter(value));
+            }
 
-                }
+            bool operator<(const numbers &rhs) const {
+                return std::tie(value) < std::tie(rhs.value);
             }
         };
         numbers elements;
@@ -57,6 +70,18 @@ struct package_version {
 
         bool is_pre_release() const { return !extra.empty(); }
         bool is_release() const { return !is_pre_release(); }
+
+        bool operator<(const number_version &rhs) const {
+            if (is_release() && rhs.is_release()) {
+                return elements < rhs.elements;
+            } else if (is_release()) {
+                return false;
+            } else if (rhs.is_release()) {
+                return true;
+            } else {
+                return std::tie(elements, extra) < std::tie(rhs.elements, rhs.extra);
+            }
+        }
     };
     using version_type = std::variant<number_version, string>;
     version_type version;
@@ -64,6 +89,20 @@ struct package_version {
     package_version() : version{number_version{{0,0,1}}} {
     }
     package_version(const string &s) {
+        if (s.empty()) {
+            throw std::runtime_error{"empty version"};
+        }
+        auto is_alpha = [](char c) {
+            return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c == '_';
+        };
+        auto alnum = std::ranges::all_of(s, [&](auto &&c) {
+            return c >= '0' && c <= '9' || is_alpha(c);
+        });
+        if (alnum && is_alpha(s[0] == '_')) {
+            version = s;
+        } else {
+            version = number_version{s};
+        }
     }
     package_version(const version_type &s) : version{s} {
     }
@@ -79,6 +118,18 @@ struct package_version {
     }
     bool is_branch() const {
         return std::holds_alternative<string>(version);
+    }
+
+    bool operator<(const package_version &rhs) const {
+        if (is_version() && rhs.is_version()) {
+            return std::tie(version) < std::tie(rhs.version);
+        } else if (is_version()) {
+            return false;
+        } else if (rhs.is_version()) {
+            return true;
+        } else {
+            return std::tie(version) < std::tie(rhs.version);
+        }
     }
 };
 

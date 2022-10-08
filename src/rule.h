@@ -46,7 +46,7 @@ struct cl_exe_rule {
     win_sdk_info sdk;
 
     cl_exe_rule() {
-        msvc = detect_msvc().at(0);
+        msvc = *detect_msvc().rbegin();
         sdk = detect_winsdk();
     }
 
@@ -82,7 +82,7 @@ struct link_exe_rule {
     win_sdk_info sdk;
 
     link_exe_rule() {
-        msvc = detect_msvc().at(0);
+        msvc = *detect_msvc().rbegin();
         sdk = detect_winsdk();
     }
 

@@ -35,6 +35,12 @@ struct msvc_instance {
         return t;
     }
     //auto root() const { return install_location / "VC" / "Tools" / "MSVC"; }
+
+    bool operator<(const msvc_instance &rhs) const {
+        package_version::number_version nv1{root.filename().string()};
+        package_version::number_version nv2{rhs.root.filename().string()};
+        return std::tie(version, nv1) < std::tie(rhs.version, nv2);
+    }
 };
 
 auto detect_msvc1() {
@@ -45,13 +51,16 @@ auto detect_msvc1() {
         auto preview = i.VSInstallLocation.contains(L"Preview");
         auto msvc = root / "VC" / "Tools" / "MSVC";
         for (auto &&p : fs::directory_iterator{msvc}) {
-            cls.emplace_back(msvc / p.path(),
-                package_version{package_version::number_version{path{i.Version}.string(), "preview"s}});
+            if (!package_version{p.path().filename().string()}.is_branch()) {
+                cls.emplace_back(msvc / p.path(),
+                    package_version{package_version::number_version{path{i.Version}.string(), preview ? "preview"s : ""s}});
+            }
         }
     }
     if (cls.empty()) {
         throw std::runtime_error("empty compilers");
     }
+    std::sort(cls.begin(), cls.end());
     return cls;
 }
 const auto &detect_msvc() {
