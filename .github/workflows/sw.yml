@@ -21,8 +21,8 @@ jobs:
     - uses: actions/checkout@v3
     - name: prepare
       run: |
-        sudo dnf -y install gcc g++ fmt-devel
-    - run: g++ -std=c++2b src/*.cpp -o sw -lfmt
+        sudo dnf -y install gcc g++
+    - run: g++ -std=c++2b src/*.cpp -o sw
     - uses: actions/upload-artifact@v3
       with:
         name: sw
@@ -32,12 +32,10 @@ jobs:
     runs-on: macos-12
     steps:
     - uses: actions/checkout@v3
-    - name: install
-      run: brew install fmt
     - name: build
       run: |
         export PATH="/usr/local/opt/gcc/bin:$PATH"
-        g++-12 -std=c++2b src/*.cpp -o sw -I/usr/local/include
+        g++-12 -std=c++2b src/*.cpp -o sw
     - uses: actions/upload-artifact@v3
       with:
         name: sw
