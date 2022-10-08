@@ -32,8 +32,14 @@ struct mmap_file {
         static inline constexpr auto map_mode = FILE_MAP_READ | FILE_MAP_WRITE;
     };
 #else
-    struct ro{};
-    struct rw{};
+    struct ro{
+        static inline constexpr auto open_mode = O_RDONLY;
+        static inline constexpr auto prot_mode = PROT_READ;
+    };
+    struct rw{
+        static inline constexpr auto open_mode = O_RDWR;
+        static inline constexpr auto prot_mode = PROT_READ | PROT_WRITE;
+    };
 #endif
 
     using size_type = uint64_t;
@@ -69,11 +75,11 @@ struct mmap_file {
             throw std::runtime_error{"cannot map file"};
         }
 #else
-        fd = ::open(fn.string().c_str(), O_RDONLY);
+        fd = ::open(fn.string().c_str(), mode.open_mode);
         if (fd == -1) {
             throw std::runtime_error{"cannot open file: " + fn.string()};
         }
-        p = (T *)mmap(0, sz, PROT_READ, MAP_PRIVATE, fd, 0);
+        p = (T *)mmap(0, sz, mode.prot_mode, MAP_PRIVATE, fd, 0);
         if (p == MAP_FAILED) {
             ::close(fd);
             throw std::runtime_error{"cannot create file mapping"};
