@@ -56,6 +56,7 @@ struct cl_exe_rule {
             if (is_cpp_file(f) && !rules.contains(this)) {
                 auto out = f.filename() += ".obj";
                 cl_exe_command c;
+                c.old_includes = msvc.vs_version < package_version{16,7};
                 c += compiler.exe, "-nologo", "-c", "-std:c++latest", "-EHsc", f, "-Fo" + out.string();
                 auto add = [&](auto &&tgt) {
                     for (auto &&d : tgt.definitions) {

@@ -6,3 +6,6 @@
 .idea
 CMake*
 cmake-*
+*.txt
+*.bin*
+*.json

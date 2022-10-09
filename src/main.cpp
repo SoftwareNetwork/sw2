@@ -19,15 +19,10 @@ void add_transform_to_storage(auto &&s, auto &&f) {
     add_file_to_storage(s,f);
 }
 
-struct solution {
-    path root;
-    // config
-};
-
-auto build_some_package(solution &s) {
+auto build_some_package(auto &s) {
     files_target tgt;
     tgt.name = "pkg1";
-    tgt.source_dir = s.root;
+    tgt.source_dir = s.source_dir;
     tgt +=
         "src"_rdir,
         "src/main.cpp",
@@ -37,10 +32,10 @@ auto build_some_package(solution &s) {
     return tgt;
 }
 
-auto build_some_package2(solution &s) {
+auto build_some_package2(auto &s) {
     rule_target tgt;
     tgt.name = "pkg2";
-    tgt.source_dir = s.root;
+    tgt.source_dir = s.source_dir;
     tgt +=
         "src"_rdir,
         "src/main.cpp",
@@ -53,13 +48,8 @@ auto build_some_package2(solution &s) {
     tgt.link_options.link_libraries.push_back("OleAut32.lib");
 #endif
     tgt += sources_rule{};
-#ifdef _WIN32
-    tgt += cl_exe_rule{};
-    tgt += link_exe_rule{};
-#else
-    tgt += gcc_compile_rule{};
-    tgt += gcc_link_rule{};
-#endif
+    tgt += s.cl_rule;
+    tgt += s.link_rule;
     tgt();
     return tgt;
 }
@@ -68,15 +58,29 @@ auto build_some_package2(solution &s) {
 
 using namespace sw;
 
+struct solution {
+    path source_dir;
+    path build_dir;
+    // config
+
+#ifdef _WIN32
+    cl_exe_rule cl_rule{};
+    link_exe_rule link_rule{};
+#else
+    gcc_compile_rule cl_rule{};
+    gcc_link_rule link_rule{};
+#endif
+};
+
 int main1() {
-    solution s{"."};
+    solution s{".", ".sw"};
     auto tgt = build_some_package(s);
     auto tgt2 = build_some_package2(s);
-	file_storage<physical_file_storage_single_file<basic_contents_hash>> fst{ {"single_file2.bin"} };
+	/*file_storage<physical_file_storage_single_file<basic_contents_hash>> fst{ {"single_file2.bin"} };
     fst += tgt;
 	for (auto &&handle : fst) {
 		handle.copy("myfile.txt");
-	}
+	}*/
     return 0;
 }
 

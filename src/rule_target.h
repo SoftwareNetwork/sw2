@@ -30,7 +30,7 @@ struct rule_target : files_target {
     }
     using files_target::operator+=;
     template <typename T>
-    auto operator+=(T &&r) requires requires {requires rule_types::contains<T>();} {
+    auto operator+=(T &&r) requires requires {requires rule_types::contains<std::decay_t<T>>();} {
         add_rule(r);
         return appender{[&](auto &&v){operator+=(v);}};
     }

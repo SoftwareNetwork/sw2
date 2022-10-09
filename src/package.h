@@ -46,13 +46,15 @@ auto split_string(const string &s, string_view split) {
 struct package_version {
     struct number_version {
         struct numbers {
-            std::vector<int> value;
+            using number_type = int;
+
+            std::vector<number_type> value;
 
             numbers() = default;
-            numbers(const std::initializer_list<int> &s) : value{s} {}
+            numbers(const std::initializer_list<number_type> &s) : value{s} {}
             numbers(const string &s) {
                 std::ranges::copy(split_string(s, "."sv) | std::views::transform([&](auto &&v) {
-                    int i;
+                    number_type i;
                     auto [_,ec] = std::from_chars(v.data(), v.data() + v.size(), i);
                     if (ec != std::errc{}) {
                         throw std::runtime_error{"bad version"};
@@ -61,8 +63,8 @@ struct package_version {
                 }), std::back_inserter(value));
             }
 
-            bool operator<(const numbers &rhs) const {
-                return std::tie(value) < std::tie(rhs.value);
+            auto operator<=>(const numbers &rhs) const {
+                return std::tie(value) <=> std::tie(rhs.value);
             }
         };
         numbers elements;
@@ -87,6 +89,8 @@ struct package_version {
     version_type version;
 
     package_version() : version{number_version{{0,0,1}}} {
+    }
+    package_version(const std::initializer_list<number_version::numbers::number_type> &s) : version{number_version{s}} {
     }
     package_version(const string &s) {
         if (s.empty()) {

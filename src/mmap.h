@@ -17,7 +17,7 @@ namespace sw {
 template <typename T = uint8_t>
 struct mmap_file {
 #ifdef _WIN32
-    struct ro{
+    struct ro {
         static inline constexpr auto access = GENERIC_READ;
         static inline constexpr auto share_mode = FILE_SHARE_READ;
         static inline constexpr auto disposition = OPEN_EXISTING;
@@ -32,11 +32,11 @@ struct mmap_file {
         static inline constexpr auto map_mode = FILE_MAP_READ | FILE_MAP_WRITE;
     };
 #else
-    struct ro{
+    struct ro {
         static inline constexpr auto open_mode = O_RDONLY;
         static inline constexpr auto prot_mode = PROT_READ;
     };
-    struct rw{
+    struct rw {
         static inline constexpr auto open_mode = O_RDWR;
         static inline constexpr auto prot_mode = PROT_READ | PROT_WRITE;
     };
@@ -53,14 +53,13 @@ struct mmap_file {
     T *p{nullptr};
     size_type sz;
 
-    mmap_file(const fs::path &fn) {
-        open(fn, ro{});
+    mmap_file(const fs::path &fn) : fn{fn} {
+        open(ro{});
     }
-    mmap_file(const fs::path &fn, rw v) {
-        open(fn, v);
+    mmap_file(const fs::path &fn, rw v) : fn{fn} {
+        open(v);
     }
-    void open(const path &fn, auto mode) {
-        this->fn = fn;
+    void open(auto mode) {
         sz = !fs::exists(fn) ? 0 : fs::file_size(fn) / sizeof(T);
         if (sz == 0) {
             return;
@@ -117,7 +116,7 @@ struct mmap_file {
             std::ofstream{fn};
         }
         fs::resize_file(fn, oldsz ? this->sz * 2 + sz : sz * 2);
-        open(fn, rw{});
+        open(rw{});
         return p + oldsz;
     }
 
@@ -127,7 +126,7 @@ struct mmap_file {
 
         auto size() const { return m.sz; }
         bool has_room(auto sz) const { return offset + sz <= m.sz; }
-        explicit operator bool() const { return offset != -1; }
+        explicit operator bool() const { return offset != -1 && !m.eof(offset); }
 
         auto write_record(size_type sz) {
             if (!has_room(sz)) {
@@ -168,11 +167,43 @@ struct mmap_file {
         template <typename U>
         stream &operator<<(const U &v) {
             if (!has_room(sizeof(U))) {
-                throw std::runtime_error{"no more room"};
+                m.alloc(sizeof(U));
             }
             *(U *)(m.p + offset) = v;
             offset += sizeof(U);
             return *this;
+        }
+
+        stream &operator>>(path &p) {
+            uint64_t len;
+            if (!has_room(sizeof(len))) {
+                p.clear();
+                return *this;
+            }
+            operator>>(len);
+            if (!has_room(len)) {
+                p.clear();
+                return *this;
+            }
+            p.assign((const char8_t *)m.p + offset, (const char8_t *)m.p + offset + len);
+            offset += len;
+            return *this;
+        }
+        stream &operator<<(const path &p) {
+            auto s = p.u8string();
+            uint64_t len = s.size();
+            if (!has_room(len + sizeof(len))) {
+                m.alloc(len + sizeof(len));
+            }
+            operator<<(len);
+            memcpy(m.p + offset, s.data(), len);
+            offset += len;
+            return *this;
+        }
+
+        template <typename U>
+        auto make_span(uint64_t n) {
+            return std::span<U>((U *)(m.p + offset), (U *)(m.p + offset) + n);
         }
     };
     auto get_stream() {

@@ -280,6 +280,12 @@ struct raw_command {
 };
 
 struct command_hash {
+    struct hasher {
+        auto operator()(const command_hash &h) const {
+            return h.h;
+        }
+    };
+
     uint64_t h{0};
 
     void operator()(auto &&cmd) {
@@ -296,6 +302,7 @@ struct command_hash {
         }
     }
     explicit operator bool() const { return h; }
+    auto operator<=>(const command_hash &) const = default;
 };
 
 struct io_command : raw_command {
@@ -339,67 +346,84 @@ struct io_command : raw_command {
 };
 
 struct cl_exe_command : io_command {
+    bool old_includes{false};
+
     void run(auto &&ex, auto &&cs) {
-        /*static const auto msvc_prefix = [&]() -> string {
-            path base = fs::temp_directory_path() / "sw_msvc_prefix";
-            auto fc = path{base} += ".c";
-            auto fh = path{base} += ".h";
-            auto fo = path{base} += ".obj";
-
-            std::ofstream{fh};
-            std::ofstream{fc} << "#include \"sw_msvc_prefix.h\"\nint dummy;";
-
-            scope_exit se{[&] {
-                fs::remove(fh);
-                fs::remove(fc);
-                fs::remove(fo);
-            }};
-
-            raw_command c;
-            c.environment = environment;
-            c += arguments[0];
-            c += "/nologo";
-            c += "/c";
-            c += fc;
-            c += "/showIncludes";
-            c += L"\"/Fo"s + fo.wstring() + L"\"";
-
-            c.out = c.err = ""s;
-
-            c.run(ex);
-            ex.run();
-
-            auto &str = std::get<string>(c.out).empty() ? std::get<string>(c.err) : std::get<string>(c.out);
-            if (auto p1 = str.find("\n"); p1 != -1) {
-                if (auto p2 = str.find((const char *)fh.u8string().c_str(), p1 + 1); p2 != -1) {
-                    return str.substr(p1 + 1, p2 - (p1 + 1));
-                }
-            }
-            throw std::runtime_error{"cannot find msvc prefix"};
-        }();
-
-        // < 14.27  1927 (version 16.7)
-        add("/showIncludes");
-        scope_exit se{[&]{arguments.pop_back();}};
-        out = [&](auto sv) {
-            size_t p = 0;
-            while ((p = sv.find(msvc_prefix, p)) != -1) {
-                p += msvc_prefix.size();
-                p = sv.find_first_not_of(' ', p);
-                auto fn = sv.substr(p, sv.find_first_of("\r\n", p) - p);
-                implicit_inputs.insert(string{fn.data(), fn.data() + fn.size()});
-            }
-        };*/
-
-        // >= 14.27  1927 (version 16.7)
-        // https://learn.microsoft.com/en-us/cpp/build/reference/sourcedependencies?view=msvc-170
-        add("/sourceDependencies-");
-        scope_exit se{[&]{arguments.pop_back();}};
-        out = ""s;
-
         err = ""s;
 
-        io_command::run(ex, cs);
+        if (old_includes) {
+            static const auto msvc_prefix = [&]() -> string {
+                path base = fs::temp_directory_path() / "sw_msvc_prefix";
+                auto fc = path{base} += ".c";
+                auto fh = path{base} += ".h";
+                auto fo = path{base} += ".obj";
+
+                std::ofstream{fh};
+                std::ofstream{fc} << "#include \"sw_msvc_prefix.h\"\nint dummy;";
+
+                scope_exit se{[&] {
+                    fs::remove(fh);
+                    fs::remove(fc);
+                    fs::remove(fo);
+                }};
+
+                raw_command c;
+                c.environment = environment;
+                c += arguments[0];
+                c += "/nologo";
+                c += "/c";
+                c += fc;
+                c += "/showIncludes";
+                c += L"\"/Fo"s + fo.wstring() + L"\"";
+
+                c.out = c.err = ""s;
+
+                c.run(ex);
+                ex.run();
+
+                auto &str = std::get<string>(c.out).empty() ? std::get<string>(c.err) : std::get<string>(c.out);
+                if (auto p1 = str.find("\n"); p1 != -1) {
+                    if (auto p2 = str.find((const char *)fh.u8string().c_str(), p1 + 1); p2 != -1) {
+                        return str.substr(p1 + 1, p2 - (p1 + 1));
+                    }
+                }
+                throw std::runtime_error{"cannot find msvc prefix"};
+            }();
+
+            add("/showIncludes");
+            scope_exit se{[&] {
+                arguments.pop_back();
+            }};
+            out = [&](auto sv) {
+                size_t p = 0;
+                while ((p = sv.find(msvc_prefix, p)) != -1) {
+                    p += msvc_prefix.size();
+                    p = sv.find_first_not_of(' ', p);
+                    auto fn = sv.substr(p, sv.find_first_of("\r\n", p) - p);
+                    implicit_inputs.insert(string{fn.data(), fn.data() + fn.size()});
+                }
+            };
+            io_command::run(ex, cs);
+        } else {
+            // >= 14.27 1927 (version 16.7)
+            // https://learn.microsoft.com/en-us/cpp/build/reference/sourcedependencies?view=msvc-170
+            if (0 && !outputs.empty()) {
+                add("/sourceDependencies");
+                add(path{*outputs.begin()} += ".json");
+                scope_exit se{[&] {
+                    arguments.pop_back();
+                    arguments.pop_back();
+                }};
+                io_command::run(ex, cs);
+            } else {
+                out = ""s;
+                add("/sourceDependencies-");
+                scope_exit se{[&] {
+                    arguments.pop_back();
+                }};
+                io_command::run(ex, cs);
+            }
+        }
     }
 };
 
@@ -416,36 +440,95 @@ using command = variant<io_command, cl_exe_command, gcc_command>;
 
 struct command_storage {
     struct command_data {
-        fs::file_time_type mtime;
-        io_command::hash_type hash;
+        io_command::time_point mtime;
+        //io_command::hash_type hash;
+        std::unordered_set<uint64_t> files;
     };
 
     using mmap_type = mmap_file<>;
 
     mmap_type f_commands, f_files;
-    std::unordered_set<path> files;
-    mmap_type::stream cmd_stream;
-    std::unordered_map<uint64_t, command_data> commands;
+    mmap_type::stream cmd_stream, files_stream;
+    std::unordered_map<uint64_t, path> files;
+    std::unordered_map<io_command::hash_type, command_data, io_command::hash_type::hasher> commands;
 
     command_storage() : command_storage{"commands.bin"} {}
     command_storage(const path &fn)
             : f_commands{fn, mmap_type::rw{}}
             , f_files{path{fn} += ".files", mmap_type::rw{}}
-            , cmd_stream{f_commands.get_stream()} {
+            , cmd_stream{f_commands.get_stream()}, files_stream{f_files.get_stream()} {
         if (cmd_stream.size() == 0) {
             return;
         }
         while (auto s = cmd_stream.read_record()) {
+            io_command::hash_type h;
+            s >> h;
+            command_data v;
+            s >> v.mtime;
+            uint64_t n;
+            s >> n;
+            std::ranges::copy(s.make_span<uint64_t>(n), std::inserter(v.files, v.files.end()));
+            commands[h] = v;
+        }
+        //f_commands.close();
+        //f_commands.open(mmap_type::rw{});
+
+        path f;
+        while (files_stream && files_stream >> f) {
+            if (f.empty()) {
+                break;
+            }
+            files.emplace(std::hash<path>()(f), f);
         }
     }
 
+    struct new_command { io_command &c; };
+    struct new_file { path &p; };
+    struct missing_file { path &p; };
+    // struct not_regular_file {};
+    struct updated_file { path &p; };
+    using outdated_reason = variant<new_command, new_file, missing_file>;
+    //
     bool outdated(auto &&cmd) const {
-        return true;
+        auto h = cmd.hash();
+        auto cit = commands.find(h);
+        if (cit == commands.end()) {
+            std::cerr << "outdated: command is missing" << "\n";
+            return true;
+        }
+        return std::ranges::any_of(cit->second.files, [&](auto &&f) {
+            auto it = files.find(f);
+            if (it == files.end()) {
+                std::cerr << "outdated: new file" << "\n";
+                return true;
+            }
+            auto s = fs::status(it->second);
+            if (!fs::exists(s)) {
+                std::cerr << "outdated: file does not exists" << "\n";
+                return true;
+            }
+            /*if (!fs::is_regular_file(s)) {
+                std::cerr << "outdated: not regular file" << "\n";
+                return true;
+            }*/
+            auto lwt = fs::last_write_time(it->second);
+            auto val = std::chrono::clock_cast<std::chrono::system_clock>(lwt);
+            if (val > cit->second.mtime) {
+                std::cerr << "outdated: file lwt > command time" << "\n";
+                return true;
+            }
+            return false;
+        });
     }
     void add(auto &&cmd) {
         uint64_t n{0};
         auto ins = [&](auto &&v) {
-            files.insert(v.begin(), v.end());
+            for (auto &&f : v) {
+                auto [_,inserted] = files.emplace(std::hash<path>()(f), f);
+                if (inserted) {
+                    files_stream << f;
+                }
+            }
             n += v.size();
         };
         ins(cmd.inputs);

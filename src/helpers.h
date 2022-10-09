@@ -110,3 +110,43 @@ decltype(auto) visit(auto &&var, auto && ... f) {
     }
     return s;
 }
+
+/*
+namespace sw {
+
+struct swpath : ::fs::path {
+    using base = ::fs::path;
+
+    path() = default;
+    path(const base &p) {
+        init(p);
+    }
+    path(auto &&p) {
+        init(p);
+    }
+    path(const path &) = default;
+
+    void init(auto &&p) {
+#ifdef _WIN32
+        std::wstring s = fs::absolute(p);
+        std::transform(s.begin(), s.end(), s.begin(), towlower);
+        base::operator=(s);
+#else
+        base::operator=(p);
+#endif
+    }
+};
+
+} // namespace sw
+
+namespace std {
+
+template <>
+struct hash<::sw::path> {
+    size_t operator()(const ::sw::path &p) {
+        return hash<::fs::path>()(p);
+    }
+};
+
+} // namespace std
+*/

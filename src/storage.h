@@ -5,6 +5,8 @@
 
 #include "helpers.h"
 
+namespace sw {
+
 auto read_file(const path &fn) {
     auto sz = fs::file_size(fn);
     string s(sz, 0);
@@ -221,3 +223,5 @@ struct file_storage {
         return *this;
     }
 };
+
+} // namespace sw

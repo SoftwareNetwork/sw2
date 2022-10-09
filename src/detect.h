@@ -12,7 +12,7 @@ namespace sw {
 
 struct msvc_instance {
     path root;
-    package_version version;
+    package_version vs_version;
 
     auto cl_target() const {
         cl_binary_target t;
@@ -39,7 +39,7 @@ struct msvc_instance {
     bool operator<(const msvc_instance &rhs) const {
         package_version::number_version nv1{root.filename().string()};
         package_version::number_version nv2{rhs.root.filename().string()};
-        return std::tie(version, nv1) < std::tie(rhs.version, nv2);
+        return std::tie(vs_version, nv1) < std::tie(rhs.vs_version, nv2);
     }
 };
 
