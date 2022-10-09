@@ -511,9 +511,14 @@ struct command_storage {
                 std::cerr << "outdated: not regular file" << "\n";
                 return true;
             }*/
+#ifdef _MSC_VER
             auto lwt = fs::last_write_time(it->second);
             auto val = std::chrono::clock_cast<std::chrono::system_clock>(lwt);
             if (val > cit->second.mtime) {
+#else
+            auto val = fs::last_write_time(it->second);
+            if (val.time_since_epoch() > cit->second.mtime.time_since_epoch()) {
+#endif
                 std::cerr << "outdated: file lwt > command time" << "\n";
                 return true;
             }

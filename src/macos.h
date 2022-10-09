@@ -92,5 +92,4 @@ namespace sw {
 using macos::executor;
 
 }
-
 #endif

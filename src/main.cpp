@@ -59,8 +59,8 @@ auto build_some_package2(auto &s) {
 using namespace sw;
 
 struct solution {
-    path source_dir;
-    path build_dir;
+    abspath source_dir;
+    abspath build_dir;
     // config
 
 #ifdef _WIN32
@@ -73,7 +73,7 @@ struct solution {
 };
 
 int main1() {
-    solution s{".", ".sw"};
+    solution s{".", ".sw4"};
     auto tgt = build_some_package(s);
     auto tgt2 = build_some_package2(s);
 	/*file_storage<physical_file_storage_single_file<basic_contents_hash>> fst{ {"single_file2.bin"} };

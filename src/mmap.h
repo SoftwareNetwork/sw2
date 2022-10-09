@@ -5,6 +5,8 @@
 
 #include "win32.h"
 
+#include <string.h>
+
 #ifdef _WIN32
 #else
 #include <fcntl.h>
@@ -78,7 +80,7 @@ struct mmap_file {
         if (fd == -1) {
             throw std::runtime_error{"cannot open file: " + fn.string()};
         }
-        p = (T *)mmap(0, sz, mode.prot_mode, MAP_PRIVATE, fd, 0);
+        p = (T *)mmap(0, sz, mode.prot_mode, MAP_SHARED, fd, 0);
         if (p == MAP_FAILED) {
             ::close(fd);
             throw std::runtime_error{"cannot create file mapping"};

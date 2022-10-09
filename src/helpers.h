@@ -111,29 +111,29 @@ decltype(auto) visit(auto &&var, auto && ... f) {
     return s;
 }
 
-/*
 namespace sw {
 
-struct swpath : ::fs::path {
+struct abspath : ::fs::path {
     using base = ::fs::path;
 
-    path() = default;
-    path(const base &p) {
-        init(p);
+    abspath() = default;
+    abspath(const base &p) : base{p} {
+        init();
     }
-    path(auto &&p) {
-        init(p);
+    abspath(auto &&p) : base{p} {
+        init();
     }
-    path(const path &) = default;
+    abspath(const abspath &) = default;
 
-    void init(auto &&p) {
-#ifdef _WIN32
+    void init() {
+        // we need target os concept and do this when needed
+/*#ifdef _WIN32
         std::wstring s = fs::absolute(p);
         std::transform(s.begin(), s.end(), s.begin(), towlower);
         base::operator=(s);
-#else
-        base::operator=(p);
-#endif
+#else*/
+        base::operator=(fs::absolute(*this));
+//#endif
     }
 };
 
@@ -142,11 +142,10 @@ struct swpath : ::fs::path {
 namespace std {
 
 template <>
-struct hash<::sw::path> {
-    size_t operator()(const ::sw::path &p) {
+struct hash<::sw::abspath> {
+    size_t operator()(const ::sw::abspath &p) {
         return hash<::fs::path>()(p);
     }
 };
 
 } // namespace std
-*/
