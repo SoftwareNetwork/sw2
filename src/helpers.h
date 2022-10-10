@@ -133,6 +133,7 @@ struct abspath : ::fs::path {
         base::operator=(s);
 #else*/
         base::operator=(fs::absolute(*this));
+        base::operator=(fs::absolute(*this).lexically_normal()); // on linux absolute does not remove last '.'?
 //#endif
     }
 };

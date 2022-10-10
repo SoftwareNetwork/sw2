@@ -275,7 +275,7 @@ struct raw_command {
     }
     auto operator+=(auto &&arg) {
         add(arg);
-        return appender{[&](auto &&v){operator+=(v);}};
+        return appender{[&](auto &&v){add(v);}};
     }
 };
 

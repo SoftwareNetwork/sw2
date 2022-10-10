@@ -63,7 +63,7 @@ struct cl_exe_rule {
                         c += (string)d;
                     }
                     for (auto &&i : tgt.include_directories) {
-                        c += "-I" + i.string();
+                        c += "-I", i;
                     }
                 };
                 add(tgt.compile_options);
@@ -104,7 +104,10 @@ struct link_exe_rule {
                 c += "-LIBPATH:" + i.string();
             }
             for (auto &&d : tgt.link_libraries) {
-                c += d.string();
+                c += d;
+            }
+            for (auto &&d : tgt.system_link_libraries) {
+                c += d;
             }
         };
         add(tgt.link_options);
@@ -158,7 +161,7 @@ struct gcc_compile_rule {
                         c += (string)d;
                     }
                     for (auto &&i : tgt.include_directories) {
-                        c += "-I" + i.string();
+                        c += "-I" + i;
                     }
                 };
                 add(tgt.compile_options);
@@ -194,7 +197,10 @@ struct gcc_link_rule {
                 c += "-L", i;
             }
             for (auto &&d : tgt.link_libraries) {
-                c += d.string();
+                c += d;
+            }
+            for (auto &&d : tgt.system_link_libraries) {
+                c += d;
             }
         };
         add(tgt.link_options);

@@ -7,7 +7,9 @@
 
 namespace sw {
 
+// basic target: throw files, rules etc.
 struct rule_target : files_target {
+    path binary_dir;
     std::vector<rule> rules;
     std::map<path, rule_flag> processed_files;
     std::vector<command> commands;
@@ -28,17 +30,33 @@ struct rule_target : files_target {
             });
         }
     }
-    using files_target::operator+=;
     template <typename T>
     auto operator+=(T &&r) requires requires {requires rule_types::contains<std::decay_t<T>>();} {
         add_rule(r);
         return appender{[&](auto &&v){operator+=(v);}};
+    }
+    void add(const system_link_library &l) {
+        link_options.system_link_libraries.push_back(l);
+    }
+    using files_target::operator+=;
+    using files_target::add;
+    using files_target::remove;
+
+    auto operator+=(auto &&v) {
+        add(v);
+        return appender{[&](auto &&v) { add(v); }};
+    }
+    auto operator-=(auto &&v) {
+        remove(v);
+        return appender{[&](auto &&v) { remove(v); }};
     }
 
     void operator()() {
         command_executor ce;
         ce.run(*this);
     }
+
+    //auto visit()
 };
 
 }

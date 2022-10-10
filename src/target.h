@@ -20,6 +20,14 @@ struct definition {
         });
     }
 };
+struct system_link_library {
+    path p;
+    operator const auto &() const { return p; }
+};
+auto operator""_slib(const char *s, size_t len) {
+    return system_link_library{std::string{s, len}};
+}
+
 struct compile_options_t {
     std::vector<definition> definitions;
     std::vector<path> include_directories;
@@ -27,7 +35,9 @@ struct compile_options_t {
 struct link_options_t {
     std::vector<path> link_directories;
     std::vector<path> link_libraries;
+    std::vector<system_link_library> system_link_libraries;
 };
+
 
 // binary_target_package?
 struct cl_binary_target : compile_options_t, link_options_t {
@@ -43,38 +53,36 @@ struct files_target {
     path source_dir;
     files_t files;
 
-    void op(file_regex &r, auto &&f) {
+    void add(const file_regex &r) {
         r(source_dir, [&](auto &&iter) {
             for (auto &&e : iter) {
                 if (fs::is_regular_file(e)) {
-                    f(files, e);
+                    add(e);
                 }
             }
         });
     }
-    void op(const path &p, auto &&f) {
-        f(files, p);
+    void add(const path &p) {
+        files.insert(p.is_absolute() ? p : source_dir / p);
     }
-    auto operator+=(auto &&iter) {
-        op(iter, [&](auto &&arr, auto &&f) {
-            arr.insert(source_dir / f);
-        });
-        return appender{[&](auto &&v) {
-            operator+=(v);
-        }};
+    void remove(const path &p) {
+        files.erase(p.is_absolute() ? p : source_dir / p);
     }
-    auto operator-=(auto &&iter) {
-        op(iter, [&](auto &&arr, auto &&f) {
-            arr.erase(source_dir / f);
-        });
-        return appender{[&](auto &&v) {
-            operator-=(v);
-        }};
+
+    // this auto &&self,
+    auto operator+=(auto &&v) {
+        add(v);
+        return appender{[&](auto &&v) { add(v); }};
     }
+    auto operator-=(auto &&v) {
+        remove(v);
+        return appender{[&](auto &&v) { remove(v); }};
+    }
+
     auto range() const {
         return files | std::views::transform([&](auto &&p) {
-                   return source_dir / p;
-               });
+            return source_dir / p;
+        });
     }
     auto begin() const {
         return iter_with_range{range()};

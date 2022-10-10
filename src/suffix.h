@@ -11,7 +11,7 @@ struct file_regex {
     std::string str;
     bool recursive;
 
-    void operator()(auto &&rootdir, auto &&f) {
+    void operator()(auto &&rootdir, auto &&f) const {
         auto &&[root,regex] = extract_dir_regex(str);
         if (root.is_absolute()) {
             throw;

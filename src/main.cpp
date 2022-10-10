@@ -32,21 +32,40 @@ auto build_some_package(auto &s) {
     return tgt;
 }
 
+namespace os {
+
+struct windows {};
+
+} // namespace os
+
+namespace arch {
+
+struct x86 {};
+struct x64 {};
+using amd64 = x64;
+using x86_64 = x64;
+
+struct arm64 {};
+using aarch64 = arm64;
+
+} // namespace os
+
 auto build_some_package2(auto &s) {
     rule_target tgt;
     tgt.name = "pkg2";
     tgt.source_dir = s.source_dir;
+    tgt.binary_dir = s.binary_dir;
     tgt +=
         "src"_rdir,
         "src/main.cpp",
         "src/.*\\.cpp"_r,
         "src/.*\\.h"_rr
         ;
-#ifdef _WIN32
-    tgt.link_options.link_libraries.push_back("advapi32.lib");
-    tgt.link_options.link_libraries.push_back("ole32.lib");
-    tgt.link_options.link_libraries.push_back("OleAut32.lib");
-#endif
+    visit(s.os, [&](os::windows &) {
+        tgt += "advapi32.lib"_slib;
+        tgt += "ole32.lib"_slib;
+        tgt += "OleAut32.lib"_slib;
+    });
     tgt += sources_rule{};
     tgt += s.cl_rule;
     tgt += s.link_rule;
@@ -60,8 +79,10 @@ using namespace sw;
 
 struct solution {
     abspath source_dir;
-    abspath build_dir;
+    abspath binary_dir;
     // config
+
+    os::windows os;
 
 #ifdef _WIN32
     cl_exe_rule cl_rule{};
