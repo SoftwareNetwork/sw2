@@ -85,7 +85,13 @@ struct overload : Ts... {
 };
 
 decltype(auto) visit(auto &&var, auto && ... f) {
-    return std::visit(overload{f...}, var);
+    return std::visit(overload{FWD(f)...}, var);
+}
+decltype(auto) visit_any(auto &&var, auto &&...f) {
+    return visit(FWD(var), overload{FWD(f)..., [](auto &&){}});
+}
+decltype(auto) visit1(auto &&var, auto &&...f) {
+    return overload{FWD(f)...}(FWD(var));
 }
 
 [[nodiscard]] std::string replace(const std::string &str, const std::string &oldstr, const std::string &newstr,

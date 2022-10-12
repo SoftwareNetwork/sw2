@@ -320,13 +320,13 @@ struct io_command : raw_command {
     bool outdated(auto &&cs) const {
         return always || cs.outdated(*this);
     }
-    void run(auto &&ex, auto &&cs) {
+    void run(auto &&ex, auto &&cs, auto &&cb) {
         if (!outdated(cs)) {
             return;
         }
         // use GetProcessTimes or similar for time
         start = clock::now();
-        raw_command::run(ex, [&](auto exit_code) {
+        raw_command::run(ex, [&, cb](auto exit_code) {
             end = clock::now();
             if (exit_code) {
                 throw std::runtime_error(
@@ -334,14 +334,31 @@ struct io_command : raw_command {
                     "process exit code: " + std::to_string(exit_code) + "\nerror: " + std::get<string>(err) + ""
                 );
             }
+            cb();
             cs.add(*this);
         });
+    }
+    void run(auto &&ex, auto &&cs) {
+        run(ex, cs, []{});
     }
     auto hash() const {
         if (!h) {
             h(*this);
         }
         return h;
+    }
+};
+
+struct json_parser {
+    const char *p;
+
+    void parse_object() {
+        eat_space();
+    }
+    void eat_space() {
+        while (isspace(*p)) {
+            ++p;
+        }
     }
 };
 
@@ -403,25 +420,35 @@ struct cl_exe_command : io_command {
                     implicit_inputs.insert(string{fn.data(), fn.data() + fn.size()});
                 }
             };
-            io_command::run(ex, cs);
+            io_command::run(ex, cs, []{});
         } else {
             // >= 14.27 1927 (version 16.7)
             // https://learn.microsoft.com/en-us/cpp/build/reference/sourcedependencies?view=msvc-170
+            // msvc prints errors into stdout, maybe use sourceDependencies with file always?
             if (0 && !outputs.empty()) {
+                auto depsfile = path{*outputs.begin()} += ".json";
                 add("/sourceDependencies");
-                add(path{*outputs.begin()} += ".json");
+                add(depsfile);
                 scope_exit se{[&] {
                     arguments.pop_back();
                     arguments.pop_back();
                 }};
-                io_command::run(ex, cs);
+                io_command::run(ex, cs, [&, depsfile] {
+                    mmap_file<> f{depsfile};
+                    int a = 5;
+                });
             } else {
                 out = ""s;
                 add("/sourceDependencies-");
                 scope_exit se{[&] {
                     arguments.pop_back();
                 }};
-                io_command::run(ex, cs);
+                io_command::run(ex, cs, [&] {
+                    auto &s = std::get<string>(out);
+                    auto pos = s.find('\n');
+                    json_parser p{s.data() + pos + 1};
+                    p.parse_object();
+                });
             }
         }
     }
@@ -432,7 +459,7 @@ struct gcc_command : io_command {
         err = ""s;
         out = ""s;
 
-        io_command::run(ex, cs);
+        io_command::run(ex, cs, []{});
     }
 };
 
@@ -526,6 +553,8 @@ struct command_storage {
         });
     }
     void add(auto &&cmd) {
+        return;
+
         uint64_t n{0};
         auto ins = [&](auto &&v) {
             for (auto &&f : v) {
@@ -565,6 +594,18 @@ struct command_executor {
         auto job = win32::create_job_object();
         ex.register_job(job);
 #endif
+
+        std::unordered_set<path> outdirs;
+        for (auto &&c : tgt.commands) {
+            visit(c, [&](auto &&c) {
+                for (auto &&o : c.outputs) {
+                    outdirs.insert(o.parent_path());
+                }
+            });
+        }
+        for (auto &&d : outdirs) {
+            fs::create_directories(d);
+        }
 
         for (auto &&c : tgt.commands) {
             visit(c, [&](auto &&c) {

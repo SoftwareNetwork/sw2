@@ -51,26 +51,25 @@ using aarch64 = arm64;
 } // namespace os
 
 auto build_some_package2(auto &s) {
-    rule_target tgt;
+    auto &tgt = s.add<rule_target>();
     tgt.name = "pkg2";
-    tgt.source_dir = s.source_dir;
-    tgt.binary_dir = s.binary_dir;
     tgt +=
         "src"_rdir,
         "src/main.cpp",
         "src/.*\\.cpp"_r,
         "src/.*\\.h"_rr
         ;
-    visit(s.os, [&](os::windows &) {
+    visit1(s.os, [&](os::windows &) {
         tgt += "advapi32.lib"_slib;
         tgt += "ole32.lib"_slib;
         tgt += "OleAut32.lib"_slib;
     });
-    tgt += sources_rule{};
-    tgt += s.cl_rule;
-    tgt += s.link_rule;
+    tgt += native_sources_rule{};
+    //tgt += s.cl_rule;
+    //tgt += s.link_rule;
+    tgt += cl_exe_rule{};
+    tgt += link_exe_rule{};
     tgt();
-    return tgt;
 }
 
 } // namespace sw
@@ -83,20 +82,51 @@ struct solution {
     // config
 
     os::windows os;
+    // arch
+    // libtype
+    // default compilers
+    //
 
-#ifdef _WIN32
-    cl_exe_rule cl_rule{};
-    link_exe_rule link_rule{};
-#else
-    gcc_compile_rule cl_rule{};
-    gcc_link_rule link_rule{};
-#endif
+    // internal data
+    std::vector<std::unique_ptr<target>> targets_;
+
+    template <typename T, typename ... Args>
+    T &add(Args && ... args) {
+        auto &v = *targets_.emplace_back(std::make_unique<target>(T{FWD(args)...}));
+        auto &t = std::get<T>(v);
+        t.source_dir = source_dir;
+        t.binary_dir = binary_dir;
+        return t;
+    }
+
+    auto targets() {
+        return targets_ | std::views::transform([](auto &&v) -> decltype(auto) { return *v; });
+    }
+    void build() {
+        for (auto &&t : targets()) {
+            visit(t, [&](auto &&v) {
+                if constexpr (requires {v();}) {
+                    v();
+                }
+            });
+        }
+    }
 };
 
 int main1() {
-    solution s{".", ".sw4"};
+    solution s {
+        ".", ".sw4", /*{native_sources_rule{},
+#ifdef _WIN32
+                        cl_exe_rule{}, link_exe_rule{}
+#else
+                        gcc_compile_rule{}, gcc_link_rule{}
+#endif
+    }*/};
     auto tgt = build_some_package(s);
-    auto tgt2 = build_some_package2(s);
+    build_some_package2(s);
+
+    s.build();
+
 	/*file_storage<physical_file_storage_single_file<basic_contents_hash>> fst{ {"single_file2.bin"} };
     fst += tgt;
 	for (auto &&handle : fst) {

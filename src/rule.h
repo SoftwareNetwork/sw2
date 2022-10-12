@@ -31,7 +31,7 @@ auto is_cpp_file(const path &fn) {
     return exts.contains(fn.extension().string());
 }
 
-struct sources_rule {
+struct native_sources_rule {
     void operator()(auto &tgt) const {
         for (auto &&f : tgt) {
             if (is_cpp_file(f)) {
@@ -54,7 +54,7 @@ struct cl_exe_rule {
         auto compiler = msvc.cl_target();
         for (auto &&[f, rules] : tgt.processed_files) {
             if (is_cpp_file(f) && !rules.contains(this)) {
-                auto out = f.filename() += ".obj";
+                auto out = tgt.binary_dir / f.filename() += ".obj";
                 cl_exe_command c;
                 c.old_includes = msvc.vs_version < package_version{16,7};
                 c += compiler.exe, "-nologo", "-c", "-std:c++latest", "-EHsc", f, "-Fo" + out.string();
@@ -88,7 +88,7 @@ struct link_exe_rule {
     }
 
     void operator()(auto &tgt) const {
-        path out = (string)tgt.name + ".exe";
+        auto out = tgt.binary_dir / (string)tgt.name += ".exe"s;
         auto linker = msvc.link_target();
         io_command c;
         c += linker.exe, "-nologo", "-OUT:" + out.string();
@@ -153,7 +153,7 @@ struct gcc_compile_rule {
         auto compiler = gcc.cl_target();
         for (auto &&[f, rules] : tgt.processed_files) {
             if (is_cpp_file(f) && !rules.contains(this)) {
-                auto out = f.filename() += ".o";
+                auto out = tgt.binary_dir / f.filename() += ".o";
                 gcc_command c;
                 c += compiler.exe, "-c", "-std=c++2b", f, "-o", out;
                 auto add = [&](auto &&tgt) {
@@ -181,7 +181,7 @@ struct gcc_link_rule {
     }
 
     void operator()(auto &tgt) const {
-        path out = (string)tgt.name;
+        path out = tgt.binary_dir / (string)tgt.name;
         auto linker = gcc.link_target();
         io_command c;
         c += linker.exe, "-o", out.string();
@@ -210,7 +210,7 @@ struct gcc_link_rule {
 };
 #endif
 
-using rule_types = types<sources_rule
+using rule_types = types<native_sources_rule
 #ifdef _WIN32
     , cl_exe_rule, link_exe_rule
 #else

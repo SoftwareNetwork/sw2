@@ -59,4 +59,9 @@ struct rule_target : files_target {
     //auto visit()
 };
 
+struct native_target {
+};
+
+using target = variant<files_target, rule_target>;
+
 }
