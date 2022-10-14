@@ -437,7 +437,8 @@ struct cl_exe_command : io_command {
                     auto j = json::parse(s.data() + pos + 1);
                     // version 1.1 has different path case
                     // version 1.2 has all lower paths
-                    vector<string> includes = j["Data"]["Includes"];
+                    vector<std::u8string> includes = j["Data"]["Includes"];
+                    std::ranges::copy(includes, std::inserter(implicit_inputs, implicit_inputs.end()));
                 });
             }
         }
@@ -543,8 +544,6 @@ struct command_storage {
         });
     }
     void add(auto &&cmd) {
-        return;
-
         uint64_t n{0};
         auto ins = [&](auto &&v) {
             for (auto &&f : v) {

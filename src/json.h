@@ -27,6 +27,8 @@ some of replacements
 */
 
 struct json {
+    //using string_view = std::u8string_view;
+
     using array = vector<json>;
     using object = ::std::map<string_view, json>;
     // using simple_value = variant<string_view, int, double, bool, nullptr_t>;
@@ -42,15 +44,16 @@ struct json {
         }
         throw std::runtime_error{"not such key"};
     }
-    operator string() const {
+    template <typename T> requires std::same_as<T, string> || std::same_as<T, std::u8string>
+    operator T() const {
         string_view sv = *this;
-        string s;
+        T s;
         s.reserve(sv.size());
         for (auto i = sv.begin(); i != sv.end(); ++i) {
             if (*i == '\\') {
                 switch (*(i+1)) {
-                case '\\': s += '\\'; ++i; break;
-                case '\0': s += '\0'; ++i; break;
+                case '\\': s += (char)'\\'; ++i; break;
+                case '\0': s += (char)'\0'; ++i; break;
                 default:
                     throw std::runtime_error{"not implemented"};
                 }
@@ -59,6 +62,13 @@ struct json {
             }
         }
         return s;
+    }
+    operator vector<std::u8string>() const {
+        auto &p = std::get<array>(value);
+        vector<std::u8string> v;
+        v.reserve(p.size());
+        std::ranges::copy(p, std::back_inserter(v));
+        return v;
     }
     operator vector<string>() const {
         auto &p = std::get<array>(value);
@@ -93,12 +103,10 @@ struct json {
         return *p;
     }
     static void eat_symbol(auto &p, auto c) {
-        eat_space(p);
-        if (*p != c) {
+        if (get_symbol(p) != c) {
             throw std::runtime_error{"unexpected '"s + c + "'"s};
         }
         ++p;
-        eat_space(p);
     }
     static auto eat_string(auto &p) {
         auto start = p;
@@ -120,18 +128,15 @@ struct json {
         T v;
         while (*p != end_sym) {
             f(v);
-            if (*p == ',') {
+            if (get_symbol(p) == ',') {
                 ++p;
             }
-            eat_space(p);
         }
         eat_symbol(p, end_sym);
         return v;
     }
     static json parse(auto &&p) {
-        eat_space(p);
-        // check_null(p);
-        switch (*p) {
+        switch (get_symbol(p)) {
         case '{':
             return {parse<object, '{', '}'>(p, [&](auto &&v) {
                 auto key = eat_string_quoted(p);
