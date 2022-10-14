@@ -413,6 +413,15 @@ struct cl_exe_command : io_command {
             // >= 14.27 1927 (version 16.7)
             // https://learn.microsoft.com/en-us/cpp/build/reference/sourcedependencies?view=msvc-170
             // msvc prints errors into stdout, maybe use sourceDependencies with file always?
+
+            auto add_deps = [&](auto &&p) {
+                auto j = json::parse(p);
+                // version 1.1 has different path case
+                // version 1.2 has all lower paths
+                vector<std::u8string> includes = j["Data"]["Includes"];
+                std::ranges::copy(includes, std::inserter(implicit_inputs, implicit_inputs.end()));
+            };
+
             if (0 && !outputs.empty()) {
                 auto depsfile = path{*outputs.begin()} += ".json";
                 add("/sourceDependencies");
@@ -421,9 +430,9 @@ struct cl_exe_command : io_command {
                     arguments.pop_back();
                     arguments.pop_back();
                 }};
-                io_command::run(ex, cs, [&, depsfile] {
-                    mmap_file<> f{depsfile};
-                    throw std::runtime_error{"not implemented"};
+                io_command::run(ex, cs, [&, depsfile, add_deps] {
+                    mmap_file<char> f{depsfile};
+                    add_deps(f.p);
                 });
             } else {
                 out = ""s;
@@ -431,14 +440,10 @@ struct cl_exe_command : io_command {
                 scope_exit se{[&] {
                     arguments.pop_back();
                 }};
-                io_command::run(ex, cs, [&] {
+                io_command::run(ex, cs, [&, add_deps] {
                     auto &s = std::get<string>(out);
                     auto pos = s.find('\n');
-                    auto j = json::parse(s.data() + pos + 1);
-                    // version 1.1 has different path case
-                    // version 1.2 has all lower paths
-                    vector<std::u8string> includes = j["Data"]["Includes"];
-                    std::ranges::copy(includes, std::inserter(implicit_inputs, implicit_inputs.end()));
+                    add_deps(s.data() + pos + 1);
                 });
             }
         }
