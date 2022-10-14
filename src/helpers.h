@@ -29,11 +29,14 @@ using fmt::format;
 #include <unordered_set>
 #include <variant>
 
+namespace sw {
+
 namespace fs = std::filesystem;
 using path = fs::path;
 using std::string;
 using std::string_view;
 using std::variant;
+using std::vector;
 using namespace std::literals;
 
 template <typename F>
@@ -117,10 +120,8 @@ decltype(auto) visit1(auto &&var, auto &&...f) {
     return s;
 }
 
-namespace sw {
-
-struct abspath : ::fs::path {
-    using base = ::fs::path;
+struct abspath : path {
+    using base = path;
 
     abspath() = default;
     abspath(const base &p) : base{p} {
@@ -151,7 +152,7 @@ namespace std {
 template <>
 struct hash<::sw::abspath> {
     size_t operator()(const ::sw::abspath &p) {
-        return hash<::fs::path>()(p);
+        return hash<sw::path>()(p);
     }
 };
 

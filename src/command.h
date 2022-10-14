@@ -8,6 +8,7 @@
 #include "linux.h"
 #include "macos.h"
 #include "mmap.h"
+#include "json.h"
 
 namespace sw {
 
@@ -349,19 +350,6 @@ struct io_command : raw_command {
     }
 };
 
-struct json_parser {
-    const char *p;
-
-    void parse_object() {
-        eat_space();
-    }
-    void eat_space() {
-        while (isspace(*p)) {
-            ++p;
-        }
-    }
-};
-
 struct cl_exe_command : io_command {
     bool old_includes{false};
 
@@ -435,7 +423,7 @@ struct cl_exe_command : io_command {
                 }};
                 io_command::run(ex, cs, [&, depsfile] {
                     mmap_file<> f{depsfile};
-                    int a = 5;
+                    throw std::runtime_error{"not implemented"};
                 });
             } else {
                 out = ""s;
@@ -446,8 +434,10 @@ struct cl_exe_command : io_command {
                 io_command::run(ex, cs, [&] {
                     auto &s = std::get<string>(out);
                     auto pos = s.find('\n');
-                    json_parser p{s.data() + pos + 1};
-                    p.parse_object();
+                    auto j = json::parse(s.data() + pos + 1);
+                    // version 1.1 has different path case
+                    // version 1.2 has all lower paths
+                    vector<string> includes = j["Data"]["Includes"];
                 });
             }
         }
