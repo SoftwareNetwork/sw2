@@ -95,6 +95,8 @@ struct pipe {
 };
 
 struct executor {
+    static inline constexpr ULONG_PTR process_completion_key = 123;
+
     handle port;
     std::atomic_bool stopped{false};
     std::atomic_int jobs{0};
@@ -127,7 +129,7 @@ struct executor {
                 return;
             }
         }
-        if (key == 10) {
+        if (key == process_completion_key) {
             switch (bytes) {
             case JOB_OBJECT_MSG_NEW_PROCESS:
                 break;
@@ -158,7 +160,7 @@ struct executor {
     void register_job(auto &&job) {
         JOBOBJECT_ASSOCIATE_COMPLETION_PORT jcp{};
         jcp.CompletionPort = port;
-        jcp.CompletionKey = (void *)10;
+        jcp.CompletionKey = (PVOID)process_completion_key;
         if (!SetInformationJobObject(job, JobObjectAssociateCompletionPortInformation, &jcp, sizeof(jcp))) {
             throw std::runtime_error{"cannot SetInformationJobObject"};
         }

@@ -317,6 +317,12 @@ struct io_command : raw_command {
     std::set<path> implicit_inputs;
     mutable hash_type h;
     time_point start, end;
+    //
+    std::set<io_command*> dependencies;
+    std::set<io_command*> dependents;
+    enum class dag_status { not_visited, visited, no_circle };
+    dag_status dagstatus{};
+    //
 
     bool outdated(auto &&cs) const {
         return always || cs.outdated(*this);
@@ -581,16 +587,9 @@ struct command_storage {
 };
 
 struct command_executor {
-    void run(auto &&tgt) {
-        command_storage cs;
-        executor ex;
-#ifdef _WIN32
-        auto job = win32::create_job_object();
-        ex.register_job(job);
-#endif
-
+    static void create_output_dirs(auto &&commands) {
         std::unordered_set<path> outdirs;
-        for (auto &&c : tgt.commands) {
+        for (auto &&c : commands) {
             visit(c, [&](auto &&c) {
                 for (auto &&o : c.outputs) {
                     outdirs.insert(o.parent_path());
@@ -600,7 +599,64 @@ struct command_executor {
         for (auto &&d : outdirs) {
             fs::create_directories(d);
         }
+    }
+    static void make_dependencies(auto &&commands) {
+        std::map<path, io_command *> cmds;
+        for (auto &&c : commands) {
+            visit(c, [&](auto &&c) {
+                for (auto &&f : c.outputs) {
+                    auto [_, inserted] = cmds.emplace(f, &c);
+                    if (!inserted) {
+                        throw std::runtime_error{"more than one command produces: "s + f.string()};
+                    }
+                }
+            });
+        }
+        for (auto &&c : commands) {
+            visit(c, [&](auto &&c) {
+                for (auto &&f : c.inputs) {
+                    if (auto i = cmds.find(f); i != cmds.end()) {
+                        c.dependencies.insert(i->second);
+                    }
+                }
+            });
+        }
+    }
 
+    static void check_dag1(auto &&c) {
+        if (c.dagstatus == io_command::dag_status::no_circle) {
+            return;
+        }
+        if (c.dagstatus == io_command::dag_status::visited) {
+            throw std::runtime_error{"circular dependency detected"};
+        }
+        c.dagstatus = io_command::dag_status::visited;
+        for (auto &&d : c.dependencies) {
+            check_dag1(*d);
+        }
+        c.dagstatus = io_command::dag_status::no_circle;
+    }
+    static void check_dag(auto &&commands) {
+        // rewrite into non recursive
+        for (auto &&c : commands) {
+            visit(c, [&](auto &&c) {
+                check_dag1(c);
+            });
+        }
+    }
+    void run(auto &&tgt) {
+        command_storage cs;
+        executor ex;
+#ifdef _WIN32
+        auto job = win32::create_job_object();
+        ex.register_job(job);
+#endif
+
+        create_output_dirs(tgt.commands);
+        make_dependencies(tgt.commands);
+        check_dag(tgt.commands);
+
+        //
         for (auto &&c : tgt.commands) {
             visit(c, [&](auto &&c) {
                 c.run(ex, cs);
