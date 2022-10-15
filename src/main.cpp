@@ -50,7 +50,7 @@ using aarch64 = arm64;
 
 } // namespace os
 
-auto build_some_package2(auto &s) {
+auto self_build(auto &s) {
     auto &tgt = s.template add<rule_target>();
     tgt.name = "pkg2";
     tgt +=
@@ -126,7 +126,7 @@ int main1() {
 #endif
     }*/};
     auto tgt = build_some_package(s);
-    build_some_package2(s);
+    self_build(s);
 
     s.build();
 

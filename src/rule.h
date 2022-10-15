@@ -161,7 +161,7 @@ struct gcc_compile_rule {
                         c += (string)d;
                     }
                     for (auto &&i : tgt.include_directories) {
-                        c += "-I" + i;
+                        c += "-I", i;
                     }
                 };
                 add(tgt.compile_options);
