@@ -40,6 +40,7 @@ struct native_sources_rule {
         }
     }
 };
+
 #ifdef _WIN32
 struct cl_exe_rule {
     msvc_instance msvc;

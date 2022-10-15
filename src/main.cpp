@@ -7,6 +7,7 @@
 #include "package.h"
 #include "detect.h"
 #include "rule_target.h"
+#include "os.h"
 
 #include <map>
 #include <regex>
@@ -32,26 +33,8 @@ auto build_some_package(auto &s) {
     return tgt;
 }
 
-namespace os {
-
-struct windows {};
-
-} // namespace os
-
-namespace arch {
-
-struct x86 {};
-struct x64 {};
-using amd64 = x64;
-using x86_64 = x64;
-
-struct arm64 {};
-using aarch64 = arm64;
-
-} // namespace os
-
 auto self_build(auto &s) {
-    auto &tgt = s.template add<rule_target>();
+    auto &tgt = s.template add<native_target>();
     tgt.name = "pkg2";
     tgt +=
         "src"_rdir,
@@ -64,7 +47,6 @@ auto self_build(auto &s) {
         tgt += "ole32.lib"_slib;
         tgt += "OleAut32.lib"_slib;
     });
-    tgt += native_sources_rule{};
     //tgt += s.cl_rule;
     //tgt += s.link_rule;
     tgt += cl_exe_rule{};
@@ -125,7 +107,7 @@ int main1() {
                         gcc_compile_rule{}, gcc_link_rule{}
 #endif
     }*/};
-    auto tgt = build_some_package(s);
+    build_some_package(s);
     self_build(s);
 
     s.build();

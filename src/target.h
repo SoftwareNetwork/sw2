@@ -70,13 +70,13 @@ struct files_target {
     }
 
     // this auto &&self,
-    auto operator+=(auto &&v) {
-        add(v);
-        return appender{[&](auto &&v) { add(v); }};
+    auto operator+=(this auto &&self, auto &&v) {
+        self.add(v);
+        return appender{[&](auto &&v) { self.add(v); }};
     }
-    auto operator-=(auto &&v) {
-        remove(v);
-        return appender{[&](auto &&v) { remove(v); }};
+    auto operator-=(this auto &&self, auto &&v) {
+        self.remove(v);
+        return appender{[&](auto &&v) { self.remove(v); }};
     }
 
     auto range() const {

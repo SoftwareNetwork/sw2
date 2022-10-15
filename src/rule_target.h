@@ -14,54 +14,55 @@ struct rule_target : files_target {
     std::map<path, rule_flag> processed_files;
     std::vector<command> commands;
 
-    compile_options_t compile_options;
-    link_options_t link_options;
-
-    /*void add_rule(auto &&r) {
-        r(*this);
-    }*/
-    void add_rule(const rule &r) {
-        std::visit([&](auto &&v){v(*this);}, r);
-        for (auto &&c : commands) {
-            visit(c, [&](auto &&c) {
-                for (auto &&o : c.outputs) {
-                    processed_files[o];
-                }
-            });
-        }
-    }
-    template <typename T>
-    auto operator+=(T &&r) requires requires {requires rule_types::contains<std::decay_t<T>>();} {
-        add_rule(r);
-        return appender{[&](auto &&v){operator+=(v);}};
-    }
-    void add(const system_link_library &l) {
-        link_options.system_link_libraries.push_back(l);
-    }
     using files_target::operator+=;
     using files_target::add;
     using files_target::remove;
 
-    auto operator+=(auto &&v) {
-        add(v);
-        return appender{[&](auto &&v) { add(v); }};
-    }
-    auto operator-=(auto &&v) {
-        remove(v);
-        return appender{[&](auto &&v) { remove(v); }};
+    /*void add_rule(auto &&r) {
+        r(*this);
+    }*/
+    void add_rule(this auto &&self, const rule &r) {
+        std::visit([&](auto &&v){v(self);}, r);
+        for (auto &&c : self.commands) {
+            visit(c, [&](auto &&c) {
+                for (auto &&o : c.outputs) {
+                    self.processed_files[o];
+                }
+            });
+        }
     }
 
-    void operator()() {
+    template <typename T>
+    auto operator+=(this auto &&self, T &&r) requires requires {requires rule_types::contains<std::decay_t<T>>();} {
+        self.add_rule(r);
+        //return appender{[&](auto &&v){operator+=(v);}};
+    }
+
+    void operator()(this auto &&self) {
         command_executor ce;
-        ce.run(*this);
+        ce.run(self);
     }
 
     //auto visit()
 };
 
-struct native_target {
+struct native_target : rule_target {
+    compile_options_t compile_options;
+    link_options_t link_options;
+
+    using rule_target::operator+=;
+    using rule_target::add;
+    using rule_target::remove;
+
+    native_target() {
+        *this += native_sources_rule{};
+    }
+
+    void add(const system_link_library &l) {
+        link_options.system_link_libraries.push_back(l);
+    }
 };
 
-using target = variant<files_target, rule_target>;
+using target = variant<files_target, rule_target, native_target>;
 
 }
