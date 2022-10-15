@@ -18,10 +18,7 @@ struct rule_target : files_target {
     using files_target::add;
     using files_target::remove;
 
-    /*void add_rule(auto &&r) {
-        r(*this);
-    }*/
-    void add_rule(this auto &&self, const rule &r) {
+    void add(this auto &&self, const rule &r) {
         std::visit([&](auto &&v){v(self);}, r);
         for (auto &&c : self.commands) {
             visit(c, [&](auto &&c) {
@@ -30,12 +27,6 @@ struct rule_target : files_target {
                 }
             });
         }
-    }
-
-    template <typename T>
-    auto operator+=(this auto &&self, T &&r) requires requires {requires rule_types::contains<std::decay_t<T>>();} {
-        self.add_rule(r);
-        //return appender{[&](auto &&v){operator+=(v);}};
     }
 
     void operator()(this auto &&self) {
