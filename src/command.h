@@ -92,7 +92,6 @@ struct raw_command {
         si.StartupInfo.cb = sizeof(si);
         PROCESS_INFORMATION pi = {0};
         LPVOID env = 0;
-        LPCWSTR dir = 0;
         int inherit_handles = 1; // must be 1
 
         flags |= NORMAL_PRIORITY_CLASS;
@@ -117,7 +116,10 @@ struct raw_command {
         set_stream(out, si.StartupInfo.hStdOutput, STD_OUTPUT_HANDLE, pout);
         set_stream(err, si.StartupInfo.hStdError, STD_ERROR_HANDLE, perr);
 
-        auto r = CreateProcessW(0, printw().data(), 0, 0, inherit_handles, flags, env, dir, (LPSTARTUPINFOW)&si, &pi);
+        auto r = CreateProcessW(0, printw().data(), 0, 0,
+            inherit_handles, flags, env,
+            working_directory.empty() ? 0 : working_directory.wstring().c_str(),
+            (LPSTARTUPINFOW)&si, &pi);
         if (!r) {
             auto err = GetLastError();
             throw std::runtime_error("CreateProcessW failed, code = " + std::to_string(err));
@@ -157,11 +159,16 @@ struct raw_command {
         set_stream2(out, pout);
         set_stream2(err, perr);
 
+        // If we do not create default job for main process, we have a race here.
+        // If main process is killed before register_process() call, created process
+        // won't stop.
         ex.register_process(pi.hProcess, pi.dwProcessId, [this, cb, h = pi.hProcess]() {
             DWORD exit_code;
             GetExitCodeProcess(h, &exit_code);
+            scope_exit se{[&] {
+                CloseHandle(h); // we may want to use h in the callback
+            }};
             cb(exit_code);
-            CloseHandle(h); // we may want to use h in the callback
         });
 #endif
     }
@@ -318,8 +325,9 @@ struct io_command : raw_command {
     mutable hash_type h;
     time_point start, end;
     //
-    std::set<io_command*> dependencies;
-    std::set<io_command*> dependents;
+    std::set<void*> dependencies;
+    std::set<void*> dependents;
+    size_t n_pending_dependencies;
     enum class dag_status { not_visited, visited, no_circle };
     dag_status dagstatus{};
     //
@@ -345,9 +353,6 @@ struct io_command : raw_command {
             cs.add(*this);
         });
     }
-    void run(auto &&ex, auto &&cs) {
-        run(ex, cs, []{});
-    }
     auto hash() const {
         if (!h) {
             h(*this);
@@ -359,7 +364,7 @@ struct io_command : raw_command {
 struct cl_exe_command : io_command {
     bool old_includes{false};
 
-    void run(auto &&ex, auto &&cs) {
+    void run(auto &&ex, auto &&cs, auto &&cb) {
         err = ""s;
 
         if (old_includes) {
@@ -414,7 +419,7 @@ struct cl_exe_command : io_command {
                     implicit_inputs.insert(string{fn.data(), fn.data() + fn.size()});
                 }
             };
-            io_command::run(ex, cs, []{});
+            io_command::run(ex, cs, cb);
         } else {
             // >= 14.27 1927 (version 16.7)
             // https://learn.microsoft.com/en-us/cpp/build/reference/sourcedependencies?view=msvc-170
@@ -436,7 +441,9 @@ struct cl_exe_command : io_command {
                     arguments.pop_back();
                     arguments.pop_back();
                 }};
-                io_command::run(ex, cs, [&, depsfile, add_deps] {
+                io_command::run(ex, cs, [&, depsfile, add_deps, cb] {
+                    cb(); // before processing (start another process)
+
                     mmap_file<char> f{depsfile};
                     add_deps(f.p);
                 });
@@ -446,7 +453,9 @@ struct cl_exe_command : io_command {
                 scope_exit se{[&] {
                     arguments.pop_back();
                 }};
-                io_command::run(ex, cs, [&, add_deps] {
+                io_command::run(ex, cs, [&, add_deps, cb] {
+                    cb(); // before processing (start another process)
+
                     auto &s = std::get<string>(out);
                     auto pos = s.find('\n');
                     add_deps(s.data() + pos + 1);
@@ -457,11 +466,11 @@ struct cl_exe_command : io_command {
 };
 
 struct gcc_command : io_command {
-    void run(auto &&ex, auto &&cs) {
+    void run(auto &&ex, auto &&cs, auto &&cb) {
         err = ""s;
         out = ""s;
 
-        io_command::run(ex, cs, []{});
+        io_command::run(ex, cs, cb);
     }
 };
 
@@ -601,10 +610,10 @@ struct command_executor {
         }
     }
     static void make_dependencies(auto &&commands) {
-        std::map<path, io_command *> cmds;
+        std::map<path, void *> cmds;
         for (auto &&c : commands) {
-            visit(c, [&](auto &&c) {
-                for (auto &&f : c.outputs) {
+            visit(c, [&](auto &&c1) {
+                for (auto &&f : c1.outputs) {
                     auto [_, inserted] = cmds.emplace(f, &c);
                     if (!inserted) {
                         throw std::runtime_error{"more than one command produces: "s + f.string()};
@@ -613,12 +622,16 @@ struct command_executor {
             });
         }
         for (auto &&c : commands) {
-            visit(c, [&](auto &&c) {
-                for (auto &&f : c.inputs) {
+            visit(c, [&](auto &&c1) {
+                for (auto &&f : c1.inputs) {
                     if (auto i = cmds.find(f); i != cmds.end()) {
-                        c.dependencies.insert(i->second);
+                        c1.dependencies.insert(i->second);
+                        visit(*(command *)i->second, [&](auto &&d1) {
+                            d1.dependents.insert(&c);
+                        });
                     }
                 }
+                c1.n_pending_dependencies = c1.dependencies.size();
             });
         }
     }
@@ -632,22 +645,51 @@ struct command_executor {
         }
         c.dagstatus = io_command::dag_status::visited;
         for (auto &&d : c.dependencies) {
-            check_dag1(*d);
+            visit(*(command *)d, [&](auto &&d1) {
+                check_dag1(d1);
+            });
         }
         c.dagstatus = io_command::dag_status::no_circle;
     }
     static void check_dag(auto &&commands) {
-        // rewrite into non recursive
+        // rewrite into non recursive?
         for (auto &&c : commands) {
             visit(c, [&](auto &&c) {
                 check_dag1(c);
             });
         }
     }
+
+    std::deque<command *> pending_commands;
+    int running_commands{0};
+    size_t maximum_running_commands{std::thread::hardware_concurrency()};
+    command_storage cs;
+    executor ex;
+
+    void run_next() {
+        while (running_commands < maximum_running_commands && !pending_commands.empty()) {
+            auto c = pending_commands.front();
+            pending_commands.pop_front();
+            visit(*c, [&](auto &&c) {
+                ++running_commands;
+                c.run(ex, cs, [&] {
+                    --running_commands;
+                    for (auto &&d : c.dependents) {
+                        visit(*(command *)d, [&](auto &&d1) {
+                            if (!--d1.n_pending_dependencies) {
+                                pending_commands.push_back((command *)d);
+                                run_next();
+                            }
+                        });
+                    }
+                });
+            });
+        }
+    }
     void run(auto &&tgt) {
-        command_storage cs;
-        executor ex;
 #ifdef _WIN32
+         // always create top level job and associate self with it
+        win32::default_job_object();
         auto job = win32::create_job_object();
         ex.register_job(job);
 #endif
@@ -658,11 +700,14 @@ struct command_executor {
 
         //
         for (auto &&c : tgt.commands) {
-            visit(c, [&](auto &&c) {
-                c.run(ex, cs);
-                ex.run();
+            visit(c, [&](auto &&c1) {
+                if (c1.dependencies.empty()) {
+                    pending_commands.push_back(&c);
+                }
             });
         }
+        run_next();
+        ex.run();
     }
 };
 

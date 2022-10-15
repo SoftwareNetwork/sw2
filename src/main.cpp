@@ -51,7 +51,7 @@ using aarch64 = arm64;
 } // namespace os
 
 auto build_some_package2(auto &s) {
-    auto &tgt = s.add<rule_target>();
+    auto &tgt = s.template add<rule_target>();
     tgt.name = "pkg2";
     tgt +=
         "src"_rdir,
@@ -69,7 +69,6 @@ auto build_some_package2(auto &s) {
     //tgt += s.link_rule;
     tgt += cl_exe_rule{};
     tgt += link_exe_rule{};
-    tgt();
 }
 
 } // namespace sw
@@ -114,6 +113,10 @@ struct solution {
 };
 
 int main1() {
+#if defined(_WIN32) && !defined(__MINGW32__)
+    SetConsoleOutputCP(CP_UTF8);
+#endif
+
     solution s {
         ".", ".sw4", /*{native_sources_rule{},
 #ifdef _WIN32

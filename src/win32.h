@@ -55,10 +55,6 @@ struct handle {
 
 auto create_job_object() {
     handle job = CreateJobObject(0, 0);
-    /*if (!AssignProcessToJobObject(job, GetCurrentProcess())) {
-        throw std::runtime_error{"cannot AssignProcessToJobObject"};
-    }*/
-
     JOBOBJECT_EXTENDED_LIMIT_INFORMATION ji;
     if (!QueryInformationJobObject(job, JobObjectExtendedLimitInformation, &ji, sizeof(ji), 0)) {
         throw std::runtime_error{"cannot QueryInformationJobObject"};
@@ -70,7 +66,22 @@ auto create_job_object() {
     return job;
 }
 HANDLE default_job_object() {
-    static handle job = create_job_object();
+    static handle job = []() {
+        auto job = create_job_object();
+        /*BOOL injob{false};
+        // check if we are a child in some job already
+        // injob is probably true under debugger/visual studio
+        if (!IsProcessInJob(GetCurrentProcess(), 0, &injob)) {
+            throw std::runtime_error{"cannot IsProcessInJob"};
+        }*/
+        // assign this process to a job
+        if (1 /*|| !injob*/) {
+            if (!AssignProcessToJobObject(job, GetCurrentProcess())) {
+                throw std::runtime_error{"cannot AssignProcessToJobObject"};
+            }
+        }
+        return job;
+    }();
     return job;
 }
 

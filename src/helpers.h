@@ -7,6 +7,7 @@
 #include <atomic>
 #include <cassert>
 #include <charconv>
+#include <deque>
 #include <filesystem>
 /*#if __has_include(<format>)
 #include <format>
