@@ -18,18 +18,29 @@ struct rule_target : files_target {
     using files_target::add;
     using files_target::remove;
 
-    void add(this auto &&self, const rule &r) {
-        std::visit([&](auto &&v){v(self);}, r);
-        for (auto &&c : self.commands) {
-            visit(c, [&](auto &&c) {
-                for (auto &&o : c.outputs) {
-                    self.processed_files[o];
+    void add(const rule &r) {
+        rules.push_back(r);
+    }
+    void init_rules(this auto &&self) {
+        for (auto &&r : self.rules) {
+            std::visit([&](auto &&v){
+                if constexpr (requires {v(self);}) {
+                    v(self);
                 }
-            });
+            }, r);
+            for (auto &&c : self.commands) {
+                visit(c, [&](auto &&c) {
+                    for (auto &&o : c.outputs) {
+                        self.processed_files[o];
+                    }
+                });
+            }
         }
     }
 
     void operator()(this auto &&self) {
+        self.init_rules();
+
         command_executor ce;
         ce.run(self);
     }

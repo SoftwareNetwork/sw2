@@ -187,6 +187,9 @@ struct mmap_file {
                 p.clear();
                 return *this;
             }
+            if (len == 0) {
+                return *this;
+            }
             p.assign((const char8_t *)m.p + offset, (const char8_t *)m.p + offset + len);
             offset += len;
             return *this;

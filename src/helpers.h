@@ -27,6 +27,7 @@ using fmt::format;
 #include <ranges>
 #include <regex>
 #include <set>
+#include <thread>
 #include <unordered_set>
 #include <variant>
 

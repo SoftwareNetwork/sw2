@@ -26,15 +26,19 @@ struct rule_flag {
     }
 };
 
+auto is_c_file(const path &fn) {
+    static std::set<string> exts{".c", ".m"}; // with obj-c, separate call?
+    return exts.contains(fn.extension().string());
+}
 auto is_cpp_file(const path &fn) {
-    static std::set<string> exts{".cpp", ".cxx"};
+    static std::set<string> exts{".cpp", ".cxx", ".mm"}; // with obj-c++, separate call?
     return exts.contains(fn.extension().string());
 }
 
 struct native_sources_rule {
     void operator()(auto &tgt) const {
         for (auto &&f : tgt) {
-            if (is_cpp_file(f)) {
+            if (is_cpp_file(f) || is_c_file(f)) {
                 tgt.processed_files[f].insert(this);
             }
         }
@@ -51,7 +55,7 @@ struct cl_exe_rule {
         sdk = detect_winsdk();
     }
 
-    void operator()(auto &tgt) const {
+    void operator()(auto &tgt) requires requires { tgt.compile_options; } {
         auto compiler = msvc.cl_target();
         for (auto &&[f, rules] : tgt.processed_files) {
             if (is_cpp_file(f) && !rules.contains(this)) {
@@ -88,7 +92,7 @@ struct link_exe_rule {
         sdk = detect_winsdk();
     }
 
-    void operator()(auto &tgt) const {
+    void operator()(auto &tgt) requires requires { tgt.link_options; } {
         auto out = tgt.binary_dir / (string)tgt.name += ".exe"s;
         auto linker = msvc.link_target();
         io_command c;
@@ -119,7 +123,7 @@ struct link_exe_rule {
         tgt.commands.emplace_back(std::move(c));
     }
 };
-#else
+#endif
 struct gcc_instance {
     path bin;
 
@@ -209,7 +213,6 @@ struct gcc_link_rule {
         tgt.commands.emplace_back(std::move(c));
     }
 };
-#endif
 
 using rule_types = types<native_sources_rule
 #ifdef _WIN32
