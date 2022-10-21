@@ -63,6 +63,9 @@ struct native_target : rule_target {
     void add(const system_link_library &l) {
         link_options.system_link_libraries.push_back(l);
     }
+
+    void build() { operator()(); }
+    void run(){}
 };
 
 using target = variant<files_target, rule_target, native_target>;

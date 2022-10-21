@@ -4,6 +4,7 @@
 #pragma once
 
 #include "helpers.h"
+#include "vs_instance_helpers.h"
 #include "target.h"
 
 namespace sw {
