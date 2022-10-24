@@ -23,9 +23,9 @@ struct raw_command {
 
     // stdin,stdout,stderr
     using stream_callback = std::function<void(string_view)>;
-    using stream = variant<std::monostate, string, stream_callback>;
+    using stream = variant<std::monostate, string, stream_callback, path>;
     //stream in;
-    stream out,err;
+    stream out, err;
 #ifdef _WIN32
     win32::pipe pout, perr;
 #endif
@@ -101,20 +101,25 @@ struct raw_command {
 
         si.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
 
-        auto set_stream = [&](auto &&s, auto &&h, auto &&stdh, auto &&pipe) {
-            pipe.init(true);
-            ex.register_handle(pipe.r);
+        auto setup_stream = [&](auto &&s, auto &&h, auto &&stdh, auto &&pipe) {
             visit(
                 s,
                 [&](std::monostate) {
                     h = GetStdHandle(stdh);
                 },
+                [&](path &fn) {
+                    SECURITY_ATTRIBUTES sa = {0};
+                    sa.bInheritHandle = TRUE;
+                    h = CreateFileW(fn.wstring().c_str(), GENERIC_WRITE, 0, &sa, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, 0);
+                },
                 [&](auto &) {
+                    pipe.init(true);
+                    ex.register_handle(pipe.r);
                     h = pipe.w;
                 });
         };
-        set_stream(out, si.StartupInfo.hStdOutput, STD_OUTPUT_HANDLE, pout);
-        set_stream(err, si.StartupInfo.hStdError, STD_ERROR_HANDLE, perr);
+        setup_stream(out, si.StartupInfo.hStdOutput, STD_OUTPUT_HANDLE, pout);
+        setup_stream(err, si.StartupInfo.hStdError, STD_ERROR_HANDLE, perr);
 
         auto r = CreateProcessW(0, printw().data(), 0, 0,
             inherit_handles, flags, env,
@@ -125,15 +130,14 @@ struct raw_command {
             throw std::runtime_error("CreateProcessW failed, code = " + std::to_string(err));
         }
         CloseHandle(pi.hThread);
-        pout.w.reset();
-        perr.w.reset();
 
-        auto set_stream2 = [&](auto &&s, auto &&pipe) {
+        auto post_setup_stream = [&](auto &&s, auto &&h, auto &&pipe) {
             visit(
                 s,
                 [&](std::monostate) {
                 },
                 [&](string &s) {
+                    pipe.w.reset();
                     ex.read_async(pipe.r, [&](this auto &&f, auto &&buf, auto &&ec) {
                         if (!ec) {
                             s += buf;
@@ -142,6 +146,7 @@ struct raw_command {
                     });
                 },
                 [&](stream_callback &cb) {
+                    pipe.w.reset();
                     ex.read_async(pipe.r, [&, cb, s = string()](this auto &&f, auto &&buf, auto &&ec) {
                         if (!ec) {
                             s += buf;
@@ -153,11 +158,14 @@ struct raw_command {
                             ex.read_async(pipe.r, f);
                         }
                     });
+                },
+                [&](path &fn) {
+                    CloseHandle(h);
                 }
             );
         };
-        set_stream2(out, pout);
-        set_stream2(err, perr);
+        post_setup_stream(out, si.StartupInfo.hStdOutput, pout);
+        post_setup_stream(err, si.StartupInfo.hStdError, perr);
 
         // If we do not create default job for main process, we have a race here.
         // If main process is killed before register_process() call, created process
@@ -268,11 +276,12 @@ struct raw_command {
 #endif
     }
     void run(auto &&ex) {
-#ifdef _WIN32
-        run(ex, [](auto){});
-#elif defined(__linux__)
-        run_linux(ex, [](auto){});
-#endif
+        run(ex, [](auto exit_code) {
+            if (exit_code) {
+                throw std::runtime_error(
+                    "process exit code: " + std::to_string(exit_code));
+            }
+        });
     }
 
     void add(auto &&p) {
@@ -281,9 +290,17 @@ struct raw_command {
     void add(const char *p) {
         arguments.push_back(string{p});
     }
+    // TODO: exclude bools, chars
+    void add(std::integral auto v) {
+        add(std::to_string(v));
+    }
     auto operator+=(auto &&arg) {
         add(arg);
         return appender{[&](auto &&v){add(v);}};
+    }
+
+    void operator>(const path &p) {
+        out = p;
     }
 };
 
@@ -323,7 +340,7 @@ struct io_command : raw_command {
     std::set<path> outputs;
     std::set<path> implicit_inputs;
     mutable hash_type h;
-    time_point start, end;
+    time_point start{}, end;
     //
     std::set<void*> dependencies;
     std::set<void*> dependents;
@@ -337,6 +354,7 @@ struct io_command : raw_command {
     }
     void run(auto &&ex, auto &&cs, auto &&cb) {
         if (!outdated(cs)) {
+            cb();
             return;
         }
         // use GetProcessTimes or similar for time
@@ -444,6 +462,10 @@ struct cl_exe_command : io_command {
                 io_command::run(ex, cs, [&, depsfile, add_deps, cb] {
                     cb(); // before processing (start another process)
 
+                    if (start == decltype(start){}) {
+                        return;
+                    }
+
                     mmap_file<char> f{depsfile};
                     add_deps(f.p);
                 });
@@ -455,6 +477,10 @@ struct cl_exe_command : io_command {
                 }};
                 io_command::run(ex, cs, [&, add_deps, cb] {
                     cb(); // before processing (start another process)
+
+                    if (start == decltype(start){}) {
+                        return;
+                    }
 
                     auto &s = std::get<string>(out);
                     auto pos = s.find('\n');
@@ -490,10 +516,10 @@ struct command_storage {
     std::unordered_map<uint64_t, path> files;
     std::unordered_map<io_command::hash_type, command_data, io_command::hash_type::hasher> commands;
 
-    command_storage() : command_storage{"commands.bin"} {}
+    command_storage() : command_storage{"."} {}
     command_storage(const path &fn)
-            : f_commands{fn, mmap_type::rw{}}
-            , f_files{path{fn} += ".files", mmap_type::rw{}}
+            : f_commands{fn / "commands.bin", mmap_type::rw{}}
+            , f_files{fn / "commands.files.bin", mmap_type::rw{}}
             , cmd_stream{f_commands.get_stream()}, files_stream{f_files.get_stream()} {
         if (cmd_stream.size() == 0) {
             return;
@@ -663,10 +689,9 @@ struct command_executor {
     std::deque<command *> pending_commands;
     int running_commands{0};
     size_t maximum_running_commands{std::thread::hardware_concurrency()};
-    command_storage cs;
     executor ex;
 
-    void run_next() {
+    void run_next(auto &&cs) {
         while (running_commands < maximum_running_commands && !pending_commands.empty()) {
             auto c = pending_commands.front();
             pending_commands.pop_front();
@@ -678,7 +703,7 @@ struct command_executor {
                         visit(*(command *)d, [&](auto &&d1) {
                             if (!--d1.n_pending_dependencies) {
                                 pending_commands.push_back((command *)d);
-                                run_next();
+                                run_next(cs);
                             }
                         });
                     }
@@ -687,11 +712,10 @@ struct command_executor {
         }
     }
     void run(auto &&tgt) {
+        command_storage cs{tgt.binary_dir};
 #ifdef _WIN32
          // always create top level job and associate self with it
         win32::default_job_object();
-        auto job = win32::create_job_object();
-        ex.register_job(job);
 #endif
 
         create_output_dirs(tgt.commands);
@@ -706,7 +730,7 @@ struct command_executor {
                 }
             });
         }
-        run_next();
+        run_next(cs);
         ex.run();
     }
 };

@@ -9,14 +9,17 @@ namespace sw {
 
 // basic target: throw files, rules etc.
 struct rule_target : files_target {
+    using base = files_target;
+
+    using base::base;
+    using base::operator+=;
+    using base::add;
+    using base::remove;
+
     path binary_dir;
     std::vector<rule> rules;
     std::map<path, rule_flag> processed_files;
     std::vector<command> commands;
-
-    using files_target::operator+=;
-    using files_target::add;
-    using files_target::remove;
 
     void add(const rule &r) {
         rules.push_back(r);
@@ -38,8 +41,11 @@ struct rule_target : files_target {
         }
     }
 
-    void operator()(this auto &&self) {
+    void prepare(this auto &&self) {
         self.init_rules();
+    }
+    void build(this auto &&self) {
+        self.prepare();
 
         command_executor ce;
         ce.run(self);
@@ -49,14 +55,16 @@ struct rule_target : files_target {
 };
 
 struct native_target : rule_target {
+    using base = rule_target;
+
+    using base::operator+=;
+    using base::add;
+    using base::remove;
+
     compile_options_t compile_options;
     link_options_t link_options;
 
-    using rule_target::operator+=;
-    using rule_target::add;
-    using rule_target::remove;
-
-    native_target() {
+    native_target(auto &&id) : base{id} {
         *this += native_sources_rule{};
     }
 
@@ -64,10 +72,22 @@ struct native_target : rule_target {
         link_options.system_link_libraries.push_back(l);
     }
 
-    void build() { operator()(); }
-    void run(){}
+    //void build() { operator()(); }
+    //void run(){}
 };
 
-using target = variant<files_target, rule_target, native_target>;
+struct executable_target : native_target {
+    using base = native_target;
 
-}
+    using base::base;
+
+    path executable;
+
+    void run(auto && ... args) {
+        // make rule?
+    }
+};
+
+using target = variant<files_target, rule_target, native_target, executable_target>;
+
+} // namespace sw

@@ -53,6 +53,8 @@ struct files_target {
     path source_dir;
     files_t files;
 
+    files_target(auto &&n) : name{n} {}
+
     void add(const file_regex &r) {
         r(source_dir, [&](auto &&iter) {
             for (auto &&e : iter) {

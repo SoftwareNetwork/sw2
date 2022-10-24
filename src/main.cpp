@@ -8,6 +8,7 @@
 #include "detect.h"
 #include "rule_target.h"
 #include "os.h"
+#include "solution.h"
 
 #include <map>
 #include <regex>
@@ -20,9 +21,12 @@ void add_transform_to_storage(auto &&s, auto &&f) {
     add_file_to_storage(s,f);
 }
 
-auto build_some_package(auto &s) {
-    files_target tgt;
-    tgt.name = "pkg1";
+} // namespace sw
+
+using namespace sw;
+
+auto build_some_package(solution &s) {
+    files_target tgt{"pkg1"};
     tgt.source_dir = s.source_dir;
     tgt +=
         "src"_rdir,
@@ -33,9 +37,8 @@ auto build_some_package(auto &s) {
     return tgt;
 }
 
-auto self_build(auto &s) {
-    auto &tgt = s.template add<native_target>();
-    tgt.name = "pkg2";
+auto self_build(solution &s) {
+    auto &tgt = s.add<native_target>("pkg2");
     tgt +=
         "src"_rdir,
         "src/main.cpp",
@@ -47,66 +50,14 @@ auto self_build(auto &s) {
         tgt += "ole32.lib"_slib;
         tgt += "OleAut32.lib"_slib;
     });
-    //tgt += s.cl_rule;
-    //tgt += s.link_rule;
-    tgt += cl_exe_rule{};
-    tgt += link_exe_rule{};
 }
-
-} // namespace sw
-
-using namespace sw;
-
-struct solution {
-    abspath source_dir;
-    abspath binary_dir;
-    // config
-
-    os::windows os;
-    // arch
-    // libtype
-    // default compilers
-    //
-
-    // internal data
-    std::vector<std::unique_ptr<target>> targets_;
-
-    template <typename T, typename ... Args>
-    T &add(Args && ... args) {
-        auto &v = *targets_.emplace_back(std::make_unique<target>(T{FWD(args)...}));
-        auto &t = std::get<T>(v);
-        t.source_dir = source_dir;
-        t.binary_dir = binary_dir;
-        return t;
-    }
-
-    auto targets() {
-        return targets_ | std::views::transform([](auto &&v) -> decltype(auto) { return *v; });
-    }
-    void build() {
-        for (auto &&t : targets()) {
-            visit(t, [&](auto &&v) {
-                if constexpr (requires {v();}) {
-                    v();
-                }
-            });
-        }
-    }
-};
 
 int main1() {
 #if defined(_WIN32) && !defined(__MINGW32__)
     SetConsoleOutputCP(CP_UTF8);
 #endif
 
-    solution s {
-        ".", ".sw4", /*{native_sources_rule{},
-#ifdef _WIN32
-                        cl_exe_rule{}, link_exe_rule{}
-#else
-                        gcc_compile_rule{}, gcc_link_rule{}
-#endif
-    }*/};
+    solution s;
     build_some_package(s);
     self_build(s);
 

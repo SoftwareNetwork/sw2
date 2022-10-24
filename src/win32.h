@@ -9,7 +9,26 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
+#define WINAPI_CALL(x) if (!(x)) {throw winapi_exception{#x};}
+
 namespace sw::win32 {
+
+struct winapi_exception : std::runtime_error {
+    using base = std::runtime_error;
+    winapi_exception(const string &msg) : base{msg + ": "s + get_last_error()} {
+    }
+    string get_last_error() const {
+        auto code = GetLastError();
+
+        LPVOID lpMsgBuf;
+        FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, NULL,
+                      code, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPTSTR)&lpMsgBuf, 0, NULL);
+        scope_exit se{[&]{LocalFree(lpMsgBuf);}};
+        string msg = (const char *)lpMsgBuf;
+
+        return "error code = "s + std::to_string(code) + ": " + msg;
+    }
+};
 
 struct io_callback {
     OVERLAPPED o{};
@@ -26,7 +45,7 @@ struct handle {
             err();
         }
     }
-    handle(HANDLE h) : handle{h,[]{throw std::runtime_error{"bad handle"};}} {
+    handle(HANDLE h) : handle{h,[]{throw winapi_exception{"bad handle"};}} {
     }
     handle(const handle &) = delete;
     handle &operator=(const handle &) = delete;
@@ -40,8 +59,7 @@ struct handle {
         return *this;
     }
     ~handle() {
-        if (!CloseHandle(h)) {
-        }
+        reset();
     }
 
     operator HANDLE() { return h; }
@@ -56,13 +74,9 @@ struct handle {
 auto create_job_object() {
     handle job = CreateJobObject(0, 0);
     JOBOBJECT_EXTENDED_LIMIT_INFORMATION ji;
-    if (!QueryInformationJobObject(job, JobObjectExtendedLimitInformation, &ji, sizeof(ji), 0)) {
-        throw std::runtime_error{"cannot QueryInformationJobObject"};
-    }
+    WINAPI_CALL(QueryInformationJobObject(job, JobObjectExtendedLimitInformation, &ji, sizeof(ji), 0));
     ji.BasicLimitInformation.LimitFlags |= JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
-    if (!SetInformationJobObject(job, JobObjectExtendedLimitInformation, &ji, sizeof(ji))) {
-        throw std::runtime_error{"cannot SetInformationJobObject"};
-    }
+    WINAPI_CALL(SetInformationJobObject(job, JobObjectExtendedLimitInformation, &ji, sizeof(ji)));
     return job;
 }
 HANDLE default_job_object() {
@@ -71,14 +85,10 @@ HANDLE default_job_object() {
         /*BOOL injob{false};
         // check if we are a child in some job already
         // injob is probably true under debugger/visual studio
-        if (!IsProcessInJob(GetCurrentProcess(), 0, &injob)) {
-            throw std::runtime_error{"cannot IsProcessInJob"};
-        }*/
+        WINAPI_CALL(IsProcessInJob(GetCurrentProcess(), 0, &injob));*/
         // assign this process to a job
         if (1 /*|| !injob*/) {
-            if (!AssignProcessToJobObject(job, GetCurrentProcess())) {
-                throw std::runtime_error{"cannot AssignProcessToJobObject"};
-            }
+            WINAPI_CALL(AssignProcessToJobObject(job, GetCurrentProcess()));
         }
         return job;
     }();
@@ -112,10 +122,12 @@ struct executor {
     std::atomic_bool stopped{false};
     std::atomic_int jobs{0};
     std::map<DWORD, std::move_only_function<void()>> process_callbacks;
-    HANDLE job{INVALID_HANDLE_VALUE};
+    handle job;
 
     executor() {
         port = CreateIoCompletionPort(INVALID_HANDLE_VALUE, 0, 0, 0);
+        job = win32::create_job_object();
+        register_job(job);
     }
     void stop() {
         stopped = true;
@@ -164,23 +176,17 @@ struct executor {
     }
 
     void register_handle(auto &&h) {
-        if (!CreateIoCompletionPort(h, port, 0, 0)) {
-            throw std::runtime_error{"cannot add fd to port"};
-        }
+        WINAPI_CALL(CreateIoCompletionPort(h, port, 0, 0));
     }
     void register_job(auto &&job) {
         JOBOBJECT_ASSOCIATE_COMPLETION_PORT jcp{};
         jcp.CompletionPort = port;
         jcp.CompletionKey = (PVOID)process_completion_key;
-        if (!SetInformationJobObject(job, JobObjectAssociateCompletionPortInformation, &jcp, sizeof(jcp))) {
-            throw std::runtime_error{"cannot SetInformationJobObject"};
-        }
-        this->job = job;
+        WINAPI_CALL(SetInformationJobObject(job, JobObjectAssociateCompletionPortInformation, &jcp, sizeof(jcp)));
+        //this->job = job;
     }
     void register_process(auto &&h, auto &&pid, auto &&f) {
-        if (!AssignProcessToJobObject(job, h)) {
-            throw std::runtime_error{"cannot AssignProcessToJobObject"};
-        }
+        WINAPI_CALL(AssignProcessToJobObject(job, h));
         process_callbacks.emplace(pid, FWD(f));
     }
 
@@ -215,5 +221,7 @@ namespace sw {
 using win32::executor;
 
 }
+
+#undef WINAPI_CALL
 
 #endif

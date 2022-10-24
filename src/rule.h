@@ -94,6 +94,9 @@ struct link_exe_rule {
 
     void operator()(auto &tgt) requires requires { tgt.link_options; } {
         auto out = tgt.binary_dir / (string)tgt.name += ".exe"s;
+        if constexpr (requires {tgt.executable;}) {
+            tgt.executable = out;
+        }
         auto linker = msvc.link_target();
         io_command c;
         c += linker.exe, "-nologo", "-OUT:" + out.string();
@@ -124,6 +127,7 @@ struct link_exe_rule {
     }
 };
 #endif
+
 struct gcc_instance {
     path bin;
 
@@ -154,7 +158,7 @@ struct gcc_compile_rule {
         gcc = detect_gcc_clang().at(0);
     }
 
-    void operator()(auto &tgt) const {
+    void operator()(auto &tgt) requires requires { tgt.compile_options; } {
         auto compiler = gcc.cl_target();
         for (auto &&[f, rules] : tgt.processed_files) {
             if (is_cpp_file(f) && !rules.contains(this)) {
@@ -185,7 +189,7 @@ struct gcc_link_rule {
         gcc = detect_gcc_clang().at(0);
     }
 
-    void operator()(auto &tgt) const {
+    void operator()(auto &tgt) requires requires { tgt.link_options; } {
         path out = tgt.binary_dir / (string)tgt.name;
         auto linker = gcc.link_target();
         io_command c;
@@ -217,10 +221,9 @@ struct gcc_link_rule {
 using rule_types = types<native_sources_rule
 #ifdef _WIN32
     , cl_exe_rule, link_exe_rule
-#else
-    , gcc_compile_rule, gcc_link_rule
 #endif
+    , gcc_compile_rule, gcc_link_rule
 >;
 using rule = decltype(make_variant(rule_types{}))::type;
 
-}
+} // namespace sw
