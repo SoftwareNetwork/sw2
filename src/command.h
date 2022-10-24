@@ -508,7 +508,7 @@ struct io_command : raw_command {
 struct cl_exe_command : io_command {
     bool old_includes{false};
 
-    void run(auto &&ex, auto &&cs, auto &&cb) {
+    void run(auto &&ex, auto &&cb) {
         err = ""s;
 
         if (old_includes) {
@@ -563,7 +563,7 @@ struct cl_exe_command : io_command {
                     implicit_inputs.insert(string{fn.data(), fn.data() + fn.size()});
                 }
             };
-            io_command::run(ex, cs, cb);
+            io_command::run(ex, cb);
         } else {
             // >= 14.27 1927 (version 16.7)
             // https://learn.microsoft.com/en-us/cpp/build/reference/sourcedependencies?view=msvc-170
@@ -585,7 +585,7 @@ struct cl_exe_command : io_command {
                     arguments.pop_back();
                     arguments.pop_back();
                 }};
-                io_command::run(ex, cs, [&, depsfile, add_deps, cb] {
+                io_command::run(ex, [&, depsfile, add_deps, cb] {
                     cb(); // before processing (start another process)
 
                     if (start == decltype(start){}) {
@@ -601,7 +601,7 @@ struct cl_exe_command : io_command {
                 scope_exit se{[&] {
                     arguments.pop_back();
                 }};
-                io_command::run(ex, cs, [&, add_deps, cb] {
+                io_command::run(ex, [&, add_deps, cb] {
                     cb(); // before processing (start another process)
 
                     if (start == decltype(start){}) {
@@ -618,11 +618,11 @@ struct cl_exe_command : io_command {
 };
 
 struct gcc_command : io_command {
-    void run(auto &&ex, auto &&cs, auto &&cb) {
+    void run(auto &&ex, auto &&cb) {
         err = ""s;
         out = ""s;
 
-        io_command::run(ex, cs, cb);
+        io_command::run(ex, cb);
     }
 };
 
@@ -701,27 +701,36 @@ struct command_executor {
     std::vector<command*> external_commands;
 
     command_executor() {
+        init();
     }
     command_executor(executor &ex) : ex_external{&ex} {
+        init();
+    }
+
+    void init() {
+#ifdef _WIN32
+        // always create top level job and associate self with it
+        win32::default_job_object();
+#endif
     }
 
     auto &get_executor() {
         return ex_external ? *ex_external : ex;
     }
 
-    void run_next(auto &&cs) {
+    void run_next() {
         while (running_commands < maximum_running_commands && !pending_commands.empty()) {
             auto c = pending_commands.front();
             pending_commands.pop_front();
             visit(*c, [&](auto &&c) {
                 ++running_commands;
-                c.run(get_executor(), cs, [&] {
+                c.run(get_executor(), [&] {
                     --running_commands;
                     for (auto &&d : c.dependents) {
                         visit(*(command *)d, [&](auto &&d1) {
                             if (!--d1.n_pending_dependencies) {
                                 pending_commands.push_back((command *)d);
-                                run_next(cs);
+                                run_next();
                             }
                         });
                     }
@@ -731,10 +740,6 @@ struct command_executor {
     }
     void run(auto &&tgt) {
         command_storage cs{tgt.binary_dir};
-#ifdef _WIN32
-         // always create top level job and associate self with it
-        win32::default_job_object();
-#endif
 
         create_output_dirs(tgt.commands);
         make_dependencies(tgt.commands);
@@ -743,12 +748,13 @@ struct command_executor {
         //
         for (auto &&c : tgt.commands) {
             visit(c, [&](auto &&c1) {
+                c1.cs = &cs;
                 if (c1.dependencies.empty()) {
                     pending_commands.push_back(&c);
                 }
             });
         }
-        run_next(cs);
+        run_next();
         get_executor().run();
     }
     void run() {
