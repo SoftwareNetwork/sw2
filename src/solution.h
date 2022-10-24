@@ -39,11 +39,7 @@ struct solution {
                    return *v;
                });
     }
-    void build() {
-        executor ex;
-        build(ex);
-    }
-    void build(auto &&ex) {
+    void prepare() {
         for (auto &&t : targets()) {
             visit(t, [&](auto &&v) {
                 if constexpr (std::derived_from<std::decay_t<decltype(v)>, rule_target>) {
@@ -51,11 +47,28 @@ struct solution {
                         v += r;
                     }
                 }
-                if constexpr (requires { v.build(); }) {
-                    v.build();
+                if constexpr (requires { v.prepare(); }) {
+                    v.prepare();
                 }
             });
         }
+    }
+    void build() {
+        executor ex;
+        build(ex);
+    }
+    void build(auto &&ex) {
+        prepare();
+
+        command_executor ce{ex};
+        for (auto &&t : targets()) {
+            visit(t, [&](auto &&v) {
+                if constexpr (requires { v.commands; }) {
+                    ce += v.commands;
+                }
+            });
+        }
+        ce.run();
     }
 };
 
