@@ -121,14 +121,10 @@ struct raw_command {
         setup_stream(out, si.StartupInfo.hStdOutput, STD_OUTPUT_HANDLE, pout);
         setup_stream(err, si.StartupInfo.hStdError, STD_ERROR_HANDLE, perr);
 
-        auto r = CreateProcessW(0, printw().data(), 0, 0,
+        WINAPI_CALL(CreateProcessW(0, printw().data(), 0, 0,
             inherit_handles, flags, env,
             working_directory.empty() ? 0 : working_directory.wstring().c_str(),
-            (LPSTARTUPINFOW)&si, &pi);
-        if (!r) {
-            auto err = GetLastError();
-            throw std::runtime_error("CreateProcessW failed, code = " + std::to_string(err));
-        }
+            (LPSTARTUPINFOW)&si, &pi));
         CloseHandle(pi.hThread);
 
         auto post_setup_stream = [&](auto &&s, auto &&h, auto &&pipe) {
@@ -336,6 +332,7 @@ struct command_storage {
     using clock = std::chrono::system_clock;
     using time_point = clock::time_point;
     using hash_type = command_hash;
+    struct raw_tag{};
 
     struct command_data {
         time_point mtime;
@@ -350,8 +347,10 @@ struct command_storage {
     std::unordered_map<uint64_t, path> files;
     std::unordered_map<hash_type, command_data, hash_type::hasher> commands;
 
-    command_storage() : command_storage{"."} {}
-    command_storage(const path &fn)
+    command_storage() : command_storage{".", raw_tag{}} {}
+    command_storage(const path &fn) : command_storage{fn / "db" / "9", raw_tag{}} {
+    }
+    command_storage(const path &fn, raw_tag)
             : f_commands{fn / "commands.bin", mmap_type::rw{}}
             , f_files{fn / "commands.files.bin", mmap_type::rw{}}
             , cmd_stream{f_commands.get_stream()}, files_stream{f_files.get_stream()} {
@@ -456,6 +455,7 @@ struct command_storage {
 };
 
 struct io_command : raw_command {
+    using base = raw_command;
     using clock = command_storage::clock;
 
     bool always{false};
@@ -502,6 +502,11 @@ struct io_command : raw_command {
             h(*this);
         }
         return h;
+    }
+
+    void operator>(const path &p) {
+        base::operator>(p);
+        outputs.insert(p);
     }
 };
 
@@ -632,7 +637,7 @@ struct command_executor {
     static void create_output_dirs(auto &&commands) {
         std::unordered_set<path> outdirs;
         for (auto &&c : commands) {
-            visit(c, [&](auto &&c) {
+            visit(*c, [&](auto &&c) {
                 for (auto &&o : c.outputs) {
                     outdirs.insert(o.parent_path());
                 }
@@ -645,9 +650,9 @@ struct command_executor {
     static void make_dependencies(auto &&commands) {
         std::map<path, void *> cmds;
         for (auto &&c : commands) {
-            visit(c, [&](auto &&c1) {
+            visit(*c, [&](auto &&c1) {
                 for (auto &&f : c1.outputs) {
-                    auto [_, inserted] = cmds.emplace(f, &c);
+                    auto [_, inserted] = cmds.emplace(f, c);
                     if (!inserted) {
                         throw std::runtime_error{"more than one command produces: "s + f.string()};
                     }
@@ -655,12 +660,12 @@ struct command_executor {
             });
         }
         for (auto &&c : commands) {
-            visit(c, [&](auto &&c1) {
+            visit(*c, [&](auto &&c1) {
                 for (auto &&f : c1.inputs) {
                     if (auto i = cmds.find(f); i != cmds.end()) {
                         c1.dependencies.insert(i->second);
                         visit(*(command *)i->second, [&](auto &&d1) {
-                            d1.dependents.insert(&c);
+                            d1.dependents.insert(c);
                         });
                     }
                 }
@@ -687,7 +692,7 @@ struct command_executor {
     static void check_dag(auto &&commands) {
         // rewrite into non recursive?
         for (auto &&c : commands) {
-            visit(c, [&](auto &&c) {
+            visit(*c, [&](auto &&c) {
                 check_dag1(c);
             });
         }
@@ -740,25 +745,28 @@ struct command_executor {
     }
     void run(auto &&tgt) {
         command_storage cs{tgt.binary_dir};
-
-        create_output_dirs(tgt.commands);
-        make_dependencies(tgt.commands);
-        check_dag(tgt.commands);
-
-        //
         for (auto &&c : tgt.commands) {
-            visit(c, [&](auto &&c1) {
-                c1.cs = &cs;
+            c.cs = &cs;
+        }
+        external_commands.clear();
+        *this += tgt.commands;
+        run();
+    }
+    void run() {
+        create_output_dirs(external_commands);
+        make_dependencies(external_commands);
+        check_dag(external_commands);
+
+        // initial set of commands
+        for (auto &&c : external_commands) {
+            visit(*c, [&](auto &&c1) {
                 if (c1.dependencies.empty()) {
-                    pending_commands.push_back(&c);
+                    pending_commands.push_back(c);
                 }
             });
         }
         run_next();
         get_executor().run();
-    }
-    void run() {
-        std::vector<command> commands;
     }
 
     void operator+=(std::vector<command> &commands) {

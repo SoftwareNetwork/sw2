@@ -115,6 +115,7 @@ struct mmap_file {
         close();
         auto oldsz = this->sz;
         if (!fs::exists(fn)) {
+            fs::create_directories(fn.parent_path());
             std::ofstream{fn};
         }
         fs::resize_file(fn, oldsz ? this->sz * 2 + sz : sz * 2);

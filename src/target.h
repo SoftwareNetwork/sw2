@@ -49,11 +49,12 @@ struct binary_library_target : compile_options_t, link_options_t {
 
 struct files_target {
     using files_t = std::set<path>; // unordered?
+
     package_id name;
     path source_dir;
     files_t files;
 
-    files_target(auto &&n) : name{n} {}
+    files_target(const package_id &n) : name{n} {}
 
     void add(const file_regex &r) {
         r(source_dir, [&](auto &&iter) {

@@ -59,7 +59,7 @@ struct cl_exe_rule {
         auto compiler = msvc.cl_target();
         for (auto &&[f, rules] : tgt.processed_files) {
             if (is_cpp_file(f) && !rules.contains(this)) {
-                auto out = tgt.binary_dir / f.filename() += ".obj";
+                auto out = tgt.binary_dir / "obj" / f.filename() += ".obj";
                 cl_exe_command c;
                 c.old_includes = msvc.vs_version < package_version{16,7};
                 c += compiler.exe, "-nologo", "-c", "-std:c++latest", "-EHsc", f, "-Fo" + out.string();
@@ -93,9 +93,9 @@ struct link_exe_rule {
     }
 
     void operator()(auto &tgt) requires requires { tgt.link_options; } {
-        auto out = tgt.binary_dir / (string)tgt.name += ".exe"s;
+        auto out = tgt.binary_dir / "bin" / (string)tgt.name += ".exe"s;
         if constexpr (requires {tgt.executable;}) {
-            tgt.executable = out;
+            out = tgt.executable;
         }
         auto linker = msvc.link_target();
         io_command c;
@@ -162,7 +162,7 @@ struct gcc_compile_rule {
         auto compiler = gcc.cl_target();
         for (auto &&[f, rules] : tgt.processed_files) {
             if (is_cpp_file(f) && !rules.contains(this)) {
-                auto out = tgt.binary_dir / f.filename() += ".o";
+                auto out = tgt.binary_dir / "obj" / f.filename() += ".o";
                 gcc_command c;
                 c += compiler.exe, "-c", "-std=c++2b", f, "-o", out;
                 auto add = [&](auto &&tgt) {
@@ -190,7 +190,7 @@ struct gcc_link_rule {
     }
 
     void operator()(auto &tgt) requires requires { tgt.link_options; } {
-        path out = tgt.binary_dir / (string)tgt.name;
+        path out = tgt.binary_dir / "bin" / (string)tgt.name;
         auto linker = gcc.link_target();
         io_command c;
         c += linker.exe, "-o", out.string();

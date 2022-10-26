@@ -9,7 +9,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
-#define WINAPI_CALL(x) if (!(x)) {throw winapi_exception{#x};}
+#define WINAPI_CALL(x) if (!(x)) {throw ::sw::win32::winapi_exception{#x};}
 
 namespace sw::win32 {
 
@@ -222,6 +222,6 @@ using win32::executor;
 
 }
 
-#undef WINAPI_CALL
+//#undef WINAPI_CALL
 
 #endif

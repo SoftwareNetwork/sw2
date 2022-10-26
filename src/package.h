@@ -29,6 +29,14 @@ struct package_name {
         }
         return "";
     }
+
+    auto hash() const {
+        size_t h = 0;
+        for (auto &&e : elements) {
+            h ^= std::hash<string>()(e);
+        }
+        return h;
+    }
 };
 
 auto split_string(const string &s, string_view split) {
@@ -66,6 +74,14 @@ struct package_version {
             auto operator<=>(const numbers &rhs) const {
                 return std::tie(value) <=> std::tie(rhs.value);
             }
+
+            auto hash() const {
+                size_t h = 0;
+                for (auto &&e : value) {
+                    h ^= std::hash<number_type>()(e);
+                }
+                return h;
+            }
         };
         numbers elements;
         string extra;
@@ -83,6 +99,10 @@ struct package_version {
             } else {
                 return std::tie(elements, extra) < std::tie(rhs.elements, rhs.extra);
             }
+        }
+
+        auto hash() const {
+            return elements.hash() ^ std::hash<string>()(extra);
         }
     };
     using version_type = std::variant<number_version, string>;
@@ -135,6 +155,13 @@ struct package_version {
             return std::tie(version) < std::tie(rhs.version);
         }
     }
+
+    auto hash() const {
+        if (is_version()) {
+            return std::get<number_version>(version).hash();
+        }
+        return std::hash<string>()(std::get<string>(version));
+    }
 };
 
 struct package_id {
@@ -142,6 +169,8 @@ struct package_id {
     package_version version;
 
     package_id() = default;
+    package_id(const char *s) : package_id{string{s}} {
+    }
     package_id(const string &s) : name{s} {
     }
     package_id(const string &p, const string &v) : name{p}, version{v} {
@@ -151,6 +180,10 @@ struct package_id {
     }
 
     operator string() const { return name; }
+
+    auto hash() const {
+        return name.hash() ^ version.hash();
+    }
 };
 
 }

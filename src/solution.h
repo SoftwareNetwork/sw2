@@ -17,7 +17,7 @@ struct solution {
     //
 
     // internal data
-    std::vector<std::unique_ptr<target>> targets_;
+    std::vector<target_ptr> targets_;
     std::vector<rule> rules;
 
     solution() {
@@ -27,21 +27,22 @@ struct solution {
 
     template <typename T, typename... Args>
     T &add(Args &&...args) {
-        auto &v = *targets_.emplace_back(std::make_unique<target>(T{FWD(args)...}));
-        auto &t = std::get<T>(v);
-        t.source_dir = source_dir;
-        t.binary_dir = binary_dir;
+        auto ptr = std::make_unique<T>(*this, FWD(args)...);
+        auto &t = *ptr;
+        targets_.emplace_back(std::move(ptr));
         return t;
     }
 
-    auto targets() {
-        return targets_ | std::views::transform([](auto &&v) -> decltype(auto) {
-                   return *v;
-               });
+    auto &targets() {
+        return targets_;
+        //| std::views::transform([](auto &&v) -> decltype(auto) {
+                   //return *v;
+               //});
     }
     void prepare() {
         for (auto &&t : targets()) {
-            visit(t, [&](auto &&v) {
+            visit(t, [&](auto &&vp) {
+                auto &v = *vp;
                 if constexpr (std::derived_from<std::decay_t<decltype(v)>, rule_target>) {
                     for (auto &&r : rules) {
                         v += r;
@@ -62,7 +63,8 @@ struct solution {
 
         command_executor ce{ex};
         for (auto &&t : targets()) {
-            visit(t, [&](auto &&v) {
+            visit(t, [&](auto &&vp) {
+                auto &v = *vp;
                 if constexpr (requires { v.commands; }) {
                     ce += v.commands;
                 }

@@ -11,15 +11,27 @@ namespace sw {
 struct rule_target : files_target {
     using base = files_target;
 
-    using base::base;
     using base::operator+=;
     using base::add;
     using base::remove;
 
     path binary_dir;
+    command_storage cs;
     std::vector<rule> rules;
     std::map<path, rule_flag> processed_files;
     std::vector<command> commands;
+
+    rule_target(auto &&solution, auto &&id)
+        : files_target{id}
+        , binary_dir{make_binary_dir(solution.binary_dir)}
+        , cs{binary_dir}
+   {
+        source_dir = solution.source_dir;
+    }
+    auto make_binary_dir(const path &parent) {
+        auto config = ""; // TODO:
+        return parent / "t" / config / std::to_string(name.hash());
+    }
 
     void add(const rule &r) {
         rules.push_back(r);
@@ -38,6 +50,11 @@ struct rule_target : files_target {
                     }
                 });
             }
+        }
+        for (auto &&c : self.commands) {
+            visit(c, [&](auto &&c2) {
+                c2.cs = &self.cs;
+            });
         }
     }
 
@@ -64,7 +81,7 @@ struct native_target : rule_target {
     compile_options_t compile_options;
     link_options_t link_options;
 
-    native_target(auto &&id) : base{id} {
+    native_target(auto &&s, auto &&id) : base{s, id} {
         *this += native_sources_rule{};
     }
 
@@ -79,7 +96,9 @@ struct native_target : rule_target {
 struct executable_target : native_target {
     using base = native_target;
 
-    using base::base;
+    executable_target(auto &&s, auto &&id) : base{s, id} {
+        executable = binary_dir / "bin" / (string)name += ".exe"s;
+    }
 
     path executable;
 
@@ -89,5 +108,11 @@ struct executable_target : native_target {
 };
 
 using target = variant<files_target, rule_target, native_target, executable_target>;
+using target_ptr = variant<
+    std::unique_ptr<files_target>,
+    std::unique_ptr<rule_target>,
+    std::unique_ptr<native_target>,
+    std::unique_ptr<executable_target>
+>;
 
 } // namespace sw
