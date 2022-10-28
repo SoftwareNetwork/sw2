@@ -379,29 +379,36 @@ struct command_storage {
         }
     }
 
-    struct new_command { io_command &c; };
-    struct new_file { path &p; };
-    struct missing_file { path &p; };
+    struct not_outdated {};
+    struct new_command { const io_command &c; };
+    struct new_file { const path *p; };
+    struct missing_file { const path *p; };
     // struct not_regular_file {};
-    struct updated_file { path &p; };
-    using outdated_reason = variant<new_command, new_file, missing_file>;
+    struct updated_file { const path *p; };
+    using outdated_reason = variant<not_outdated, new_command, new_file, missing_file, updated_file>;
     //
     bool outdated(auto &&cmd) const {
+        return !std::holds_alternative<not_outdated>(outdated1(cmd));
+    }
+    outdated_reason outdated1(auto &&cmd) const {
         auto h = cmd.hash();
         auto cit = commands.find(h);
         if (cit == commands.end()) {
-            std::cerr << "outdated: command is missing" << "\n";
-            return true;
+            return new_command{cmd};
+            //std::cerr << "outdated: command is missing" << "\n";
         }
-        return std::ranges::any_of(cit->second.files, [&](auto &&f) {
+        outdated_reason reason;
+        auto r = std::ranges::any_of(cit->second.files, [&](auto &&f) {
             auto it = files.find(f);
             if (it == files.end()) {
-                std::cerr << "outdated: new file" << "\n";
+                reason = new_file{&it->second};
+                //std::cerr << "outdated: new file" << "\n";
                 return true;
             }
             auto s = fs::status(it->second);
             if (!fs::exists(s)) {
-                std::cerr << "outdated: file does not exists" << "\n";
+                reason = missing_file{&it->second};
+                //std::cerr << "outdated: file does not exists" << "\n";
                 return true;
             }
             /*if (!fs::is_regular_file(s)) {
@@ -416,11 +423,16 @@ struct command_storage {
             auto val = fs::last_write_time(it->second);
             if (val.time_since_epoch() > cit->second.mtime.time_since_epoch()) {
 #endif
-                std::cerr << "outdated: file lwt > command time" << "\n";
+                reason = updated_file{&it->second};
+                //std::cerr << "outdated: file lwt > command time" << "\n";
                 return true;
             }
             return false;
         });
+        if (r) {
+            return reason;
+        }
+        return not_outdated{};
     }
     void add(auto &&cmd) {
         uint64_t n{0};

@@ -11,12 +11,25 @@ struct istring : string {
     using string::string;
     using string::operator=;
 
-     //std::strong_ordering operator<=>(const istring &rhs) const { return stricmp(data(), rhs.data()); }
+    istring(const string &s) : string{s} {}
+
+    std::strong_ordering operator<=>(const istring &rhs) const {
+        auto r = stricmp(data(), rhs.data());
+        if (r == 0) {
+            return std::strong_ordering::equal;
+        }
+        return r < 0 ? std::strong_ordering::less : std::strong_ordering::greater;
+    }
+
+    auto hash() const {
+        string v = *this;
+        std::transform(v.begin(), v.end(), v.begin(), tolower);
+        return std::hash<string>()(v);
+    }
 };
 
 struct package_name {
-    //std::vector<istring> elements;
-    std::vector<string> elements;
+    std::vector<istring> elements;
 
     package_name() {
     }
@@ -33,7 +46,7 @@ struct package_name {
     auto hash() const {
         size_t h = 0;
         for (auto &&e : elements) {
-            h ^= std::hash<string>()(e);
+            h ^= e.hash();
         }
         return h;
     }

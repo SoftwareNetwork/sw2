@@ -4,6 +4,7 @@
 #pragma once
 
 #include "rule.h"
+#include "os.h"
 
 namespace sw {
 
@@ -20,6 +21,7 @@ struct rule_target : files_target {
     std::vector<rule> rules;
     std::map<path, rule_flag> processed_files;
     std::vector<command> commands;
+    build_settings bs;
 
     rule_target(auto &&solution, auto &&id)
         : files_target{id}
@@ -27,10 +29,24 @@ struct rule_target : files_target {
         , cs{binary_dir}
    {
         source_dir = solution.source_dir;
+        bs = solution.bs;
     }
     auto make_binary_dir(const path &parent) {
         auto config = ""; // TODO:
         return parent / "t" / config / std::to_string(name.hash());
+    }
+
+    auto &build_settings() {
+        return bs;
+    }
+    auto &build_settings() const {
+        return bs;
+    }
+
+    template <typename T, typename ... Types>
+    bool is() { return bs.is<T, Types...>(); }
+    void visit(auto && ... f) {
+        bs.visit(FWD(f)...);
     }
 
     void add(const rule &r) {
@@ -44,7 +60,7 @@ struct rule_target : files_target {
                 }
             }, r);
             for (auto &&c : self.commands) {
-                visit(c, [&](auto &&c) {
+                ::visit(c, [&](auto &&c) {
                     for (auto &&o : c.outputs) {
                         self.processed_files[o];
                     }
@@ -52,7 +68,7 @@ struct rule_target : files_target {
             }
         }
         for (auto &&c : self.commands) {
-            visit(c, [&](auto &&c2) {
+            ::visit(c, [&](auto &&c2) {
                 c2.cs = &self.cs;
             });
         }
@@ -97,7 +113,7 @@ struct executable_target : native_target {
     using base = native_target;
 
     executable_target(auto &&s, auto &&id) : base{s, id} {
-        executable = binary_dir / "bin" / (string)name += ".exe"s;
+        executable = binary_dir / "bin" / (string)name += s.os.executable_extension;
     }
 
     path executable;

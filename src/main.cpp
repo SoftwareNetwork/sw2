@@ -45,11 +45,11 @@ auto self_build(solution &s) {
         "src/.*\\.cpp"_r,
         "src/.*\\.h"_rr
         ;
-    visit1(s.os, [&](os::windows &) {
+    if (tgt.is<os::windows>()) {
         tgt += "advapi32.lib"_slib;
         tgt += "ole32.lib"_slib;
         tgt += "OleAut32.lib"_slib;
-    });
+    }
 }
 
 int main1() {
@@ -58,9 +58,8 @@ int main1() {
 #endif
 
     solution s;
-    build_some_package(s);
-    self_build(s);
-
+    s.add_input(source_code_input{&build_some_package});
+    s.add_input(source_code_input{&self_build});
     s.build();
 
 	/*file_storage<physical_file_storage_single_file<basic_contents_hash>> fst{ {"single_file2.bin"} };

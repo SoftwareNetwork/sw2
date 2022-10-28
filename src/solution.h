@@ -2,6 +2,7 @@
 
 #include "rule_target.h"
 #include "os.h"
+#include "input.h"
 
 namespace sw {
 
@@ -10,15 +11,12 @@ struct solution {
     abspath binary_dir{".sw4"};
     // config
 
-    os::windows os;
-    // arch
-    // libtype
-    // default compilers
-    //
+    build_settings bs{build_settings::default_build_settings()};
 
     // internal data
     std::vector<target_ptr> targets_;
     std::vector<rule> rules;
+    std::vector<input_with_settings> inputs;
 
     solution() {
         rules.push_back(cl_exe_rule{});
@@ -31,6 +29,13 @@ struct solution {
         auto &t = *ptr;
         targets_.emplace_back(std::move(ptr));
         return t;
+    }
+
+    void add_input(auto &&i) {
+        inputs.emplace_back(input_with_settings{i,{build_settings::default_build_settings()}});
+    }
+    void add_input(const input_with_settings &i) {
+        inputs.emplace_back(i);
     }
 
     auto &targets() {
@@ -59,6 +64,10 @@ struct solution {
         build(ex);
     }
     void build(auto &&ex) {
+        for (auto &&i : inputs) {
+            i(*this);
+        }
+
         prepare();
 
         command_executor ce{ex};
