@@ -60,6 +60,11 @@ int main1() {
     solution s;
     s.add_input(source_code_input{&build_some_package});
     s.add_input(source_code_input{&self_build});
+    input_with_settings is{source_code_input{&self_build}};
+    auto dbs = build_settings::default_build_settings();
+    dbs.arch = arch::x86{};
+    is.settings.push_back(dbs);
+    s.add_input(is);
     s.build();
 
 	/*file_storage<physical_file_storage_single_file<basic_contents_hash>> fst{ {"single_file2.bin"} };

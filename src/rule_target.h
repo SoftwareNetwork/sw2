@@ -16,24 +16,24 @@ struct rule_target : files_target {
     using base::add;
     using base::remove;
 
+    build_settings bs; // ref? but how to deal in visit const/non const?
     path binary_dir;
     command_storage cs;
     std::vector<rule> rules;
     std::map<path, rule_flag> processed_files;
     std::vector<command> commands;
-    build_settings bs;
 
     rule_target(auto &&solution, auto &&id)
         : files_target{id}
+        , bs{solution.bs}
         , binary_dir{make_binary_dir(solution.binary_dir)}
         , cs{binary_dir}
    {
         source_dir = solution.source_dir;
-        bs = solution.bs;
     }
     auto make_binary_dir(const path &parent) {
-        auto config = ""; // TODO:
-        return parent / "t" / config / std::to_string(name.hash());
+        auto config = bs.hash();
+        return parent / "t" / std::to_string(config) / std::to_string(name.hash());
     }
 
     auto &build_settings() {

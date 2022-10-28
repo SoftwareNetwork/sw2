@@ -10,11 +10,15 @@ namespace sw {
 namespace os {
 
 struct windows {
-    // kernel32 dependency (winsdk.um)
+    static constexpr auto name = "windows"sv;
+
     static constexpr auto executable_extension = ".exe";
     static constexpr auto object_file_extension = ".obj";
     static constexpr auto static_library_extension = ".lib";
     static constexpr auto shared_library_extension = ".dll";
+
+    // deps:
+    // kernel32 dependency (winsdk.um)
 };
 
 struct unix {
@@ -23,6 +27,8 @@ struct unix {
 };
 
 struct linux : unix {
+    static constexpr auto name = "linux"sv;
+
     static constexpr auto shared_library_extension = ".so";
 };
 
@@ -30,52 +36,61 @@ struct darwin : unix {
     static constexpr auto shared_library_extension = ".dylib";
 };
 
-struct macos : darwin {};
+struct macos : darwin {
+    static constexpr auto name = "macos"sv;
+};
 // ios etc
 
 } // namespace os
 
 namespace arch {
 
-struct x86 {};
-struct x64 {};
+struct x86 {
+    static constexpr auto name = "x86"sv;
+};
+struct x64 {
+    static constexpr auto name = "x64"sv;
+};
 using amd64 = x64;
 using x86_64 = x64;
 
-struct arm {};
-struct arm64 {};
+struct arm {
+    static constexpr auto name = "arm"sv;
+};
+struct arm64 {
+    static constexpr auto name = "arm64"sv;
+};
 using aarch64 = arm64;
 
 } // namespace arch
 
 namespace build_type {
 
-struct debug {};
-struct minimum_size_release {};
-struct release_with_debug_information {};
-struct release {};
+struct debug {
+    static constexpr auto name = "debug"sv;
+};
+struct minimum_size_release {
+    static constexpr auto name = "minimum_size_release"sv;
+};
+struct release_with_debug_information {
+    static constexpr auto name = "release_with_debug_information"sv;
+};
+struct release {
+    static constexpr auto name = "release"sv;
+};
 
 } // namespace build_type
 
 namespace library_type {
 
-struct static_ {};
-struct shared {};
+struct static_ {
+    static constexpr auto name = "static"sv;
+};
+struct shared {
+    static constexpr auto name = "shared"sv;
+};
 
 } // namespace library_type
-
-template <typename T, typename Head, typename... Types>
-static constexpr bool contains() {
-    if constexpr (sizeof...(Types) == 0) {
-        return std::same_as<T, Head>;
-    } else {
-        return std::same_as<T, Head> || contains<T, Types...>();
-    }
-}
-template <typename T, template <typename ...> typename Container, typename... Types>
-static constexpr bool contains(Container<Types...> **) {
-    return contains<T, Types...>();
-}
 
 struct build_settings {
     template <typename ... Types>
@@ -137,6 +152,21 @@ struct build_settings {
     template <typename T, typename ... Types>
     bool is() {
         return (is1<T>() && ... && is1<Types>());
+    }
+
+    size_t hash() const {
+        size_t h = 0;
+        std::apply(
+            [&](auto &&...args) {
+                auto f2 = [&](auto &&a) {
+                    ::sw::visit(a, [&](auto &&v) {
+                        h ^= std::hash<string_view>()(v.name);
+                    });
+                };
+                (f2(FWD(args)), ...);
+            },
+            for_each());
+        return h;
     }
 
     static auto default_build_settings() {

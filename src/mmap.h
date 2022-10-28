@@ -68,12 +68,12 @@ struct mmap_file {
         }
 #ifdef _WIN32
         f = win32::handle{CreateFileW(fn.wstring().c_str(), mode.access, mode.share_mode, 0, mode.disposition, FILE_ATTRIBUTE_NORMAL, 0),
-            [&] { throw std::runtime_error{"cannot open file: " + fn.string()}; }};
+            [&] { throw win32::winapi_exception{"cannot open file: " + fn.string()}; }};
         m = win32::handle{CreateFileMappingW(f, 0, mode.page_mode, 0, 0, 0),
-            [&] { throw std::runtime_error{"cannot create file mapping"}; }};
+            [&] { throw win32::winapi_exception{"cannot create file mapping"}; }};
         p = (T *)MapViewOfFile(m, mode.map_mode, 0, 0, 0);
         if (!p) {
-            throw std::runtime_error{"cannot map file"};
+            throw win32::winapi_exception{"cannot map file"};
         }
 #else
         fd = ::open(fn.string().c_str(), mode.open_mode);

@@ -99,6 +99,19 @@ decltype(auto) visit1(auto &&var, auto &&...f) {
     return overload{FWD(f)...}(FWD(var));
 }
 
+template <typename T, typename Head, typename... Types>
+static constexpr bool contains() {
+    if constexpr (sizeof...(Types) == 0) {
+        return std::same_as<T, Head>;
+    } else {
+        return std::same_as<T, Head> || contains<T, Types...>();
+    }
+}
+template <typename T, template <typename...> typename Container, typename... Types>
+static constexpr bool contains(Container<Types...> **) {
+    return contains<T, Types...>();
+}
+
 [[nodiscard]] std::string replace(const std::string &str, const std::string &oldstr, const std::string &newstr,
                                   int count = -1) {
     int sofar = 0;

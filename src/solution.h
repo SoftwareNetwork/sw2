@@ -32,7 +32,10 @@ struct solution {
     }
 
     void add_input(auto &&i) {
-        inputs.emplace_back(input_with_settings{i,{build_settings::default_build_settings()}});
+        inputs.emplace_back(input_with_settings{i, {build_settings::default_build_settings()}});
+    }
+    void add_input(input_with_settings &i) {
+        inputs.emplace_back(i);
     }
     void add_input(const input_with_settings &i) {
         inputs.emplace_back(i);
