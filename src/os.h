@@ -7,6 +7,10 @@
 
 namespace sw {
 
+struct any_setting {
+    static constexpr auto name = "any_setting"sv;
+};
+
 namespace os {
 
 struct windows {
@@ -19,6 +23,17 @@ struct windows {
 
     // deps:
     // kernel32 dependency (winsdk.um)
+};
+
+struct mingw : windows {
+    static constexpr auto name = "mingw"sv;
+};
+
+struct cygwin : windows {
+    static constexpr auto name = "cygwin"sv;
+
+    static constexpr auto static_library_extension = ".a";
+    static constexpr auto object_file_extension = ".o";
 };
 
 struct unix {
@@ -40,6 +55,12 @@ struct macos : darwin {
     static constexpr auto name = "macos"sv;
 };
 // ios etc
+
+struct wasm : unix {
+    static constexpr auto name = "wasm"sv;
+
+    static constexpr auto executable_extension = ".html";
+};
 
 } // namespace os
 
@@ -94,10 +115,15 @@ struct shared {
 
 struct build_settings {
     template <typename ... Types>
-    struct special_variant : variant<Types...> {
-        using base = variant<Types...>;
+    struct special_variant : variant<any_setting, Types...> {
+        using base = variant<any_setting, Types...>;
         using base::base;
         using base::operator=;
+
+        auto operator<(const special_variant &rhs) const {
+            return base::index() < rhs.base::index();
+        }
+        //auto operator==(const build_settings &) const = default;
 
         template <typename T>
         bool is() const {
@@ -105,7 +131,7 @@ struct build_settings {
         }
     };
 
-    using os_type = special_variant<os::linux, os::macos, os::windows>;
+    using os_type = special_variant<os::linux, os::macos, os::windows, os::mingw, os::cygwin, os::wasm>;
     using arch_type = special_variant<arch::x86, arch::x64, arch::arm, arch::arm64>;
     using build_type_type = special_variant<build_type::debug, build_type::minimum_size_release,
         build_type::release_with_debug_information, build_type::release>;
@@ -121,64 +147,71 @@ struct build_settings {
     auto for_each() const {
         return std::tie(os, arch, build_type, library_type);
     }
+    auto for_each(auto &&f) const {
+        std::apply(
+            [&](auto &&...args) {
+                (f(FWD(args)), ...);
+            },
+            for_each());
+    }
 
     void visit(auto &&...f) {
-        std::apply([&](auto && ... args){
-            auto f2 = [&](auto && a) {
-                visit_any(a, FWD(f)...);
-            };
-            (f2(FWD(args)),...);
-        }, for_each());
+        for_each([&](auto && a) {
+            visit_any(a, FWD(f)...);
+        });
     }
 
     template <typename T>
-    bool is1() {
+    bool is1() const {
         int cond = 0;
-        std::apply(
-            [&](auto &&...args) {
-                auto f2 = [&](auto &&a) {
-                    if (cond == 1) {
-                        return;
-                    }
-                    if constexpr (contains<T>((std::decay_t<decltype(a)>**)nullptr)) {
-                        cond += std::holds_alternative<T>(a);
-                    }
-                };
-                (f2(FWD(args)), ...);
-            },
-            for_each());
+        for_each([&](auto &&a) {
+            if (cond == 1) {
+                return;
+            }
+            if constexpr (contains<T>((std::decay_t<decltype(a)> **)nullptr)) {
+                cond += std::holds_alternative<T>(a);
+            }
+        });
         return cond == 1;
     }
     template <typename T, typename ... Types>
-    bool is() {
+    bool is() const {
         return (is1<T>() && ... && is1<Types>());
     }
 
     size_t hash() const {
         size_t h = 0;
-        std::apply(
-            [&](auto &&...args) {
-                auto f2 = [&](auto &&a) {
-                    ::sw::visit(a, [&](auto &&v) {
-                        h ^= std::hash<string_view>()(v.name);
-                    });
-                };
-                (f2(FWD(args)), ...);
-            },
-            for_each());
+        for_each([&](auto &&a) {
+            ::sw::visit(a, [&](auto &&v) {
+                h ^= std::hash<string_view>()(v.name);
+            });
+        });
         return h;
     }
 
-    static auto default_build_settings() {
+    auto operator<(const build_settings &rhs) const {
+        return for_each() < rhs.for_each();
+    }
+
+    static auto host_os() {
         build_settings bs;
+        // these will be set for custom linux distribution
+        //bs.build_type = build_type::release{};
+        //bs.library_type = library_type::shared{};
+
         // see more definitions at https://opensource.apple.com/source/WTF/WTF-7601.1.46.42/wtf/Platform.h.auto.html
-#if defined(_WIN32)
+#if defined(__MINGW32__)
+        bs.os = os::mingw{};
+#elif defined(_WIN32)
         bs.os = os::windows{};
 #elif defined(__APPLE__)
         bs.os = os::macos{};
-#else
+#elif defined(__linux__)
         bs.os = os::linux{};
+#else
+#error "unknown os"
 #endif
+
 #if defined(__x86_64__) || defined(_M_X64)
         bs.arch = arch::x64{};
 #elif defined(__i386__) || defined(_M_IX86)
@@ -187,9 +220,40 @@ struct build_settings {
         bs.arch = arch::arm64{};
 #elif defined(__arm__)
         bs.arch = arch::arm{};
+#else
+#error "unknown arch"
 #endif
+
+        return bs;
+    }
+    static auto default_build_settings() {
+        build_settings bs;
         bs.build_type = build_type::release{};
         bs.library_type = library_type::shared{};
+
+        // see more definitions at https://opensource.apple.com/source/WTF/WTF-7601.1.46.42/wtf/Platform.h.auto.html
+#if defined(_WIN32)
+        bs.os = os::windows{};
+#elif defined(__APPLE__)
+        bs.os = os::macos{};
+#elif defined(__linux__)
+        bs.os = os::linux{};
+#else
+#error "unknown os"
+#endif
+
+#if defined(__x86_64__) || defined(_M_X64)
+        bs.arch = arch::x64{};
+#elif defined(__i386__) || defined(_M_IX86)
+        bs.arch = arch::x86{};
+#elif defined(__arm64__) || defined(__aarch64__)
+        bs.arch = arch::arm64{};
+#elif defined(__arm__)
+        bs.arch = arch::arm{};
+#else
+#error "unknown arch"
+#endif
+
         return bs;
     }
 };

@@ -26,7 +26,7 @@ void add_transform_to_storage(auto &&s, auto &&f) {
 using namespace sw;
 
 auto build_some_package(solution &s) {
-    files_target tgt{"pkg1"};
+    files_target tgt{package_id{"pkg1"}};
     tgt.source_dir = s.source_dir;
     tgt +=
         "src"_rdir,
@@ -38,7 +38,7 @@ auto build_some_package(solution &s) {
 }
 
 auto self_build(solution &s) {
-    auto &tgt = s.add<native_target>("pkg2");
+    auto &tgt = s.add<native_target>(package_id{"pkg2"});
     tgt +=
         "src"_rdir,
         "src/main.cpp",
@@ -63,7 +63,8 @@ int main1() {
     input_with_settings is{source_code_input{&self_build}};
     auto dbs = build_settings::default_build_settings();
     dbs.arch = arch::x86{};
-    is.settings.push_back(dbs);
+    //is.settings.push_back(dbs);
+    is.settings.insert(dbs);
     s.add_input(is);
     s.build();
 

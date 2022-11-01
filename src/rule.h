@@ -62,7 +62,7 @@ struct cl_exe_rule {
                 auto out = tgt.binary_dir / "obj" / f.filename() += ".obj";
                 cl_exe_command c;
                 c.old_includes = msvc.vs_version < package_version{16,7};
-                c += compiler.exe, "-nologo", "-c", "-std:c++latest", "-EHsc", f, "-Fo" + out.string();
+                c += compiler.executable, "-nologo", "-c", "-std:c++latest", "-EHsc", f, "-Fo" + out.string();
                 auto add = [&](auto &&tgt) {
                     for (auto &&d : tgt.definitions) {
                         c += (string)d;
@@ -73,8 +73,8 @@ struct cl_exe_rule {
                 };
                 add(tgt.compile_options);
                 add(msvc.stdlib_target());
-                add(sdk.ucrt);
-                add(sdk.um);
+                add(*sdk.ucrt);
+                add(*sdk.um);
                 c.inputs.insert(f);
                 c.outputs.insert(out);
                 tgt.commands.emplace_back(std::move(c));
@@ -99,7 +99,7 @@ struct link_exe_rule {
         }
         auto linker = msvc.link_target();
         io_command c;
-        c += linker.exe, "-nologo", "-OUT:" + out.string();
+        c += linker.executable, "-nologo", "-OUT:" + out.string();
         for (auto &&[f, rules] : tgt.processed_files) {
             if (f.extension() == ".obj") {
                 c += f;
@@ -120,8 +120,8 @@ struct link_exe_rule {
         };
         add(tgt.link_options);
         add(msvc.stdlib_target());
-        add(sdk.ucrt);
-        add(sdk.um);
+        add(*sdk.ucrt);
+        add(*sdk.um);
         c.outputs.insert(out);
         tgt.commands.emplace_back(std::move(c));
     }
@@ -132,15 +132,13 @@ struct gcc_instance {
     path bin;
 
     auto cl_target() const {
-        cl_binary_target t;
-        t.package = package_id{"org.gnu.gcc"s, "0.0.1"};
-        t.exe = bin;
+        binary_target t{package_id{"org.gnu.gcc"s, "0.0.1"}};
+        t.executable = bin;
         return t;
     }
     auto link_target() const {
-        cl_binary_target t;
-        t.package = package_id{"org.gnu.gcc"s, "0.0.1"};
-        t.exe = bin;
+        binary_target t{package_id{"org.gnu.gcc"s, "0.0.1"}};
+        t.executable = bin;
         return t;
     }
 };
@@ -164,7 +162,7 @@ struct gcc_compile_rule {
             if (is_cpp_file(f) && !rules.contains(this)) {
                 auto out = tgt.binary_dir / "obj" / f.filename() += ".o";
                 gcc_command c;
-                c += compiler.exe, "-c", "-std=c++2b", f, "-o", out;
+                c += compiler.executable, "-c", "-std=c++2b", f, "-o", out;
                 auto add = [&](auto &&tgt) {
                     for (auto &&d : tgt.definitions) {
                         c += (string)d;
@@ -193,7 +191,7 @@ struct gcc_link_rule {
         path out = tgt.binary_dir / "bin" / (string)tgt.name;
         auto linker = gcc.link_target();
         io_command c;
-        c += linker.exe, "-o", out.string();
+        c += linker.executable, "-o", out.string();
         for (auto &&[f, rules] : tgt.processed_files) {
             if (f.extension() == ".o") {
                 c += f;

@@ -34,8 +34,7 @@ using input = variant<source_code_input>;
 
 struct input_with_settings {
     input i;
-    //std::set<build_settings> settings;
-    std::vector<build_settings> settings;
+    std::set<build_settings> settings;
 
     void operator()(auto &sln) {
         for (auto &&s : settings) {

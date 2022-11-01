@@ -38,23 +38,25 @@ struct link_options_t {
     std::vector<system_link_library> system_link_libraries;
 };
 
+struct target_base {
+    package_id name;
+
+    target_base(const package_id &n) : name{n} {
+    }
+};
 
 // binary_target_package?
-struct cl_binary_target : compile_options_t, link_options_t {
-    sw::package_id package;
-    path exe;
+struct binary_target : target_base, compile_options_t, link_options_t {
+    path executable;
 };
-struct binary_library_target : compile_options_t, link_options_t {
+struct binary_library_target : target_base, compile_options_t, link_options_t {
 };
 
-struct files_target {
+struct files_target : target_base {
     using files_t = std::set<path>; // unordered?
 
-    package_id name;
     path source_dir;
     files_t files;
-
-    files_target(const package_id &n) : name{n} {}
 
     void add(const file_regex &r) {
         r(source_dir, [&](auto &&iter) {

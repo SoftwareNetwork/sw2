@@ -123,12 +123,8 @@ struct executable_target : native_target {
     }
 };
 
-using target = variant<files_target, rule_target, native_target, executable_target>;
-using target_ptr = variant<
-    std::unique_ptr<files_target>,
-    std::unique_ptr<rule_target>,
-    std::unique_ptr<native_target>,
-    std::unique_ptr<executable_target>
->;
+using target_type = types<files_target, rule_target, native_target, executable_target, binary_target, binary_library_target>;
+using target = target_type::variant_type;
+using target_ptr = target_type::variant_of_uptr_type;
 
 } // namespace sw

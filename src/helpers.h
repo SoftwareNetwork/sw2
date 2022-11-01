@@ -70,10 +70,13 @@ struct scope_exit {
 };
 
 template <typename T> struct type_ { using type = T; };
-template <typename ... Args> struct types {
+template <typename ... Types> struct types {
+    using variant_type = std::variant<Types...>;
+    using variant_of_uptr_type = std::variant<std::unique_ptr<Types>...>;
+
     template <typename T>
     static constexpr bool contains() {
-        return (false || ... || std::same_as<Args, T>);
+        return (false || ... || std::same_as<Types, T>);
     }
 };
 template <typename ... Args>
