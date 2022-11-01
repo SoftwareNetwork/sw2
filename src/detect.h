@@ -16,12 +16,12 @@ struct msvc_instance {
     package_version vs_version;
 
     auto cl_target() const {
-        binary_target t{package_id{"com.Microsoft.VisualStudio.VC.cl"s, root.filename().string()}};
+        binary_target t{package_name{"com.Microsoft.VisualStudio.VC.cl"s, root.filename().string()}};
         t.executable = root / "bin" / "Hostx64" / "x64" / "cl.exe";
         return t;
     }
     auto link_target() const {
-        binary_target t{package_id{"com.Microsoft.VisualStudio.VC.cl"s, root.filename().string()}};
+        binary_target t{package_name{"com.Microsoft.VisualStudio.VC.cl"s, root.filename().string()}};
         t.executable = root / "bin" / "Hostx64" / "x64" / "link.exe";
         return t;
     }
@@ -29,7 +29,7 @@ struct msvc_instance {
     }
     auto stdlib_target() const {
         // com.Microsoft.VisualStudio.VC.STL?
-        binary_library_target t{package_id{"com.Microsoft.VisualStudio.VC.libcpp"s, root.filename().string()}};
+        binary_library_target t{package_name{"com.Microsoft.VisualStudio.VC.libcpp"s, root.filename().string()}};
         t.include_directories.push_back(root / "include");
         t.link_directories.push_back(root / "lib" / "x64");
         return t;
@@ -103,7 +103,7 @@ struct win_kit {
         for (auto target_arch : {"x64"}) {
             auto libdir = kit_root / "Lib" / ldir_subversion / name / target_arch;
             if (fs::exists(libdir)) {
-                binary_library_target t{package_id{"com.Microsoft.Windows.SDK."s + name, path{v}.string()}};
+                binary_library_target t{package_name{"com.Microsoft.Windows.SDK."s + name, path{v}.string()}};
                 t.include_directories.push_back(idir / name);
                 for (auto &i : idirs)
                     t.include_directories.push_back(idir / i);

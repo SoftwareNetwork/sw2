@@ -132,12 +132,12 @@ struct gcc_instance {
     path bin;
 
     auto cl_target() const {
-        binary_target t{package_id{"org.gnu.gcc"s, "0.0.1"}};
+        binary_target t{package_name{"org.gnu.gcc"s, "0.0.1"}};
         t.executable = bin;
         return t;
     }
     auto link_target() const {
-        binary_target t{package_id{"org.gnu.gcc"s, "0.0.1"}};
+        binary_target t{package_name{"org.gnu.gcc"s, "0.0.1"}};
         t.executable = bin;
         return t;
     }

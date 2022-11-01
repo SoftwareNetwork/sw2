@@ -3,6 +3,7 @@
 #include "rule_target.h"
 #include "os.h"
 #include "input.h"
+#include "package_id.h"
 
 namespace sw {
 
@@ -14,7 +15,7 @@ struct solution {
     build_settings bs{build_settings::default_build_settings()};
 
     // internal data
-    std::vector<target_ptr> targets_;
+    std::map<package_id, target_ptr> targets;
     std::vector<rule> rules;
     std::vector<input_with_settings> inputs;
 
@@ -25,9 +26,13 @@ struct solution {
 
     template <typename T, typename... Args>
     T &add(Args &&...args) {
+        // msvc bug? without upt it converts to basic type
         auto ptr = std::make_unique<T>(*this, FWD(args)...);
         auto &t = *ptr;
-        targets_.emplace_back(std::move(ptr));
+        auto &&[i, inserted] = targets.emplace(package_id{t.name, bs}, std::move(ptr));
+        if (!inserted) {
+            throw std::runtime_error{"target already exists"};
+        }
         return t;
     }
 
@@ -41,14 +46,8 @@ struct solution {
         inputs.emplace_back(i);
     }
 
-    auto &targets() {
-        return targets_;
-        //| std::views::transform([](auto &&v) -> decltype(auto) {
-                   //return *v;
-               //});
-    }
     void prepare() {
-        for (auto &&t : targets()) {
+        for (auto &&[id,t] : targets) {
             visit(t, [&](auto &&vp) {
                 auto &v = *vp;
                 if constexpr (std::derived_from<std::decay_t<decltype(v)>, rule_target>) {
@@ -74,7 +73,7 @@ struct solution {
         prepare();
 
         command_executor ce{ex};
-        for (auto &&t : targets()) {
+        for (auto &&[id,t] : targets) {
             visit(t, [&](auto &&vp) {
                 auto &v = *vp;
                 if constexpr (requires { v.commands; }) {

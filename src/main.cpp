@@ -26,7 +26,7 @@ void add_transform_to_storage(auto &&s, auto &&f) {
 using namespace sw;
 
 auto build_some_package(solution &s) {
-    files_target tgt{package_id{"pkg1"}};
+    files_target tgt{package_name{"pkg1"}};
     tgt.source_dir = s.source_dir;
     tgt +=
         "src"_rdir,
@@ -38,7 +38,7 @@ auto build_some_package(solution &s) {
 }
 
 auto self_build(solution &s) {
-    auto &tgt = s.add<native_target>(package_id{"pkg2"});
+    auto &tgt = s.add<native_target>(package_name{"pkg2"});
     tgt +=
         "src"_rdir,
         "src/main.cpp",

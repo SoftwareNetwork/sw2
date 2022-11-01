@@ -39,9 +39,9 @@ struct link_options_t {
 };
 
 struct target_base {
-    package_id name;
+    package_name name;
 
-    target_base(const package_id &n) : name{n} {
+    target_base(const package_name &n) : name{n} {
     }
 };
 

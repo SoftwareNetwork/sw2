@@ -28,12 +28,12 @@ struct istring : string {
     }
 };
 
-struct package_name {
+struct package_path {
     std::vector<istring> elements;
 
-    package_name() {
+    package_path() {
     }
-    package_name(const string &s) : elements{s} {
+    package_path(const string &s) : elements{s} {
     }
 
     operator string() const {
@@ -50,6 +50,8 @@ struct package_name {
         }
         return h;
     }
+
+    auto operator<=>(const package_path &) const = default;
 };
 
 auto split_string(const string &s, string_view split) {
@@ -157,6 +159,8 @@ struct package_version {
         return std::holds_alternative<string>(version);
     }
 
+    // this is release order
+    // sometimes we want semver order - todo: implement
     bool operator<(const package_version &rhs) const {
         if (is_version() && rhs.is_version()) {
             return std::tie(version) < std::tie(rhs.version);
@@ -177,25 +181,69 @@ struct package_version {
     }
 };
 
-struct package_id {
-    package_name name;
+struct version_range {
+    using version = package_version::number_version::numbers;
+    struct pair : std::pair<version, version> {
+        bool contains(const package_version::number_version &v) {
+            return first <= v.elements && v.elements <= second;
+        }
+    };
+
+    // change to set
+    std::vector<pair> pairs;
+
+    bool contains(const package_version::number_version &v) {
+        return std::ranges::any_of(pairs, [&](auto &&p) { return p.contains(v); });
+    }
+};
+
+struct package_version_range {
+    using range_type = std::variant<version_range, string>;
+    range_type range;
+
+    bool is_branch() const {
+        return std::holds_alternative<string>(range);
+    }
+};
+
+struct package_name {
+    package_path path;
     package_version version;
 
-    package_id() = default;
-    package_id(const char *s) : package_id{string{s}} {
+    package_name() = default;
+    package_name(const char *s) : package_name{string{s}} {
     }
-    package_id(const string &s) : name{s} {
+    package_name(const string &s) : path{s} {
     }
-    package_id(const string &p, const string &v) : name{p}, version{v} {
+    package_name(const string &p, const string &v) : path{p}, version{v} {
     }
     void operator=(const string &s) {
-        name = s;
+        path = s;
     }
 
-    operator string() const { return name; }
+    operator string() const { return path; }
 
     auto hash() const {
-        return name.hash() ^ version.hash();
+        return path.hash() ^ version.hash();
+    }
+
+    bool operator<(const package_name &rhs) const {
+        return std::tie(path, version) < std::tie(rhs.path, rhs.version);
+    }
+};
+
+struct unresolved_package_name {
+    package_name name;
+    package_version_range range;
+
+    bool contains(const package_version &v) {
+        if (v.is_branch() && range.is_branch()) {
+            return std::get<string>(v.version) == std::get<string>(range.range);
+        }
+        if (v.is_branch() || range.is_branch()) {
+            return false;
+        }
+        return std::get<version_range>(range.range).contains(std::get<package_version::number_version>(v.version));
     }
 };
 

@@ -4,6 +4,7 @@
 #pragma once
 
 #include "helpers.h"
+#include "package.h"
 
 namespace sw {
 
@@ -112,6 +113,86 @@ struct shared {
 };
 
 } // namespace library_type
+
+struct compiler_base {
+    unresolved_package_name name;
+
+    compiler_base(const unresolved_package_name &name) : name{name} {}
+};
+
+namespace asm_compiler {
+
+struct clang {
+    static constexpr auto name = "clang"sv;
+};
+struct gcc {
+    static constexpr auto name = "gcc"sv;
+};
+struct msvc {
+    static constexpr auto name = "msvc"sv;
+};
+
+} // namespace c_compiler
+
+namespace c_compiler {
+
+struct clang : compiler_base {
+    static constexpr auto name = "clang"sv;
+
+    using compiler_base::compiler_base;
+    clang() : compiler_base{unresolved_package_name{"org.llvm.clang","*"}} {
+    }
+};
+struct gcc {
+    static constexpr auto name = "gcc"sv;
+};
+struct msvc {
+    static constexpr auto name = "msvc"sv;
+};
+
+} // namespace c_compiler
+
+namespace cpp_compiler {
+
+struct clang {
+    static constexpr auto name = "clang"sv;
+};
+struct gcc {
+    static constexpr auto name = "gcc"sv;
+};
+struct msvc {
+    static constexpr auto name = "msvc"sv;
+};
+
+} // namespace cpp_compiler
+
+namespace objc_compiler {
+
+struct apple_clang {
+    static constexpr auto name = "apple_clang"sv;
+};
+struct clang {
+    static constexpr auto name = "clang"sv;
+};
+struct gcc {
+    static constexpr auto name = "gcc"sv;
+};
+
+} // namespace objc_compiler
+
+namespace objcpp_compiler {
+
+struct apple_clang {
+    static constexpr auto name = "apple_clang"sv;
+};
+struct clang {
+    static constexpr auto name = "clang"sv;
+};
+struct gcc {
+    static constexpr auto name = "gcc"sv;
+};
+
+} // namespace objcpp_compiler
 
 struct build_settings {
     template <typename ... Types>
