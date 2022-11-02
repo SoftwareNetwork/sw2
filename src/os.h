@@ -119,6 +119,33 @@ struct compiler_base {
 
     compiler_base(const unresolved_package_name &name) : name{name} {}
 };
+struct clang_base : compiler_base {
+    static constexpr auto name = "clang"sv;
+    using compiler_base::compiler_base;
+    clang_base() : compiler_base{unresolved_package_name{"org.llvm.clang", "*"}} {
+    }
+
+    void detect(auto &sln) {
+    }
+};
+struct gcc_base : compiler_base {
+    static constexpr auto name = "gcc"sv;
+    using compiler_base::compiler_base;
+    gcc_base() : compiler_base{unresolved_package_name{"org.gnu.gcc", "*"}} {
+    }
+
+    void detect(auto &sln) {
+    }
+};
+struct msvc_base : compiler_base {
+    static constexpr auto name = "msvc"sv;
+    using compiler_base::compiler_base;
+    msvc_base() : compiler_base{unresolved_package_name{"com.Microsoft.VisualStudio.VC.cl", "*"}} {
+    }
+
+    void detect(auto &sln) {
+    }
+};
 
 namespace asm_compiler {
 
@@ -136,32 +163,28 @@ struct msvc {
 
 namespace c_compiler {
 
-struct clang : compiler_base {
-    static constexpr auto name = "clang"sv;
-
-    using compiler_base::compiler_base;
-    clang() : compiler_base{unresolved_package_name{"org.llvm.clang","*"}} {
-    }
+struct clang : clang_base {
+    using clang_base::clang_base;
 };
-struct gcc {
-    static constexpr auto name = "gcc"sv;
+struct gcc : gcc_base {
+    using gcc_base::gcc_base;
 };
-struct msvc {
-    static constexpr auto name = "msvc"sv;
+struct msvc : msvc_base {
+    using msvc_base::msvc_base;
 };
 
 } // namespace c_compiler
 
 namespace cpp_compiler {
 
-struct clang {
-    static constexpr auto name = "clang"sv;
+struct clang : clang_base {
+    using clang_base::clang_base;
 };
-struct gcc {
-    static constexpr auto name = "gcc"sv;
+struct gcc : gcc_base {
+    using gcc_base::gcc_base;
 };
-struct msvc {
-    static constexpr auto name = "msvc"sv;
+struct msvc : msvc_base {
+    using msvc_base::msvc_base;
 };
 
 } // namespace cpp_compiler
@@ -217,13 +240,15 @@ struct build_settings {
     using build_type_type = special_variant<build_type::debug, build_type::minimum_size_release,
         build_type::release_with_debug_information, build_type::release>;
     using library_type_type = special_variant<library_type::static_, library_type::shared>;
+    using c_compiler_type = special_variant<c_compiler::clang, c_compiler::gcc, c_compiler::msvc>;
+    using cpp_compiler_type = special_variant<cpp_compiler::clang, cpp_compiler::gcc, cpp_compiler::msvc>;
 
     os_type os;
     arch_type arch;
     build_type_type build_type;
     library_type_type library_type;
-    // default compilers
-    //
+    c_compiler_type c_compiler;
+    cpp_compiler_type cpp_compiler;
 
     auto for_each() const {
         return std::tie(os, arch, build_type, library_type);
@@ -312,17 +337,6 @@ struct build_settings {
         bs.build_type = build_type::release{};
         bs.library_type = library_type::shared{};
 
-        // see more definitions at https://opensource.apple.com/source/WTF/WTF-7601.1.46.42/wtf/Platform.h.auto.html
-#if defined(_WIN32)
-        bs.os = os::windows{};
-#elif defined(__APPLE__)
-        bs.os = os::macos{};
-#elif defined(__linux__)
-        bs.os = os::linux{};
-#else
-#error "unknown os"
-#endif
-
 #if defined(__x86_64__) || defined(_M_X64)
         bs.arch = arch::x64{};
 #elif defined(__i386__) || defined(_M_IX86)
@@ -333,6 +347,23 @@ struct build_settings {
         bs.arch = arch::arm{};
 #else
 #error "unknown arch"
+#endif
+
+        // see more definitions at https://opensource.apple.com/source/WTF/WTF-7601.1.46.42/wtf/Platform.h.auto.html
+#if defined(_WIN32)
+        bs.os = os::windows{};
+        bs.c_compiler = c_compiler::msvc{}; // switch to gcc-12+
+        bs.cpp_compiler = cpp_compiler::msvc{}; // switch to gcc-12+
+#elif defined(__APPLE__)
+        bs.os = os::macos{};
+        bs.c_compiler = c_compiler::gcc{}; // gcc-12+
+        bs.cpp_compiler = cpp_compiler::gcc{}; // gcc-12+
+#elif defined(__linux__)
+        bs.os = os::linux{};
+        bs.c_compiler = c_compiler::gcc{};
+        bs.cpp_compiler = cpp_compiler::gcc{};
+#else
+#error "unknown os"
 #endif
 
         return bs;
