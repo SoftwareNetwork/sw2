@@ -352,16 +352,16 @@ struct build_settings {
         // see more definitions at https://opensource.apple.com/source/WTF/WTF-7601.1.46.42/wtf/Platform.h.auto.html
 #if defined(_WIN32)
         bs.os = os::windows{};
-        bs.c_compiler = c_compiler::msvc{}; // switch to gcc-12+
-        bs.cpp_compiler = cpp_compiler::msvc{}; // switch to gcc-12+
+        //bs.c_compiler = c_compiler::msvc{}; // switch to gcc-12+
+        //bs.cpp_compiler = cpp_compiler::msvc{}; // switch to gcc-12+
 #elif defined(__APPLE__)
         bs.os = os::macos{};
-        bs.c_compiler = c_compiler::gcc{}; // gcc-12+
-        bs.cpp_compiler = cpp_compiler::gcc{}; // gcc-12+
+        //bs.c_compiler = c_compiler::gcc{}; // gcc-12+
+        //bs.cpp_compiler = cpp_compiler::gcc{}; // gcc-12+
 #elif defined(__linux__)
         bs.os = os::linux{};
-        bs.c_compiler = c_compiler::gcc{};
-        bs.cpp_compiler = cpp_compiler::gcc{};
+        //bs.c_compiler = c_compiler::gcc{};
+        //bs.cpp_compiler = cpp_compiler::gcc{};
 #else
 #error "unknown os"
 #endif

@@ -50,6 +50,16 @@ auto self_build(solution &s) {
         tgt += "ole32.lib"_slib;
         tgt += "OleAut32.lib"_slib;
     }
+
+    {
+        auto &tgt = s.add<native_target>(package_name{"pkg3"});
+        tgt += "src"_rdir, "src/main.cpp", "src/.*\\.cpp"_r, "src/.*\\.h"_rr;
+        if (tgt.is<os::windows>()) {
+            tgt += "advapi32.lib"_slib;
+            tgt += "ole32.lib"_slib;
+            tgt += "OleAut32.lib"_slib;
+        }
+    }
 }
 
 int main1() {

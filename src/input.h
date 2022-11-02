@@ -38,7 +38,7 @@ struct input_with_settings {
 
     void operator()(auto &sln) {
         for (auto &&s : settings) {
-            sln.bs = s;
+            sln.bs = &s;
             visit(i, [&](auto &&v){v(sln);});
         }
     }

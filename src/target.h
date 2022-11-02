@@ -6,6 +6,7 @@
 #include "helpers.h"
 #include "package.h"
 #include "suffix.h"
+#include "os.h"
 
 namespace sw {
 
@@ -40,6 +41,7 @@ struct link_options_t {
 
 struct target_base {
     package_name name;
+    build_settings bs;
 
     target_base(const package_name &n) : name{n} {
     }
@@ -48,8 +50,15 @@ struct target_base {
 // binary_target_package?
 struct binary_target : target_base, compile_options_t, link_options_t {
     path executable;
+
+    binary_target(auto &&s, const package_name &n) : target_base{n} {
+        bs = *s.bs;
+    }
 };
 struct binary_library_target : target_base, compile_options_t, link_options_t {
+    binary_library_target(auto &&s, const package_name &n) : target_base{n} {
+        bs = *s.bs;
+    }
 };
 
 struct files_target : target_base {

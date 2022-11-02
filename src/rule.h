@@ -4,7 +4,6 @@
 #pragma once
 
 #include "helpers.h"
-#include "detect.h"
 
 namespace sw {
 
@@ -47,16 +46,13 @@ struct native_sources_rule {
 
 #ifdef _WIN32
 struct cl_exe_rule {
-    msvc_instance msvc;
-    win_sdk_info sdk;
-
     cl_exe_rule() {
-        msvc = *detect_msvc().rbegin();
-        sdk = detect_winsdk();
+        //msvc = *detect_msvc().rbegin();
+        //sdk = detect_winsdk();
     }
 
     void operator()(auto &tgt) requires requires { tgt.compile_options; } {
-        auto compiler = msvc.cl_target();
+        /*auto compiler = msvc.cl_target();
         for (auto &&[f, rules] : tgt.processed_files) {
             if (is_cpp_file(f) && !rules.contains(this)) {
                 auto out = tgt.binary_dir / "obj" / f.filename() += ".obj";
@@ -80,16 +76,13 @@ struct cl_exe_rule {
                 tgt.commands.emplace_back(std::move(c));
                 rules.insert(this);
             }
-        }
+        }*/
     }
 };
 struct link_exe_rule {
-    msvc_instance msvc;
-    win_sdk_info sdk;
-
     link_exe_rule() {
-        msvc = *detect_msvc().rbegin();
-        sdk = detect_winsdk();
+        //msvc = *detect_msvc().rbegin();
+        //sdk = detect_winsdk();
     }
 
     void operator()(auto &tgt) requires requires { tgt.link_options; } {
@@ -97,7 +90,7 @@ struct link_exe_rule {
         if constexpr (requires {tgt.executable;}) {
             out = tgt.executable;
         }
-        auto linker = msvc.link_target();
+        /*auto linker = msvc.link_target();
         io_command c;
         c += linker.executable, "-nologo", "-OUT:" + out.string();
         for (auto &&[f, rules] : tgt.processed_files) {
@@ -123,7 +116,7 @@ struct link_exe_rule {
         add(*sdk.ucrt);
         add(*sdk.um);
         c.outputs.insert(out);
-        tgt.commands.emplace_back(std::move(c));
+        tgt.commands.emplace_back(std::move(c));*/
     }
 };
 #endif
@@ -132,14 +125,14 @@ struct gcc_instance {
     path bin;
 
     auto cl_target() const {
-        binary_target t{package_name{"org.gnu.gcc"s, "0.0.1"}};
+        /*binary_target t{package_name{"org.gnu.gcc"s, "0.0.1"}};
         t.executable = bin;
-        return t;
+        return t;*/
     }
     auto link_target() const {
-        binary_target t{package_name{"org.gnu.gcc"s, "0.0.1"}};
+        /*binary_target t{package_name{"org.gnu.gcc"s, "0.0.1"}};
         t.executable = bin;
-        return t;
+        return t;*/
     }
 };
 
@@ -153,11 +146,11 @@ struct gcc_compile_rule {
     gcc_instance gcc;
 
     gcc_compile_rule() {
-        gcc = detect_gcc_clang().at(0);
+        //gcc = detect_gcc_clang().at(0);
     }
 
     void operator()(auto &tgt) requires requires { tgt.compile_options; } {
-        auto compiler = gcc.cl_target();
+        /*auto compiler = gcc.cl_target();
         for (auto &&[f, rules] : tgt.processed_files) {
             if (is_cpp_file(f) && !rules.contains(this)) {
                 auto out = tgt.binary_dir / "obj" / f.filename() += ".o";
@@ -177,7 +170,7 @@ struct gcc_compile_rule {
                 tgt.commands.emplace_back(std::move(c));
                 rules.insert(this);
             }
-        }
+        }*/
     }
 };
 struct gcc_link_rule {
@@ -188,7 +181,7 @@ struct gcc_link_rule {
     }
 
     void operator()(auto &tgt) requires requires { tgt.link_options; } {
-        path out = tgt.binary_dir / "bin" / (string)tgt.name;
+        /*path out = tgt.binary_dir / "bin" / (string)tgt.name;
         auto linker = gcc.link_target();
         io_command c;
         c += linker.executable, "-o", out.string();
@@ -212,7 +205,7 @@ struct gcc_link_rule {
         };
         add(tgt.link_options);
         c.outputs.insert(out);
-        tgt.commands.emplace_back(std::move(c));
+        tgt.commands.emplace_back(std::move(c));*/
     }
 };
 
