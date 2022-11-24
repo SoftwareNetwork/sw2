@@ -498,9 +498,15 @@ struct io_command : raw_command {
         raw_command::run(ex, [&, cb](auto exit_code) {
             end = clock::now();
             if (exit_code) {
+                string t;
+                if (auto e = std::get_if<string>(&err); e && !e->empty()) {
+                    t = *e;
+                } else if (auto e = std::get_if<string>(&out); e && !e->empty()) {
+                    t = *e;
+                }
                 throw std::runtime_error(
                     //format("process exit code: {}\nerror: {}", exit_code, std::get<string>(err))
-                    "process exit code: " + std::to_string(exit_code) + "\nerror: " + std::get<string>(err) + ""
+                    "process exit code: " + std::to_string(exit_code) + "\nerror: " + t + ""
                 );
             }
             cb();

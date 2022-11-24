@@ -61,6 +61,14 @@ struct binary_library_target : target_base, compile_options_t, link_options_t {
     }
 };
 
+struct msvc_instance;
+struct binary_target_msvc : binary_target {
+    const msvc_instance &msvc;
+
+    binary_target_msvc(auto &&s, const package_name &n, auto &msvc) : binary_target{s,n}, msvc{msvc} {
+    }
+};
+
 struct files_target : target_base {
     using files_t = std::set<path>; // unordered?
 

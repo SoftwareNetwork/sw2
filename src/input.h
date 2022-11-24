@@ -17,8 +17,9 @@ struct solution;
 struct source_code_input {
     std::function<void(solution &)> entry_point;
 
-    void operator()(solution &s) {
-        entry_point(s);
+    void operator()(auto &sln, const build_settings &bs) {
+        sln.bs = &bs;
+        entry_point(sln);
     }
 };
 
@@ -39,8 +40,7 @@ struct input_with_settings {
 
     void operator()(auto &sln) {
         for (auto &&s : settings) {
-            sln.bs = &s;
-            visit(i, [&](auto &&v){v(sln);});
+            visit(i, [&](auto &&v){v(sln, s);});
         }
     }
 };

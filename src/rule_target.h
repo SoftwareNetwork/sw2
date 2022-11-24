@@ -87,30 +87,94 @@ struct rule_target : files_target {
     //auto visit()
 };
 
-struct native_target : rule_target {
+struct target_data {
+    compile_options_t compile_options;
+    link_options_t link_options;
+    std::vector<target_ptr *> dependencies;
+};
+struct target_data_storage : target_data {
+    struct groups {
+        enum {
+            self = 0x1,
+            project = 0x10,
+            others = 0x100,
+        };
+    };
+
+    // we need 2^3 = 8 values
+    // minus 1 inherited
+    // plus  1 resulting value
+    //
+    // inherited = 0
+    // array[0] = resulting
+    std::array<std::unique_ptr<target_data>, 8> data;
+
+    target_data &private_{*this};
+    target_data &protected_{get(groups::self | groups::project)};
+    target_data &public_{get(groups::self | groups::project | groups::others)};
+#undef interface // some win32 stuff
+    target_data &interface{get(groups::project | groups::others)};
+    target_data &interface_{get(groups::project | groups::others)};
+
+private:
+    target_data &get(int i) {
+        if (!data[i]) {
+            data[i] = std::make_unique<target_data>();
+        }
+        return *data[i];
+    }
+};
+
+struct native_target : rule_target, target_data_storage {
     using base = rule_target;
 
     using base::operator+=;
     using base::add;
     using base::remove;
 
-    compile_options_t compile_options;
-    link_options_t link_options;
-
     native_target(auto &&s, auto &&id) : base{s, id} {
         *this += native_sources_rule{};
 
-        ::sw::visit(bs.c_compiler, [&](c_compiler::msvc &c) {
+        std::once_flag win_sdk_um, win_ucrt;
+        auto load_win_sdk_um = [&] {
+            detect_winsdk(s);
+            auto &t = s.load_target(unresolved_package_name{"com.Microsoft.Windows.SDK.um", "*"}, bs);
+            add(t);
+        };
+        auto load_win_ucrt = [&] {
+            detect_winsdk(s);
+            auto &t = s.load_target(unresolved_package_name{"com.Microsoft.Windows.SDK.ucrt", "*"}, bs);
+            add(t);
+        };
+
+        ::sw::visit(bs.c_compiler,
+            [&](c_compiler::msvc &c) {
             get_msvc_detector().add(s);
-            s.load_target(c.package, s.host_settings());
-            //add_rule();
-            ;
-        },
+            auto &t = s.load_target(c.package, s.host_settings());
+            add(c_compiler::msvc::rule_type{*std::get<std::unique_ptr<binary_target_msvc>>(t)});
+            std::call_once(win_sdk_um, load_win_sdk_um);
+            std::call_once(win_ucrt, load_win_ucrt);
+            },
         [](auto &) {
             SW_UNIMPLEMENTED;
-        });
+            });
+        ::sw::visit(
+            bs.cpp_compiler,
+            [&](cpp_compiler::msvc &c) {
+                get_msvc_detector().add(s);
+                auto &t = s.load_target(c.package, s.host_settings());
+                add(cpp_compiler::msvc::rule_type{*std::get<std::unique_ptr<binary_target_msvc>>(t)});
+                std::call_once(win_sdk_um, load_win_sdk_um);
+                std::call_once(win_ucrt, load_win_ucrt);
+            },
+            [](auto &) {
+                SW_UNIMPLEMENTED;
+            });
     }
 
+    void add(target_ptr &t) {
+        dependencies.push_back(&t);
+    }
     void add(const system_link_library &l) {
         link_options.system_link_libraries.push_back(l);
     }
@@ -141,7 +205,7 @@ struct executable_target : native_target {
     }
 };
 
-using target_type = types<files_target, rule_target, native_target, executable_target, binary_target, binary_library_target>;
+using target_type = types<files_target, rule_target, native_target, executable_target, binary_target, binary_library_target, binary_target_msvc>;
 using target = target_type::variant_type;
 using target_ptr = target_type::variant_of_uptr_type;
 

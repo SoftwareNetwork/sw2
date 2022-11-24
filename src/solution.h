@@ -25,6 +25,18 @@ struct target_map {
             }
         }
         auto &container() { return targets; }
+
+        auto &load(auto &s, const build_settings &bs) {
+            auto it = targets.find(bs);
+            if (it == targets.end()) {
+                visit(ep, [&](auto &&v){v(s, bs);});
+            }
+            it = targets.find(bs);
+            if (it == targets.end()) {
+                throw std::runtime_error{"target was not loaded with provided settings"};
+            }
+            return it->second;
+        }
     };
     struct target_versions {
         using versions_type = std::map<package_version, target_version>;
@@ -41,17 +53,10 @@ struct target_map {
         }
         auto &container() { return versions; }
 
-        void find(const package_version_range &r) {
-            /*auto it = std::max_element(versions.begin(), versions.end(), [&](auto &&v1, auto &&v2) {
+        auto find(const package_version_range &r) {
+            return std::max_element(versions.begin(), versions.end(), [&](auto &&v1, auto &&v2) {
                 return r.contains(v1.first) && r.contains(v2.first) && v1.first < v2.first;
-            });*/
-            /*if (it = versions.end()) {
-                SW_UNIMPLEMENTED
-            }*/
-            for (auto &&[v,_] : versions) {
-                if (r.contains(v)) {
-                }
-            }
+            });
         }
     };
 
@@ -71,12 +76,16 @@ struct target_map {
     }
     auto &container() { return packages; }
 
-    void find(const unresolved_package_name &pkg) {
+    auto &find(const unresolved_package_name &pkg) {
         auto it = packages.find(pkg.path);
         if (it == packages.end()) {
-            SW_UNIMPLEMENTED;
+            throw std::runtime_error{"cannot load package: "s + string{pkg.path} + ": not found"};
         }
-        it->second.find(pkg.range);
+        auto it2 = it->second.find(pkg.range);
+        if (it2 == it->second.container().end()) {
+            throw std::runtime_error{"cannot load package: "s + string{pkg} + ": not found"};
+        }
+        return it2->second;
     }
 
     struct end_sentinel{};
@@ -185,12 +194,13 @@ struct solution {
         inputs.emplace_back(i);
     }
 
-    void load_target(const unresolved_package_name &pkg, const build_settings &bs) {
-        //auto &t =
-            targets.find(pkg);
+    auto &load_target(const unresolved_package_name &pkg, const build_settings &bs) {
+        auto &tv = targets.find(pkg);
+        return tv.load(*this, bs);
     }
-    auto host_settings() const {
-        return default_host_settings();
+    auto &host_settings() const {
+        static const auto hs = default_build_settings();
+        return hs;
     }
 
     void prepare() {
@@ -220,14 +230,14 @@ struct solution {
         prepare();
 
         command_executor ce{ex};
-        /*for (auto &&[id,t] : targets) {
+        for (auto &&[id,t] : targets) {
             visit(t, [&](auto &&vp) {
                 auto &v = *vp;
                 if constexpr (requires { v.commands; }) {
                     ce += v.commands;
                 }
             });
-        }*/
+        }
         ce.run();
     }
 };

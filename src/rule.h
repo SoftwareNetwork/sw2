@@ -44,20 +44,20 @@ struct native_sources_rule {
     }
 };
 
-#ifdef _WIN32
 struct cl_exe_rule {
-    cl_exe_rule() {
+    binary_target_msvc &compiler;
+
+    //cl_exe_rule() {
         //msvc = *detect_msvc().rbegin();
         //sdk = detect_winsdk();
-    }
+    //}
 
     void operator()(auto &tgt) requires requires { tgt.compile_options; } {
-        /*auto compiler = msvc.cl_target();
         for (auto &&[f, rules] : tgt.processed_files) {
             if (is_cpp_file(f) && !rules.contains(this)) {
                 auto out = tgt.binary_dir / "obj" / f.filename() += ".obj";
                 cl_exe_command c;
-                c.old_includes = msvc.vs_version < package_version{16,7};
+                c.old_includes = compiler.msvc.vs_version < package_version{16,7};
                 c += compiler.executable, "-nologo", "-c", "-std:c++latest", "-EHsc", f, "-Fo" + out.string();
                 auto add = [&](auto &&tgt) {
                     for (auto &&d : tgt.definitions) {
@@ -68,15 +68,15 @@ struct cl_exe_rule {
                     }
                 };
                 add(tgt.compile_options);
-                add(msvc.stdlib_target());
+                /*add(msvc.stdlib_target());
                 add(*sdk.ucrt);
-                add(*sdk.um);
+                add(*sdk.um);*/
                 c.inputs.insert(f);
                 c.outputs.insert(out);
                 tgt.commands.emplace_back(std::move(c));
                 rules.insert(this);
             }
-        }*/
+        }
     }
 };
 struct link_exe_rule {
@@ -119,7 +119,6 @@ struct link_exe_rule {
         tgt.commands.emplace_back(std::move(c));*/
     }
 };
-#endif
 
 struct gcc_instance {
     path bin;
@@ -210,9 +209,7 @@ struct gcc_link_rule {
 };
 
 using rule_types = types<native_sources_rule
-#ifdef _WIN32
     , cl_exe_rule, link_exe_rule
-#endif
     , gcc_compile_rule, gcc_link_rule
 >;
 using rule = decltype(make_variant(rule_types{}))::type;

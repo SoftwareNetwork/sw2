@@ -7,6 +7,7 @@
 #include "helpers.h"
 
 #define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
 #include <windows.h>
 
 #define WINAPI_CALL(x) if (!(x)) {throw ::sw::win32::winapi_exception{#x};}

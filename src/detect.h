@@ -56,14 +56,14 @@ struct msvc_instance {
     }
     auto cl_target(auto &&s) const {
         s.add_entry_point(package_name{"com.Microsoft.VisualStudio.VC.cl"s, version()}, source_code_input{[&](decltype(s) &s) {
-            auto &t = s.add<binary_target>(package_name{"com.Microsoft.VisualStudio.VC.cl"s, version()});
-            t.executable = root / "bin" / "Hostx64" / get_windows_arch(t) / "cl.exe";
+            auto &t = s.add<binary_target_msvc>(package_name{"com.Microsoft.VisualStudio.VC.cl"s, version()}, *this);
+            t.executable = root / "bin" / ("Host"s + get_windows_arch(s.host_settings())) / get_windows_arch(t) / "cl.exe";
         }});
     }
     auto link_target(auto &&s) const {
         s.add_entry_point(package_name{"com.Microsoft.VisualStudio.VC.link"s, version()}, source_code_input{[&](decltype(s) &s) {
             auto &t = s.add<binary_target>(package_name{"com.Microsoft.VisualStudio.VC.link"s, version()});
-            t.executable = root / "bin" / "Hostx64" / get_windows_arch(t) / "link.exe";
+            t.executable = root / "bin" / ("Host"s + get_windows_arch(s.host_settings())) / get_windows_arch(t) / "link.exe";
         }});
     }
     auto vcruntime_target(auto &&s) const {
@@ -144,23 +144,27 @@ struct win_kit {
             return;
         }
 
-        auto libdir = kit_root / "Lib" / ldir_subversion / name / get_windows_arch(*s.bs);
-        if (fs::exists(libdir)) {
-            auto &t = s.add<binary_library_target>(package_name{"com.Microsoft.Windows.SDK."s + name, path{v}.string()});
-            t.include_directories.push_back(idir / name);
-            for (auto &i : idirs) {
-                t.include_directories.push_back(idir / i);
-            }
-            t.link_directories.push_back(libdir);
-        } else if (without_ldir) {
-            auto &t = s.add<binary_library_target>(package_name{"com.Microsoft.Windows.SDK."s + name, path{v}.string()});
-            t.include_directories.push_back(idir / name);
-            for (auto &i : idirs) {
-                t.include_directories.push_back(idir / i);
-            }
-        } else {
-            //LOG_TRACE(logger, "Libdir " << libdir << " not found for library: " << name);
-        }
+        s.add_entry_point(package_name{"com.Microsoft.Windows.SDK."s + name, path{v}.string()},
+                          source_code_input{[=, *this](decltype(s) &s) {
+                              auto &t = s.add<binary_library_target>(
+                                  package_name{"com.Microsoft.Windows.SDK."s + name, path{v}.string()});
+                              auto libdir = kit_root / "Lib" / ldir_subversion / name / get_windows_arch(t);
+                              if (fs::exists(libdir)) {
+                                  t.include_directories.push_back(idir / name);
+                                  for (auto &i : idirs) {
+                                      t.include_directories.push_back(idir / i);
+                                  }
+                                  t.link_directories.push_back(libdir);
+                              } else if (without_ldir) {
+                                  t.include_directories.push_back(idir / name);
+                                  for (auto &i : idirs) {
+                                      t.include_directories.push_back(idir / i);
+                                  }
+                              } else {
+                                  throw std::runtime_error{"libdir not found"};
+                                  // LOG_TRACE(logger, "Libdir " << libdir << " not found for library: " << name);
+                              }
+                          }});
     }
 
     /*std::vector<sw::PredefinedTarget *> addOld(DETECT_ARGS, sw::OS settings, const sw::Version &v) {

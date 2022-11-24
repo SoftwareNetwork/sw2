@@ -8,6 +8,10 @@
 
 namespace sw {
 
+// rule fwd
+struct cl_exe_rule;
+
+//
 struct any_setting {
     static constexpr auto name = "any_setting"sv;
 };
@@ -170,6 +174,7 @@ struct gcc : gcc_base {
     using gcc_base::gcc_base;
 };
 struct msvc : msvc_base {
+    using rule_type = cl_exe_rule;
     using msvc_base::msvc_base;
 };
 
@@ -184,6 +189,7 @@ struct gcc : gcc_base {
     using gcc_base::gcc_base;
 };
 struct msvc : msvc_base {
+    using rule_type = cl_exe_rule;
     using msvc_base::msvc_base;
 };
 

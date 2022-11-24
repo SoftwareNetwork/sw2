@@ -88,9 +88,7 @@ struct package_version {
                 }), std::back_inserter(value));
             }
 
-            auto operator<=>(const numbers &rhs) const {
-                return std::tie(value) <=> std::tie(rhs.value);
-            }
+            auto operator<=>(const numbers &rhs) const = default;
 
             auto hash() const {
                 size_t h = 0;
@@ -106,34 +104,25 @@ struct package_version {
         bool is_pre_release() const { return !extra.empty(); }
         bool is_release() const { return !is_pre_release(); }
 
-        bool operator<(const number_version &rhs) const {
-            if (is_release() && rhs.is_release()) {
-                return elements < rhs.elements;
-            } else if (is_release()) {
-                return false;
-            } else if (rhs.is_release()) {
-                return true;
-            } else {
-                return std::tie(elements, extra) < std::tie(rhs.elements, rhs.extra);
-            }
-        }
-        bool operator<=(const number_version &rhs) const {
-            if (is_release() && rhs.is_release()) {
-                return elements <= rhs.elements;
-            } else if (is_release()) {
-                return false;
-            } else if (rhs.is_release()) {
-                return true;
-            } else {
-                return std::tie(elements, extra) <= std::tie(rhs.elements, rhs.extra);
-            }
-        }
+        auto operator<=>(const number_version &) const = default;
 
         auto hash() const {
             return elements.hash() ^ std::hash<string>()(extra);
         }
+
+        operator string() const {
+            string s;
+            /*
+            for (auto &&[f, t] : pairs) {
+                s += "[" + string{f} + ", " + string{t} + "] |";
+            }
+            if (!s.empty()) {
+                s.resize(s.size() - 2);
+            }*/
+            return s;
+        }
     };
-    using version_type = std::variant<number_version, string>;
+    using version_type = std::variant<string, number_version>;
     version_type version;
 
     package_version() : version{number_version{{0,0,1}}} {
@@ -156,6 +145,8 @@ struct package_version {
             version = number_version{s};
         }
     }
+    package_version(const package_version::number_version &s) : version{s} {
+    }
     package_version(const version_type &s) : version{s} {
     }
 
@@ -174,17 +165,7 @@ struct package_version {
 
     // this is release order
     // sometimes we want semver order - todo: implement
-    bool operator<(const package_version &rhs) const {
-        if (is_version() && rhs.is_version()) {
-            return std::tie(version) < std::tie(rhs.version);
-        } else if (is_version()) {
-            return false;
-        } else if (rhs.is_version()) {
-            return true;
-        } else {
-            return std::tie(version) < std::tie(rhs.version);
-        }
-    }
+    auto operator<=>(const package_version &) const = default;
 
     auto hash() const {
         if (is_version()) {
@@ -209,6 +190,16 @@ struct version_range {
 
     bool contains(const package_version::number_version &v) const {
         return std::ranges::any_of(pairs, [&](auto &&p) { return p.contains(v); });
+    }
+    operator string() const {
+        string s;
+        for (auto &&[f,t] : pairs) {
+            s += "[" + string{f} + ", " + string{t} + "] |";
+        }
+        if (!s.empty()) {
+            s.resize(s.size() - 2);
+        }
+        return s;
     }
 };
 
@@ -242,6 +233,12 @@ struct package_version_range {
             return false;
         }
         return std::get<version_range>(range).contains(std::get<package_version::number_version>(v.version));
+    }
+    operator string() const {
+        if (is_branch()) {
+            return std::get<string>(range);
+        }
+        return std::get<version_range>(range);
     }
 };
 
@@ -285,6 +282,12 @@ struct unresolved_package_name {
             return false;
         }
         return std::get<version_range>(range.range).contains(std::get<package_version::number_version>(v.version));
+    }
+
+    operator string() const {
+        string s = path;
+        s += "-"s + string{range};
+        return s;
     }
 };
 
