@@ -51,24 +51,27 @@ struct msvc_instance {
     path root;
     package_version vs_version;
 
+    auto version() const {
+        return package_version{package_version::number_version{root.filename().string(), std::get<package_version::number_version>(vs_version.version).extra}};
+    }
     auto cl_target(auto &&s) const {
-        s.add_entry_point(package_name{"com.Microsoft.VisualStudio.VC.cl"s, root.filename().string()}, source_code_input{[&](decltype(s) &s) {
-            auto &t = s.add<binary_target>(package_name{"com.Microsoft.VisualStudio.VC.cl"s, root.filename().string()});
+        s.add_entry_point(package_name{"com.Microsoft.VisualStudio.VC.cl"s, version()}, source_code_input{[&](decltype(s) &s) {
+            auto &t = s.add<binary_target>(package_name{"com.Microsoft.VisualStudio.VC.cl"s, version()});
             t.executable = root / "bin" / "Hostx64" / get_windows_arch(t) / "cl.exe";
         }});
     }
     auto link_target(auto &&s) const {
-        s.add_entry_point(package_name{"com.Microsoft.VisualStudio.VC.link"s, root.filename().string()}, source_code_input{[&](decltype(s) &s) {
-            auto &t = s.add<binary_target>(package_name{"com.Microsoft.VisualStudio.VC.link"s, root.filename().string()});
+        s.add_entry_point(package_name{"com.Microsoft.VisualStudio.VC.link"s, version()}, source_code_input{[&](decltype(s) &s) {
+            auto &t = s.add<binary_target>(package_name{"com.Microsoft.VisualStudio.VC.link"s, version()});
             t.executable = root / "bin" / "Hostx64" / get_windows_arch(t) / "link.exe";
         }});
     }
     auto vcruntime_target(auto &&s) const {
     }
     auto stdlib_target(auto &&s) const {
-        s.add_entry_point(package_name{"com.Microsoft.VisualStudio.VC.libcpp"s, root.filename().string()}, source_code_input{[&](decltype(s) &s) {
+        s.add_entry_point(package_name{"com.Microsoft.VisualStudio.VC.libcpp"s, version()}, source_code_input{[&](decltype(s) &s) {
             // com.Microsoft.VisualStudio.VC.STL?
-            auto &t = s.add<binary_library_target>(package_name{"com.Microsoft.VisualStudio.VC.libcpp"s, root.filename().string()});
+            auto &t = s.add<binary_library_target>(package_name{"com.Microsoft.VisualStudio.VC.libcpp"s, version()});
             t.include_directories.push_back(root / "include");
             t.link_directories.push_back(root / "lib" / get_windows_arch(t));
         }});

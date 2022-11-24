@@ -42,6 +42,55 @@
         <DisplayString>empty</DisplayString>
     </Type>
 
+    <Type Name="sw::package_version::number_version::numbers">
+        <DisplayString Condition="value._Mypair._Myval2._Mylast - value._Mypair._Myval2._Myfirst == 0">
+            empty
+        </DisplayString>
+        <DisplayString Condition="value._Mypair._Myval2._Mylast - value._Mypair._Myval2._Myfirst == 1">
+            {value._Mypair._Myval2._Myfirst[0]}
+        </DisplayString>
+        <DisplayString Condition="value._Mypair._Myval2._Mylast - value._Mypair._Myval2._Myfirst == 2">
+            {value._Mypair._Myval2._Myfirst[0]}.{value._Mypair._Myval2._Myfirst[1]}
+        </DisplayString>
+        <DisplayString Condition="value._Mypair._Myval2._Mylast - value._Mypair._Myval2._Myfirst == 3">
+            {value._Mypair._Myval2._Myfirst[0]}.{value._Mypair._Myval2._Myfirst[1]}.{value._Mypair._Myval2._Myfirst[2]}
+        </DisplayString>
+        <DisplayString Condition="value._Mypair._Myval2._Mylast - value._Mypair._Myval2._Myfirst == 4">
+            {value._Mypair._Myval2._Myfirst[0]}.{value._Mypair._Myval2._Myfirst[1]}.{value._Mypair._Myval2._Myfirst[2]}.{value._Mypair._Myval2._Myfirst[3]}
+        </DisplayString>
+        <DisplayString Condition="value._Mypair._Myval2._Mylast - value._Mypair._Myval2._Myfirst == 5">
+            {value._Mypair._Myval2._Myfirst[0]}.{value._Mypair._Myval2._Myfirst[1]}.{value._Mypair._Myval2._Myfirst[2]}.{value._Mypair._Myval2._Myfirst[3]}.{value._Mypair._Myval2._Myfirst[4]}
+        </DisplayString>
+        <DisplayString Condition="value._Mypair._Myval2._Mylast - value._Mypair._Myval2._Myfirst == 6">
+            {value._Mypair._Myval2._Myfirst[0]}.{value._Mypair._Myval2._Myfirst[1]}.{value._Mypair._Myval2._Myfirst[2]}.{value._Mypair._Myval2._Myfirst[3]}.{value._Mypair._Myval2._Myfirst[4]}.{value._Mypair._Myval2._Myfirst[5]}
+        </DisplayString>
+        <DisplayString Condition="value._Mypair._Myval2._Mylast - value._Mypair._Myval2._Myfirst == 7">
+            {value._Mypair._Myval2._Myfirst[0]}.{value._Mypair._Myval2._Myfirst[1]}.{value._Mypair._Myval2._Myfirst[2]}.{value._Mypair._Myval2._Myfirst[3]}.{value._Mypair._Myval2._Myfirst[4]}.{value._Mypair._Myval2._Myfirst[5]}.{value._Mypair._Myval2._Myfirst[6]}
+        </DisplayString>
+        <DisplayString Condition="value._Mypair._Myval2._Mylast - value._Mypair._Myval2._Myfirst == 8">
+            {value._Mypair._Myval2._Myfirst[0]}.{value._Mypair._Myval2._Myfirst[1]}.{value._Mypair._Myval2._Myfirst[2]}.{value._Mypair._Myval2._Myfirst[3]}.{value._Mypair._Myval2._Myfirst[4]}.{value._Mypair._Myval2._Myfirst[5]}.{value._Mypair._Myval2._Myfirst[6]}.{value._Mypair._Myval2._Myfirst[7]}
+        </DisplayString>
+        <DisplayString Condition="value._Mypair._Myval2._Mylast - value._Mypair._Myval2._Myfirst == 9">
+            {value._Mypair._Myval2._Myfirst[0]}.{value._Mypair._Myval2._Myfirst[1]}.{value._Mypair._Myval2._Myfirst[2]}.{value._Mypair._Myval2._Myfirst[3]}.{value._Mypair._Myval2._Myfirst[4]}.{value._Mypair._Myval2._Myfirst[5]}.{value._Mypair._Myval2._Myfirst[6]}.{value._Mypair._Myval2._Myfirst[7]}.{value._Mypair._Myval2._Myfirst[8]}
+        </DisplayString>
+        <DisplayString Condition="value._Mypair._Myval2._Mylast - value._Mypair._Myval2._Myfirst == 10">
+            {value._Mypair._Myval2._Myfirst[0]}.{value._Mypair._Myval2._Myfirst[1]}.{value._Mypair._Myval2._Myfirst[2]}.{value._Mypair._Myval2._Myfirst[3]}.{value._Mypair._Myval2._Myfirst[4]}.{value._Mypair._Myval2._Myfirst[5]}.{value._Mypair._Myval2._Myfirst[6]}.{value._Mypair._Myval2._Myfirst[7]}.{value._Mypair._Myval2._Myfirst[8]}.{value._Mypair._Myval2._Myfirst[9]}
+        </DisplayString>
+        <DisplayString>empty</DisplayString>
+    </Type>
+
+    <Type Name="sw::package_version::number_version">
+        <DisplayString Condition="extra._Mypair._Myval2._Mysize == 0">{elements}</DisplayString>
+        <DisplayString>{elements}-{extra,sb}</DisplayString>
+    </Type>
+    <Type Name="sw::package_version">
+        <DisplayString Condition="version._Which == 0">{version._Head}</DisplayString>
+    </Type>
+
+    <Type Name="sw::package_version_range">
+        <DisplayString Condition="range._Which == 1">{range._Tail._Head,sb}</DisplayString>
+    </Type>
+
     <Type Name="sw::PackageId">
         <DisplayString>{ppath}-{version}</DisplayString>
     </Type>

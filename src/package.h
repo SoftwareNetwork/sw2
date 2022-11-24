@@ -117,6 +117,17 @@ struct package_version {
                 return std::tie(elements, extra) < std::tie(rhs.elements, rhs.extra);
             }
         }
+        bool operator<=(const number_version &rhs) const {
+            if (is_release() && rhs.is_release()) {
+                return elements <= rhs.elements;
+            } else if (is_release()) {
+                return false;
+            } else if (rhs.is_release()) {
+                return true;
+            } else {
+                return std::tie(elements, extra) <= std::tie(rhs.elements, rhs.extra);
+            }
+        }
 
         auto hash() const {
             return elements.hash() ^ std::hash<string>()(extra);
@@ -185,16 +196,18 @@ struct package_version {
 
 struct version_range {
     using version = package_version::number_version::numbers;
-    struct pair : std::pair<version, version> {
-        bool contains(const package_version::number_version &v) {
-            return first <= v.elements && v.elements <= second;
+    struct pair : std::pair<package_version::number_version, package_version::number_version> {
+        using base = std::pair<package_version::number_version, package_version::number_version>;
+        using base::base;
+        bool contains(const package_version::number_version &v) const {
+            return first <= v && v <= second;
         }
     };
 
     // change to set
     std::vector<pair> pairs;
 
-    bool contains(const package_version::number_version &v) {
+    bool contains(const package_version::number_version &v) const {
         return std::ranges::any_of(pairs, [&](auto &&p) { return p.contains(v); });
     }
 };
@@ -203,8 +216,32 @@ struct package_version_range {
     using range_type = std::variant<version_range, string>;
     range_type range;
 
+    package_version_range(const char *s) : package_version_range{string{s}} {
+    }
+    package_version_range(const std::string &s) {
+        if (s == "*") {
+            package_version::number_version from{{0}};
+            package_version::number_version to{{999999999}};
+            version_range::pair p{from,to};
+            range = version_range{{p}};
+        } else {
+            range = s;
+        }
+    }
+
     bool is_branch() const {
         return std::holds_alternative<string>(range);
+    }
+    bool contains(const package_version &v) const {
+        auto b = is_branch();
+        auto bv = v.is_branch();
+        if (b && bv) {
+            return std::get<string>(range) == std::get<string>(v.version);
+        }
+        if (b ^ bv) {
+            return false;
+        }
+        return std::get<version_range>(range).contains(std::get<package_version::number_version>(v.version));
     }
 };
 
@@ -218,6 +255,8 @@ struct package_name {
     package_name(const string &s) : path{s} {
     }
     package_name(const string &p, const string &v) : path{p}, version{v} {
+    }
+    package_name(const string &p, const package_version &v) : path{p}, version{v} {
     }
     void operator=(const string &s) {
         path = s;

@@ -102,7 +102,9 @@ struct native_target : rule_target {
 
         ::sw::visit(bs.c_compiler, [&](c_compiler::msvc &c) {
             get_msvc_detector().add(s);
-            c.package;
+            s.load_target(c.package, s.host_settings());
+            //add_rule();
+            ;
         },
         [](auto &) {
             SW_UNIMPLEMENTED;

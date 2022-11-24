@@ -40,6 +40,19 @@ struct target_map {
             return it->second;
         }
         auto &container() { return versions; }
+
+        void find(const package_version_range &r) {
+            /*auto it = std::max_element(versions.begin(), versions.end(), [&](auto &&v1, auto &&v2) {
+                return r.contains(v1.first) && r.contains(v2.first) && v1.first < v2.first;
+            });*/
+            /*if (it = versions.end()) {
+                SW_UNIMPLEMENTED
+            }*/
+            for (auto &&[v,_] : versions) {
+                if (r.contains(v)) {
+                }
+            }
+        }
     };
 
     using packages_type = std::map<package_path, target_versions>;
@@ -57,6 +70,14 @@ struct target_map {
         return operator[](id.name).emplace(id, std::move(ptr));
     }
     auto &container() { return packages; }
+
+    void find(const unresolved_package_name &pkg) {
+        auto it = packages.find(pkg.path);
+        if (it == packages.end()) {
+            SW_UNIMPLEMENTED;
+        }
+        it->second.find(pkg.range);
+    }
 
     struct end_sentinel{};
     struct iterator {
@@ -162,6 +183,14 @@ struct solution {
     }
     void add_input(const input_with_settings &i) {
         inputs.emplace_back(i);
+    }
+
+    void load_target(const unresolved_package_name &pkg, const build_settings &bs) {
+        //auto &t =
+            targets.find(pkg);
+    }
+    auto host_settings() const {
+        return default_host_settings();
     }
 
     void prepare() {
