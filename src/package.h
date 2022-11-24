@@ -33,6 +33,8 @@ struct package_path {
 
     package_path() {
     }
+    package_path(const char *s) : elements{s} {
+    }
     package_path(const string &s) : elements{s} {
     }
 
@@ -233,7 +235,7 @@ struct package_name {
 };
 
 struct unresolved_package_name {
-    package_name name;
+    package_path path;
     package_version_range range;
 
     bool contains(const package_version &v) {

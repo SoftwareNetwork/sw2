@@ -31,6 +31,7 @@ struct directory_input {};
 struct directory_specification_file_input {};
 
 using input = variant<source_code_input>;
+using entry_point = input;
 
 struct input_with_settings {
     input i;

@@ -100,7 +100,13 @@ struct native_target : rule_target {
     native_target(auto &&s, auto &&id) : base{s, id} {
         *this += native_sources_rule{};
 
-        detect_system_targets(s);
+        ::sw::visit(bs.c_compiler, [&](c_compiler::msvc &c) {
+            get_msvc_detector().add(s);
+            c.package;
+        },
+        [](auto &) {
+            SW_UNIMPLEMENTED;
+        });
     }
 
     void add(const system_link_library &l) {
@@ -110,13 +116,13 @@ struct native_target : rule_target {
     //void build() { operator()(); }
     //void run(){}
 
-    static void detect_system_targets(auto &&s) {
+    /*static void detect_system_targets(auto &&s) {
         if (!s.system_targets_detected) {
             detect_msvc(s);
             detect_winsdk(s);
             s.system_targets_detected = true;
         }
-    }
+    }*/
 };
 
 struct executable_target : native_target {

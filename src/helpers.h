@@ -163,6 +163,11 @@ struct abspath : path {
     }
 };
 
+struct unimplemented_exception : std::runtime_error {
+    unimplemented_exception() : runtime_error{"unimplemented"} {}
+};
+#define SW_UNIMPLEMENTED throw unimplemented_exception{}
+
 } // namespace sw
 
 namespace std {

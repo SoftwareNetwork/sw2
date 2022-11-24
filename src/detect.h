@@ -6,7 +6,8 @@
 #include "helpers.h"
 #include "vs_instance_helpers.h"
 #include "target.h"
-#include "os.h"
+#include "os_base.h"
+#include "input.h"
 
 namespace sw {
 
@@ -51,20 +52,26 @@ struct msvc_instance {
     package_version vs_version;
 
     auto cl_target(auto &&s) const {
-        auto &t = s.add<binary_target>(package_name{"com.Microsoft.VisualStudio.VC.cl"s, root.filename().string()});
-        t.executable = root / "bin" / "Hostx64" / get_windows_arch(t) / "cl.exe";
+        s.add_entry_point(package_name{"com.Microsoft.VisualStudio.VC.cl"s, root.filename().string()}, source_code_input{[&](decltype(s) &s) {
+            auto &t = s.add<binary_target>(package_name{"com.Microsoft.VisualStudio.VC.cl"s, root.filename().string()});
+            t.executable = root / "bin" / "Hostx64" / get_windows_arch(t) / "cl.exe";
+        }});
     }
     auto link_target(auto &&s) const {
-        auto &t = s.add<binary_target>(package_name{"com.Microsoft.VisualStudio.VC.link"s, root.filename().string()});
-        t.executable = root / "bin" / "Hostx64" / get_windows_arch(t) / "link.exe";
+        s.add_entry_point(package_name{"com.Microsoft.VisualStudio.VC.link"s, root.filename().string()}, source_code_input{[&](decltype(s) &s) {
+            auto &t = s.add<binary_target>(package_name{"com.Microsoft.VisualStudio.VC.link"s, root.filename().string()});
+            t.executable = root / "bin" / "Hostx64" / get_windows_arch(t) / "link.exe";
+        }});
     }
     auto vcruntime_target(auto &&s) const {
     }
     auto stdlib_target(auto &&s) const {
-        // com.Microsoft.VisualStudio.VC.STL?
-        auto &t = s.add<binary_library_target>(package_name{"com.Microsoft.VisualStudio.VC.libcpp"s, root.filename().string()});
-        t.include_directories.push_back(root / "include");
-        t.link_directories.push_back(root / "lib" / get_windows_arch(t));
+        s.add_entry_point(package_name{"com.Microsoft.VisualStudio.VC.libcpp"s, root.filename().string()}, source_code_input{[&](decltype(s) &s) {
+            // com.Microsoft.VisualStudio.VC.STL?
+            auto &t = s.add<binary_library_target>(package_name{"com.Microsoft.VisualStudio.VC.libcpp"s, root.filename().string()});
+            t.include_directories.push_back(root / "include");
+            t.link_directories.push_back(root / "lib" / get_windows_arch(t));
+        }});
     }
     //auto root() const { return install_location / "VC" / "Tools" / "MSVC"; }
 
@@ -75,27 +82,33 @@ struct msvc_instance {
     }
 };
 
-auto detect_msvc1() {
-    auto instances = enumerate_vs_instances();
-    std::vector<msvc_instance> cls;
-    for (auto &&i : instances) {
-        path root = i.VSInstallLocation;
-        auto preview = i.VSInstallLocation.contains(L"Preview");
-        auto msvc = root / "VC" / "Tools" / "MSVC";
-        for (auto &&p : fs::directory_iterator{msvc}) {
-            if (!package_version{p.path().filename().string()}.is_branch()) {
-                cls.emplace_back(msvc / p.path(),
-                    package_version{package_version::number_version{path{i.Version}.string(), preview ? "preview"s : ""s}});
+struct msvc_detector {
+    std::vector<msvc_instance> msvc;
+
+    msvc_detector() {
+        auto instances = enumerate_vs_instances();
+        for (auto &&i : instances) {
+            path root = i.VSInstallLocation;
+            auto preview = i.VSInstallLocation.contains(L"Preview");
+            auto d = root / "VC" / "Tools" / "MSVC";
+            for (auto &&p : fs::directory_iterator{d}) {
+                if (!package_version{p.path().filename().string()}.is_branch()) {
+                    msvc.emplace_back(d / p.path(), package_version{package_version::number_version{
+                                                          path{i.Version}.string(), preview ? "preview"s : ""s}});
+                }
             }
         }
     }
-    return cls;
-}
-void detect_msvc(auto &&s) {
-    static auto msvc = detect_msvc1();
-    for (auto &&m : msvc) {
-        m.add(s);
+    bool exists() const { return !msvc.empty(); }
+    void add(auto &&s) {
+        for (auto &&m : msvc) {
+            m.add(s);
+        }
     }
+};
+auto &get_msvc_detector() {
+    static msvc_detector d;
+    return d;
 }
 
 // https://en.wikipedia.org/wiki/Microsoft_Windows_SDK
