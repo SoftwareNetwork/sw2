@@ -95,18 +95,18 @@ struct target_data {
 struct target_data_storage : target_data {
     struct groups {
         enum {
-            self = 0x1,
-            project = 0x10,
-            others = 0x100,
+            self    = 0b001,
+            project = 0b010,
+            others  = 0b100,
         };
     };
 
     // we need 2^3 = 8 values
     // minus 1 inherited
-    // plus  1 resulting value
+    // plus  1 merge_object value
     //
     // inherited = 0
-    // array[0] = resulting
+    // array[0] = merge_object
     std::array<std::unique_ptr<target_data>, 8> data;
 
     target_data &private_{*this};
@@ -116,6 +116,8 @@ struct target_data_storage : target_data {
     target_data &interface{get(groups::project | groups::others)};
     target_data &interface_{get(groups::project | groups::others)};
 
+protected:
+    target_data &merge_object{get(0)};
 private:
     target_data &get(int i) {
         if (!data[i]) {
