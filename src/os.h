@@ -41,7 +41,9 @@ struct build_settings {
     build_type_type build_type;
     library_type_type library_type;
     c_compiler_type c_compiler;
+    // move under cpp. struct?
     cpp_compiler_type cpp_compiler;
+    unresolved_package_name cpp_stdlib;
 
     auto for_each() const {
         return std::tie(os, arch, build_type, library_type);

@@ -85,6 +85,13 @@
     </Type>
     <Type Name="sw::package_version">
         <DisplayString Condition="version._Which == 0">{version._Head}</DisplayString>
+        <DisplayString Condition="version._Which == 1">{version._Tail._Head}</DisplayString>
+    </Type>
+    <Type Name="sw::package_name">
+        <DisplayString>{path}-{version}</DisplayString>
+    </Type>
+    <Type Name="sw::target_base">
+        <DisplayString>{name}</DisplayString>
     </Type>
 
     <Type Name="sw::package_version_range">

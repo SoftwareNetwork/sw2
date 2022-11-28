@@ -10,12 +10,12 @@ namespace sw {
 
 struct target_map {
     struct target_version {
-        using targets_type = std::map<build_settings, target_ptr>;
+        using targets_type = std::map<build_settings, target_uptr>;
 
         targets_type targets;
         entry_point ep;
 
-        bool emplace(const package_id &id, target_ptr ptr) {
+        bool emplace(const package_id &id, target_uptr ptr) {
             auto it = targets.find(id.settings);
             if (it == targets.end()) {
                 targets.emplace(id.settings, std::move(ptr));
@@ -71,7 +71,7 @@ struct target_map {
         }
         return it->second[name.version];
     }
-    bool emplace(const package_id &id, target_ptr ptr) {
+    bool emplace(const package_id &id, target_uptr ptr) {
         return operator[](id.name).emplace(id, std::move(ptr));
     }
     auto &container() { return packages; }
@@ -108,7 +108,7 @@ struct target_map {
             };
             struct pair {
                 package_id_ref ref;
-                target_ptr &ptr;
+                target_uptr &ptr;
             };
             return pair{package_id_ref{p->first,v->first,t->first}, t->second};
         }

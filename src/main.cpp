@@ -73,7 +73,6 @@ int main1() {
     input_with_settings is{source_code_input{&self_build}};
     auto dbs = default_build_settings();
     dbs.arch = arch::x86{};
-    //is.settings.push_back(dbs);
     is.settings.insert(dbs);
     s.add_input(is);
     s.build();

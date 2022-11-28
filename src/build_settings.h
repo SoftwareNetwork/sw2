@@ -30,6 +30,7 @@ auto default_host_settings() {
     if (get_msvc_detector().exists()) {
         bs.c_compiler = c_compiler::msvc{};     // switch to gcc-12+
         bs.cpp_compiler = cpp_compiler::msvc{}; // switch to gcc-12+
+        bs.cpp_stdlib = unresolved_package_name{"com.Microsoft.VisualStudio.VC.libcpp"s};
     } else {
         SW_UNIMPLEMENTED;
     }

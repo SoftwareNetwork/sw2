@@ -5,8 +5,13 @@
 
 #include "rule.h"
 #include "os.h"
+#include "target_list.h"
 
 namespace sw {
+
+struct dependency {
+    target_uptr *target;
+};
 
 // basic target: throw files, rules etc.
 struct rule_target : files_target {
@@ -90,7 +95,7 @@ struct rule_target : files_target {
 struct target_data {
     compile_options_t compile_options;
     link_options_t link_options;
-    std::vector<target_ptr *> dependencies;
+    std::vector<dependency> dependencies;
 };
 struct target_data_storage : target_data {
     struct groups {
@@ -114,7 +119,7 @@ struct target_data_storage : target_data {
     target_data &public_{get(groups::self | groups::project | groups::others)};
 #undef interface // some win32 stuff
     target_data &interface{get(groups::project | groups::others)};
-    target_data &interface_{get(groups::project | groups::others)};
+    target_data &interface_{get(groups::project | groups::others)}; // for similarity
 
 protected:
     target_data &merge_object{get(0)};
@@ -152,7 +157,7 @@ struct native_target : rule_target, target_data_storage {
         ::sw::visit(bs.c_compiler,
             [&](c_compiler::msvc &c) {
             get_msvc_detector().add(s);
-            auto &t = s.load_target(c.package, s.host_settings());
+            auto &t = s.load_target(c.package, bs);
             add(c_compiler::msvc::rule_type{*std::get<std::unique_ptr<binary_target_msvc>>(t)});
             std::call_once(win_sdk_um, load_win_sdk_um);
             std::call_once(win_ucrt, load_win_ucrt);
@@ -164,7 +169,7 @@ struct native_target : rule_target, target_data_storage {
             bs.cpp_compiler,
             [&](cpp_compiler::msvc &c) {
                 get_msvc_detector().add(s);
-                auto &t = s.load_target(c.package, s.host_settings());
+                auto &t = s.load_target(c.package, bs);
                 add(cpp_compiler::msvc::rule_type{*std::get<std::unique_ptr<binary_target_msvc>>(t)});
                 std::call_once(win_sdk_um, load_win_sdk_um);
                 std::call_once(win_ucrt, load_win_ucrt);
@@ -172,10 +177,12 @@ struct native_target : rule_target, target_data_storage {
             [](auto &) {
                 SW_UNIMPLEMENTED;
             });
+        auto &stdlib = s.load_target(bs.cpp_stdlib, bs);
+        add(stdlib);
     }
 
-    void add(target_ptr &t) {
-        dependencies.push_back(&t);
+    void add(target_uptr &ptr) {
+        dependencies.push_back({&ptr});
     }
     void add(const system_link_library &l) {
         link_options.system_link_libraries.push_back(l);
@@ -207,8 +214,6 @@ struct executable_target : native_target {
     }
 };
 
-using target_type = types<files_target, rule_target, native_target, executable_target, binary_target, binary_library_target, binary_target_msvc>;
 using target = target_type::variant_type;
-using target_ptr = target_type::variant_of_uptr_type;
 
 } // namespace sw

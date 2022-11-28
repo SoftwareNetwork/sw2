@@ -37,6 +37,8 @@ struct package_path {
     }
     package_path(const string &s) : elements{s} {
     }
+    //package_path(const package_path &) = default;
+    //package_path &operator=(const package_path &) = default;
 
     operator string() const {
         if (!elements.empty()) {
@@ -207,6 +209,8 @@ struct package_version_range {
     using range_type = std::variant<version_range, string>;
     range_type range;
 
+    package_version_range() : package_version_range{"*"s} {
+    }
     package_version_range(const char *s) : package_version_range{string{s}} {
     }
     package_version_range(const std::string &s) {
@@ -214,7 +218,7 @@ struct package_version_range {
             package_version::number_version from{{0}};
             package_version::number_version to{{999999999}};
             version_range::pair p{from,to};
-            range = version_range{{p}};
+            range = version_range{.pairs = {p}};
         } else {
             range = s;
         }

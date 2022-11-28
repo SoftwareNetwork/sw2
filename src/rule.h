@@ -68,9 +68,16 @@ struct cl_exe_rule {
                     }
                 };
                 add(tgt.compile_options);
-                /*add(msvc.stdlib_target());
-                add(*sdk.ucrt);
-                add(*sdk.um);*/
+                for (auto &&d : tgt.dependencies) {
+                    visit(*d.target, [&](auto &&v) {
+                        if constexpr (requires { v->definitions; }) {
+                            add(*v);
+                        }
+                    });
+                }
+                /*
+                add(msvc.stdlib_target());
+                */
                 c.inputs.insert(f);
                 c.outputs.insert(out);
                 tgt.commands.emplace_back(std::move(c));
