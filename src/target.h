@@ -7,37 +7,9 @@
 #include "package.h"
 #include "suffix.h"
 #include "os.h"
+#include "target_properties.h"
 
 namespace sw {
-
-struct definition {
-    string key;
-    std::variant<string, bool> value; // value/undef
-
-    operator string() const {
-        return visit(value, overload{
-            [&](const string &v){ return "-D" + key + "=" + v; },
-            [&](bool){ return "-U" + key; }
-        });
-    }
-};
-struct system_link_library {
-    path p;
-    operator const auto &() const { return p; }
-};
-auto operator""_slib(const char *s, size_t len) {
-    return system_link_library{std::string{s, len}};
-}
-
-struct compile_options_t {
-    std::vector<definition> definitions;
-    std::vector<path> include_directories;
-};
-struct link_options_t {
-    std::vector<path> link_directories;
-    std::vector<path> link_libraries;
-    std::vector<system_link_library> system_link_libraries;
-};
 
 struct target_base {
     package_name name;

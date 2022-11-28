@@ -126,10 +126,13 @@ struct mmap_file {
     struct stream {
         mmap_file &m;
         size_type offset{0};
+        bool ok{true};
 
         auto size() const { return m.sz; }
         bool has_room(auto sz) const { return offset + sz <= m.sz; }
-        explicit operator bool() const { return offset != -1 && !m.eof(offset); }
+        explicit operator bool() const {
+            return ok && offset != -1 && !m.eof(offset);
+        }
 
         auto write_record(size_type sz) {
             if (!has_room(sz)) {
@@ -178,18 +181,18 @@ struct mmap_file {
         }
 
         stream &operator>>(path &p) {
+            auto make_eof = [&, &s = *this]() -> stream& {
+                p.clear();
+                ok = false;
+                return s;
+            };
             uint64_t len;
             if (!has_room(sizeof(len))) {
-                p.clear();
-                return *this;
+                return make_eof();
             }
             operator>>(len);
-            if (!has_room(len)) {
-                p.clear();
-                return *this;
-            }
-            if (len == 0) {
-                return *this;
+            if (!has_room(len) || len == 0) {
+                return make_eof();
             }
             p.assign((const char8_t *)m.p + offset, (const char8_t *)m.p + offset + len);
             offset += len;

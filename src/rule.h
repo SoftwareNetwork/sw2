@@ -3,7 +3,8 @@
 
 #pragma once
 
-#include "helpers.h"
+#include "rule_list.h"
+#include "target_list.h"
 
 namespace sw {
 
@@ -45,18 +46,21 @@ struct native_sources_rule {
 };
 
 struct cl_exe_rule {
-    binary_target_msvc &compiler;
+    using target_type = binary_target_msvc;
 
-    //cl_exe_rule() {
-        //msvc = *detect_msvc().rbegin();
-        //sdk = detect_winsdk();
-    //}
+    target_type &compiler;
+
+    cl_exe_rule(target_uptr &t) : compiler{*std::get<uptr<target_type>>(t)} {}
 
     void operator()(auto &tgt) requires requires { tgt.compile_options; } {
         for (auto &&[f, rules] : tgt.processed_files) {
-            if (is_cpp_file(f) && !rules.contains(this)) {
+            if (rules.contains(this)) {
+                continue;
+            }
+            if (is_c_file(f) || is_cpp_file(f)) {
                 auto out = tgt.binary_dir / "obj" / f.filename() += ".obj";
                 cl_exe_command c;
+                c.name_ = std::format("[{}]/{}", (string)tgt.name, normalize_path(f.lexically_relative(tgt.source_dir).string()));
                 c.old_includes = compiler.msvc.vs_version < package_version{16,7};
                 c += compiler.executable, "-nologo", "-c", "-std:c++latest", "-EHsc", f, "-Fo" + out.string();
                 auto add = [&](auto &&tgt) {
@@ -75,9 +79,6 @@ struct cl_exe_rule {
                         }
                     });
                 }
-                /*
-                add(msvc.stdlib_target());
-                */
                 c.inputs.insert(f);
                 c.outputs.insert(out);
                 tgt.commands.emplace_back(std::move(c));
@@ -87,19 +88,32 @@ struct cl_exe_rule {
     }
 };
 struct link_exe_rule {
-    link_exe_rule() {
-        //msvc = *detect_msvc().rbegin();
-        //sdk = detect_winsdk();
-    }
+    using target_type = binary_target;
+
+    target_type &linker;
+
+    link_exe_rule(target_uptr &t) : linker{*std::get<uptr<target_type>>(t)} {}
 
     void operator()(auto &tgt) requires requires { tgt.link_options; } {
-        auto out = tgt.binary_dir / "bin" / (string)tgt.name += ".exe"s;
-        if constexpr (requires {tgt.executable;}) {
-            out = tgt.executable;
-        }
-        /*auto linker = msvc.link_target();
         io_command c;
-        c += linker.executable, "-nologo", "-OUT:" + out.string();
+        c.err = ""s;
+        c.out = ""s;
+        c += linker.executable, "-nologo";
+        // add "-NODEFAULTLIB"
+        if constexpr (requires { tgt.executable; }) {
+            c.name_ = std::format("[{}]{}", (string)tgt.name, tgt.executable.extension().string());
+            c += "-OUT:" + tgt.executable.string();
+            c.outputs.insert(tgt.executable);
+        } else if constexpr (requires { tgt.library; }) {
+            c.name_ = std::format("[{}]{}", (string)tgt.name, tgt.library.extension().string());
+            c += "-DLL";
+            c += "-IMPLIB:" + tgt.implib.string();
+            c += "-OUT:" + tgt.library.string();
+            c.outputs.insert(tgt.implib);
+            c.outputs.insert(tgt.library);
+        } else {
+            SW_UNIMPLEMENTED;
+        }
         for (auto &&[f, rules] : tgt.processed_files) {
             if (f.extension() == ".obj") {
                 c += f;
@@ -119,11 +133,14 @@ struct link_exe_rule {
             }
         };
         add(tgt.link_options);
-        add(msvc.stdlib_target());
-        add(*sdk.ucrt);
-        add(*sdk.um);
-        c.outputs.insert(out);
-        tgt.commands.emplace_back(std::move(c));*/
+        for (auto &&d : tgt.dependencies) {
+            visit(*d.target, [&](auto &&v) {
+                if constexpr (requires { v->link_directories; }) {
+                    add(*v);
+                }
+            });
+        }
+        tgt.commands.emplace_back(std::move(c));
     }
 };
 
@@ -215,10 +232,6 @@ struct gcc_link_rule {
     }
 };
 
-using rule_types = types<native_sources_rule
-    , cl_exe_rule, link_exe_rule
-    , gcc_compile_rule, gcc_link_rule
->;
-using rule = decltype(make_variant(rule_types{}))::type;
+using rule = rule_types::variant_type;
 
 } // namespace sw

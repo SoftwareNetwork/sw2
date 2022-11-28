@@ -5,11 +5,9 @@
 
 #include "helpers.h"
 #include "package.h"
+#include "rule_list.h"
 
 namespace sw {
-
-// rule fwd
-struct cl_exe_rule;
 
 //
 struct any_setting {
@@ -222,5 +220,14 @@ struct gcc {
 };
 
 } // namespace objcpp_compiler
+
+namespace linker {
+
+struct msvc {
+    using rule_type = link_exe_rule;
+    unresolved_package_name package{"com.Microsoft.VisualStudio.VC.link"s};
+};
+
+} // namespace linker
 
 } // namespace sw

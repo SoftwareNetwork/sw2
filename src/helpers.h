@@ -42,6 +42,9 @@ using std::variant;
 using std::vector;
 using namespace std::literals;
 
+template <typename ... Types>
+using uptr = std::unique_ptr<Types...>;
+
 template <typename F>
 struct appender {
     F f;
@@ -74,15 +77,13 @@ template <typename T> struct type_ { using type = T; };
 template <typename ... Types> struct types {
     using variant_type = variant<Types...>;
     using variant_of_ptr_type = variant<Types*...>;
-    using variant_of_uptr_type = variant<std::unique_ptr<Types>...>;
+    using variant_of_uptr_type = variant<uptr<Types>...>;
 
     template <typename T>
     static constexpr bool contains() {
         return (false || ... || std::same_as<Types, T>);
     }
 };
-template <typename ... Args>
-constexpr auto make_variant(types<Args...>) {return type_<std::variant<Args...>>{};}
 
 #ifndef FWD
 #define FWD(x) std::forward<decltype(x)>(x)
@@ -95,7 +96,7 @@ struct overload : Ts... {
 };
 
 decltype(auto) visit(auto &&var, auto && ... f) {
-    return std::visit(overload{FWD(f)...}, var);
+    return ::std::visit(overload{FWD(f)...}, var);
 }
 decltype(auto) visit_any(auto &&var, auto &&...f) {
     return visit(FWD(var), overload{FWD(f)..., [](auto &&){}});
@@ -169,6 +170,11 @@ struct unimplemented_exception : std::runtime_error {
     unimplemented_exception() : runtime_error{"unimplemented"} {}
 };
 #define SW_UNIMPLEMENTED throw unimplemented_exception{}
+
+string &&normalize_path(string &&s) {
+    std::replace(s.begin(), s.end(), '\\', '/');
+    return std::move(s);
+}
 
 } // namespace sw
 

@@ -141,44 +141,60 @@ struct native_target : rule_target, target_data_storage {
 
     native_target(auto &&s, auto &&id) : base{s, id} {
         *this += native_sources_rule{};
+        init_compilers(s);
+    }
 
-        std::once_flag win_sdk_um, win_ucrt;
-        auto load_win_sdk_um = [&] {
-            detect_winsdk(s);
-            auto &t = s.load_target(unresolved_package_name{"com.Microsoft.Windows.SDK.um", "*"}, bs);
-            add(t);
-        };
-        auto load_win_ucrt = [&] {
-            detect_winsdk(s);
-            auto &t = s.load_target(unresolved_package_name{"com.Microsoft.Windows.SDK.ucrt", "*"}, bs);
-            add(t);
-        };
-
-        ::sw::visit(bs.c_compiler,
-            [&](c_compiler::msvc &c) {
-            get_msvc_detector().add(s);
-            auto &t = s.load_target(c.package, bs);
-            add(c_compiler::msvc::rule_type{*std::get<std::unique_ptr<binary_target_msvc>>(t)});
-            std::call_once(win_sdk_um, load_win_sdk_um);
-            std::call_once(win_ucrt, load_win_ucrt);
-            },
-        [](auto &) {
-            SW_UNIMPLEMENTED;
-            });
-        ::sw::visit(
-            bs.cpp_compiler,
-            [&](cpp_compiler::msvc &c) {
+    void init_compilers(auto &&s) {
+        auto load = [&] {
+            std::once_flag once;
+            auto load = [&] {
+                detect_winsdk(s);
                 get_msvc_detector().add(s);
+            };
+            visit_any(bs.c_compiler, [&](c_compiler::msvc &c) {
+                std::call_once(once, load);
+            });
+            visit_any(bs.cpp_compiler, [&](cpp_compiler::msvc &c) {
+                std::call_once(once, load);
+            });
+            visit_any(bs.linker, [&](linker::msvc &c) {
+                std::call_once(once, load);
+            });
+        };
+        std::call_once(s.system_targets_detected, load);
+
+        // order
+        add(s.load_target(bs.cpp_stdlib, bs));
+        add(s.load_target(bs.c_stdlib, bs));
+        add(s.load_target(bs.kernel_lib, bs));
+
+        ::sw::visit(
+            bs.c_compiler,
+            [&](c_compiler::msvc &c) {
                 auto &t = s.load_target(c.package, bs);
-                add(cpp_compiler::msvc::rule_type{*std::get<std::unique_ptr<binary_target_msvc>>(t)});
-                std::call_once(win_sdk_um, load_win_sdk_um);
-                std::call_once(win_ucrt, load_win_ucrt);
+                add(c_compiler::msvc::rule_type{t});
             },
             [](auto &) {
                 SW_UNIMPLEMENTED;
             });
-        auto &stdlib = s.load_target(bs.cpp_stdlib, bs);
-        add(stdlib);
+        ::sw::visit(
+            bs.cpp_compiler,
+            [&](cpp_compiler::msvc &c) {
+                auto &t = s.load_target(c.package, bs);
+                add(cpp_compiler::msvc::rule_type{t});
+            },
+            [](auto &) {
+                SW_UNIMPLEMENTED;
+            });
+        ::sw::visit(
+            bs.linker,
+            [&](linker::msvc &c) {
+                auto &t = s.load_target(c.package, bs);
+                add(linker::msvc::rule_type{t});
+            },
+            [](auto &) {
+                SW_UNIMPLEMENTED;
+            });
     }
 
     void add(target_uptr &ptr) {
@@ -187,27 +203,45 @@ struct native_target : rule_target, target_data_storage {
     void add(const system_link_library &l) {
         link_options.system_link_libraries.push_back(l);
     }
+    void add(const definition &d) {
+        compile_options.definitions.push_back(d);
+    }
 
     //void build() { operator()(); }
     //void run(){}
+};
 
-    /*static void detect_system_targets(auto &&s) {
-        if (!s.system_targets_detected) {
-            detect_msvc(s);
-            detect_winsdk(s);
-            s.system_targets_detected = true;
-        }
-    }*/
+struct native_library_target : native_target {
+    using base = native_target;
+    path library;
+    path implib;
+
+    native_library_target(auto &&s, auto &&id) : base{s, id} {
+        library = binary_dir / "bin" / (string)name;
+        implib = binary_dir / "lib" / (string)name;
+        ::sw::visit(bs.os, [&](auto &&os) {
+            if constexpr (requires { os.shared_library_extension; }) {
+                library += os.shared_library_extension;
+            }
+            if constexpr (requires { os.shared_library_extension; }) {
+                implib += os.static_library_extension;
+            }
+        });
+    }
 };
 
 struct executable_target : native_target {
     using base = native_target;
+    path executable;
 
     executable_target(auto &&s, auto &&id) : base{s, id} {
-        executable = binary_dir / "bin" / (string)name += s.os.executable_extension;
+        executable = binary_dir / "bin" / (string)name;
+        ::sw::visit(bs.os, [&](auto &&os) {
+            if constexpr (requires {os.executable_extension;}) {
+                executable += os.executable_extension;
+            }
+        });
     }
-
-    path executable;
 
     void run(auto && ... args) {
         // make rule?

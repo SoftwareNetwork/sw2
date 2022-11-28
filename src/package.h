@@ -114,13 +114,15 @@ struct package_version {
 
         operator string() const {
             string s;
-            /*
-            for (auto &&[f, t] : pairs) {
-                s += "[" + string{f} + ", " + string{t} + "] |";
+            for (auto &&i : elements.value) {
+                s += std::to_string(i) + ".";
             }
             if (!s.empty()) {
-                s.resize(s.size() - 2);
-            }*/
+                s.resize(s.size() - 1);
+            }
+            if (!extra.empty()) {
+                s += "-" + extra;
+            }
             return s;
         }
     };
@@ -163,6 +165,13 @@ struct package_version {
     }
     bool is_branch() const {
         return std::holds_alternative<string>(version);
+    }
+
+    operator string() const {
+        if (is_branch()) {
+            return std::get<string>(version);
+        }
+        return std::get<number_version>(version);
     }
 
     // this is release order
@@ -263,7 +272,7 @@ struct package_name {
         path = s;
     }
 
-    operator string() const { return path; }
+    operator string() const { return (string)path + "-" + (string)version; }
 
     auto hash() const {
         return path.hash() ^ version.hash();

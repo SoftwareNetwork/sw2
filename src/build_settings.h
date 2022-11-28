@@ -27,10 +27,13 @@ auto default_host_settings() {
     // see more definitions at https://opensource.apple.com/source/WTF/WTF-7601.1.46.42/wtf/Platform.h.auto.html
 #if defined(_WIN32)
     bs.os = os::windows{};
+    bs.kernel_lib = unresolved_package_name{"com.Microsoft.Windows.SDK.um"s};
     if (get_msvc_detector().exists()) {
-        bs.c_compiler = c_compiler::msvc{};     // switch to gcc-12+
+        bs.c_compiler = c_compiler::msvc{}; // switch to gcc-12+
+        bs.c_stdlib = unresolved_package_name{"com.Microsoft.Windows.SDK.ucrt"s};
         bs.cpp_compiler = cpp_compiler::msvc{}; // switch to gcc-12+
         bs.cpp_stdlib = unresolved_package_name{"com.Microsoft.VisualStudio.VC.libcpp"s};
+        bs.linker = linker::msvc{}; // switch to gcc-12+
     } else {
         SW_UNIMPLEMENTED;
     }

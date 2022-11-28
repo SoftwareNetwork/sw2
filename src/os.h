@@ -35,15 +35,22 @@ struct build_settings {
     using library_type_type = special_variant<library_type::static_, library_type::shared>;
     using c_compiler_type = special_variant<c_compiler::clang, c_compiler::gcc, c_compiler::msvc>;
     using cpp_compiler_type = special_variant<cpp_compiler::clang, cpp_compiler::gcc, cpp_compiler::msvc>;
+    using linker_type = special_variant<linker::msvc>;
 
     os_type os;
     arch_type arch;
     build_type_type build_type;
     library_type_type library_type;
+    // make optional?
+    unresolved_package_name kernel_lib; // can be winsdk.um, mingw64, linux kernel etc.
+    // move under cpp.* (lang.*) struct?
     c_compiler_type c_compiler;
-    // move under cpp. struct?
+    // make optional?
+    unresolved_package_name c_stdlib; // can be mingw64 etc.
     cpp_compiler_type cpp_compiler;
-    unresolved_package_name cpp_stdlib;
+    // make optional?
+    unresolved_package_name cpp_stdlib; // can be libc++ etc.
+    linker_type linker;
 
     auto for_each() const {
         return std::tie(os, arch, build_type, library_type);

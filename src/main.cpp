@@ -38,7 +38,7 @@ auto build_some_package(solution &s) {
 }
 
 auto self_build(solution &s) {
-    auto &tgt = s.add<native_target>(package_name{"pkg2"});
+    auto &tgt = s.add<executable_target>(package_name{"pkg2"});
     tgt +=
         "src"_rdir,
         "src/main.cpp",
@@ -52,7 +52,7 @@ auto self_build(solution &s) {
     }
 
     {
-        auto &tgt = s.add<native_target>(package_name{"pkg3"});
+        auto &tgt = s.add<executable_target>(package_name{"pkg3"});
         tgt += "src"_rdir, "src/main.cpp", "src/.*\\.cpp"_r, "src/.*\\.h"_rr;
         if (tgt.is<os::windows>()) {
             tgt += "advapi32.lib"_slib;
@@ -62,19 +62,27 @@ auto self_build(solution &s) {
     }
 }
 
-int main1() {
-#if defined(_WIN32) && !defined(__MINGW32__)
-    SetConsoleOutputCP(CP_UTF8);
-#endif
+auto zlib(solution &s) {
+    auto &tgt = s.add<native_library_target>(package_name{"zlib"});
+    tgt.source_dir /= ".sw4/1";
+    tgt += ".*\\.[hc]"_r;
+    tgt += "ZLIB_DLL"_def;
+}
 
+int main1() {
     solution s;
-    s.add_input(source_code_input{&build_some_package});
-    s.add_input(source_code_input{&self_build});
-    input_with_settings is{source_code_input{&self_build}};
-    auto dbs = default_build_settings();
-    dbs.arch = arch::x86{};
-    is.settings.insert(dbs);
-    s.add_input(is);
+    //s.add_input(source_code_input{&build_some_package});
+    //s.add_input(source_code_input{&self_build});
+    auto add = [&](auto f) {
+        input_with_settings is{source_code_input{f}};
+        auto dbs = default_build_settings();
+        is.settings.insert(dbs);
+        dbs.arch = arch::x86{};
+        //is.settings.insert(dbs);
+        s.add_input(is);
+    };
+    //add(&self_build);
+    add(&zlib);
     s.build();
 
 	/*file_storage<physical_file_storage_single_file<basic_contents_hash>> fst{ {"single_file2.bin"} };

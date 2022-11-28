@@ -24,7 +24,12 @@ struct target_map {
                 return false;
             }
         }
-        auto &container() { return targets; }
+        auto &container() {
+            return targets;
+        }
+        bool contains(const package_id &id) const {
+            return targets.contains(id.settings);
+        }
 
         auto &load(auto &s, const build_settings &bs) {
             auto it = targets.find(bs);
@@ -73,6 +78,9 @@ struct target_map {
     }
     bool emplace(const package_id &id, target_uptr ptr) {
         return operator[](id.name).emplace(id, std::move(ptr));
+    }
+    bool contains(const package_id &id) {
+        return operator[](id.name).contains(id);
     }
     auto &container() { return packages; }
 
@@ -139,6 +147,7 @@ struct target_map {
                     }
                     return it != obj.container().end();
                 }
+                return true;
             }
             return ++it != obj.container().end();
         }
@@ -161,7 +170,7 @@ struct solution {
     std::vector<input_with_settings> inputs;
 
     // some settings
-    bool system_targets_detected{false};
+    std::once_flag system_targets_detected;
 
     solution() {
         //rules.push_back(cl_exe_rule{});
@@ -169,14 +178,20 @@ struct solution {
     }
 
     template <typename T, typename... Args>
-    T &add(Args &&...args) {
-        // msvc bug? without upt it converts to basic type
-        auto ptr = std::make_unique<T>(*this, FWD(args)...);
-        auto &t = *ptr;
-        auto inserted = targets.emplace(package_id{t.name, *bs}, std::move(ptr));
-        if (!inserted) {
-            throw std::runtime_error{"target already exists"};
+    T &add(const package_name &name, Args &&...args) {
+        package_id id{name, *bs};
+        if (targets.contains(id)) {
+            throw std::runtime_error{std::format("target already exists: {}", (string)name)};
         }
+        // msvc bug? without upt it converts to basic type
+        std::unique_ptr<T> ptr;
+        try {
+            ptr = std::make_unique<T>(*this, name, FWD(args)...);
+        } catch (std::exception &e) {
+            throw std::runtime_error{"cannot create target: "s + e.what()};
+        }
+        auto &t = *ptr;
+        targets.emplace(id, std::move(ptr));
         return t;
     }
 
@@ -185,7 +200,7 @@ struct solution {
     }
     void add_input(auto &&i) {
         static const auto bs = default_build_settings();
-        //inputs.emplace_back(input_with_settings{i, {bs}});
+        inputs.emplace_back(input_with_settings{i, {bs}});
     }
     void add_input(input_with_settings &i) {
         inputs.emplace_back(i);
@@ -207,11 +222,6 @@ struct solution {
         for (auto &&[id,t] : targets) {
             visit(t, [&](auto &&vp) {
                 auto &v = *vp;
-                //if constexpr (std::derived_from<std::decay_t<decltype(v)>, rule_target>) {
-                    //for (auto &&r : rules) {
-                        //v += r;
-                    //}
-                //}
                 if constexpr (requires { v.prepare(); }) {
                     v.prepare();
                 }
