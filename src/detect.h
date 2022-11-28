@@ -93,6 +93,9 @@ struct msvc_detector {
         for (auto &&i : instances) {
             path root = i.VSInstallLocation;
             auto preview = i.VSInstallLocation.contains(L"Preview");
+            if (preview) {
+                continue;
+            }
             auto d = root / "VC" / "Tools" / "MSVC";
             for (auto &&p : fs::directory_iterator{d}) {
                 if (!package_version{p.path().filename().string()}.is_branch()) {

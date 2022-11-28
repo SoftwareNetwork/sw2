@@ -26,6 +26,20 @@ struct build_settings {
         bool is() const {
             return contains<T, Types...>();
         }
+
+        decltype(auto) visit(auto &&... args) {
+            return ::sw::visit(*this, FWD(args)...);
+        }
+        decltype(auto) visit(auto &&... args) const {
+            return ::sw::visit(*this, FWD(args)...);
+        }
+        // name visit special or?
+        /*decltype(auto) visit(auto &&... args) {
+            return ::sw::visit(*this, FWD(args)..., [](any_setting &){});
+        }
+        decltype(auto) visit(auto &&... args) const {
+            return ::sw::visit(*this, FWD(args)..., [](const any_setting &){});
+        }*/
     };
 
     using os_type = special_variant<os::linux, os::macos, os::windows, os::mingw, os::cygwin, os::wasm>;
@@ -124,9 +138,9 @@ struct build_settings {
         bs.arch = arch::x64{};
 #elif defined(__i386__) || defined(_M_IX86)
         bs.arch = arch::x86{};
-#elif defined(__arm64__) || defined(__aarch64__)
+#elif defined(__arm64__) || defined(__aarch64__) || defined(_M_ARM64)
         bs.arch = arch::arm64{};
-#elif defined(__arm__)
+#elif defined(__arm__) || defined(_M_ARM)
         bs.arch = arch::arm{};
 #else
 #error "unknown arch"

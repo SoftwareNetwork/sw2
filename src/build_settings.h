@@ -16,9 +16,9 @@ auto default_host_settings() {
     bs.arch = arch::x64{};
 #elif defined(__i386__) || defined(_M_IX86)
     bs.arch = arch::x86{};
-#elif defined(__arm64__) || defined(__aarch64__)
+#elif defined(__arm64__) || defined(__aarch64__) || defined(_M_ARM64)
     bs.arch = arch::arm64{};
-#elif defined(__arm__)
+#elif defined(__arm__) || defined(_M_ARM)
     bs.arch = arch::arm{};
 #else
 #error "unknown arch"

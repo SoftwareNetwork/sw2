@@ -26,6 +26,7 @@ struct raw_command {
     using stream = variant<std::monostate, string, stream_callback, path>;
     //stream in;
     stream out, err;
+    string out_text; // filtered, workaround
 #ifdef _WIN32
     win32::pipe pout, perr;
 #endif
@@ -534,6 +535,8 @@ struct io_command : raw_command {
                     t = *e;
                 } else if (auto e = std::get_if<string>(&out); e && !e->empty()) {
                     t = *e;
+                } else if (!out_text.empty()) {
+                    t = out_text;
                 }
                 throw std::runtime_error(
                     //format("process exit code: {}\nerror: {}", exit_code, std::get<string>(err))
@@ -584,7 +587,7 @@ struct cl_exe_command : io_command {
             scope_exit se{[&] {
                 arguments.pop_back();
             }};
-            out = [&](auto sv) {
+            out = [&, line = 0](auto sv) mutable {
                 static const auto msvc_prefix = [&]() -> string {
                     path base = fs::temp_directory_path() / "sw_msvc_prefix";
                     auto fc = path{base} += ".c";
@@ -624,7 +627,15 @@ struct cl_exe_command : io_command {
                     throw std::runtime_error{"cannot find msvc prefix"};
                 }();
 
-                size_t p = 0;
+                if (++line == 1) {
+                    return;
+                }
+                size_t p = sv.find(msvc_prefix);
+                if (p == -1) {
+                    out_text += sv;
+                    out_text += "\n";
+                    return;
+                }
                 while ((p = sv.find(msvc_prefix, p)) != -1) {
                     p += msvc_prefix.size();
                     p = sv.find_first_not_of(' ', p);
@@ -789,6 +800,10 @@ struct command_executor {
     }
 
     void run_next() {
+        if (running_commands > maximum_running_commands) {
+            int a = 5;
+            a++;
+        }
         while (running_commands < maximum_running_commands && !pending_commands.empty()) {
             auto c = pending_commands.front();
             pending_commands.pop_front();

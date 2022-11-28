@@ -215,18 +215,51 @@ struct native_library_target : native_target {
     using base = native_target;
     path library;
     path implib;
+    std::optional<bool> shared_;
 
-    native_library_target(auto &&s, auto &&id) : base{s, id} {
-        library = binary_dir / "bin" / (string)name;
-        implib = binary_dir / "lib" / (string)name;
-        ::sw::visit(bs.os, [&](auto &&os) {
-            if constexpr (requires { os.shared_library_extension; }) {
-                library += os.shared_library_extension;
-            }
-            if constexpr (requires { os.shared_library_extension; }) {
-                implib += os.static_library_extension;
-            }
-        });
+    native_library_target(auto &&s, auto &&id, const std::optional<bool> &shared = {}) : base{s, id}, shared_{shared} {
+        if (!shared_) {
+            shared_ = bs.library_type.visit(
+                [](library_type::static_ &){
+                    return false;
+                },
+                [](library_type::shared &) {
+                    return true;
+                }, [](auto &) {
+                    return true; // for now shared if the default
+                }
+            );
+        }
+        if (is_shared()) {
+            library = binary_dir / "bin" / (string)name;
+            implib = binary_dir / "lib" / (string)name;
+            ::sw::visit(bs.os, [&](auto &&os) {
+                if constexpr (requires { os.shared_library_extension; }) {
+                    library += os.shared_library_extension;
+                }
+                if constexpr (requires { os.shared_library_extension; }) {
+                    implib += os.static_library_extension;
+                }
+            });
+        } else {
+            library = binary_dir / "lib" / (string)name;
+            ::sw::visit(bs.os, [&](auto &&os) {
+                if constexpr (requires { os.static_library_extension; }) {
+                    library += os.static_library_extension;
+                }
+            });
+        }
+    }
+    bool is_shared() const {
+        return *shared_;
+    }
+};
+struct native_shared_library_target : native_library_target {
+    native_shared_library_target(auto &&s, auto &&id) : base{s, id, true} {
+    }
+};
+struct native_static_library_target : native_library_target {
+    native_static_library_target(auto &&s, auto &&id) : base{s, id, false} {
     }
 };
 

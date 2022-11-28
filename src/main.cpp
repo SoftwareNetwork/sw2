@@ -67,6 +67,7 @@ auto zlib(solution &s) {
     tgt.source_dir /= ".sw4/1";
     tgt += ".*\\.[hc]"_r;
     tgt += "ZLIB_DLL"_def;
+    tgt.source_dir = tgt.source_dir.parent_path().parent_path();
 }
 
 int main1() {
@@ -78,10 +79,14 @@ int main1() {
         auto dbs = default_build_settings();
         is.settings.insert(dbs);
         dbs.arch = arch::x86{};
-        //is.settings.insert(dbs);
+        is.settings.insert(dbs);
+        dbs.arch = arch::arm64{};
+        is.settings.insert(dbs);
+        dbs.arch = arch::arm{};
+        is.settings.insert(dbs);
         s.add_input(is);
     };
-    //add(&self_build);
+    add(&self_build);
     add(&zlib);
     s.build();
 
