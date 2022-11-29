@@ -27,19 +27,19 @@ struct build_settings {
             return contains<T, Types...>();
         }
 
-        decltype(auto) visit(auto &&... args) {
-            return ::sw::visit(*this, FWD(args)...);
-        }
         decltype(auto) visit(auto &&... args) const {
             return ::sw::visit(*this, FWD(args)...);
+        }
+        decltype(auto) visit_any(auto &&...args) const {
+            return ::sw::visit_any(*this, FWD(args)...);
         }
         // name visit special or?
-        /*decltype(auto) visit(auto &&... args) {
+        decltype(auto) visit_no_special(auto &&... args) {
             return ::sw::visit(*this, FWD(args)..., [](any_setting &){});
         }
-        decltype(auto) visit(auto &&... args) const {
+        decltype(auto) visit_no_special(auto &&... args) const {
             return ::sw::visit(*this, FWD(args)..., [](const any_setting &){});
-        }*/
+        }
     };
 
     using os_type = special_variant<os::linux, os::macos, os::windows, os::mingw, os::cygwin, os::wasm>;

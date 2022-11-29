@@ -139,9 +139,17 @@ struct native_target : rule_target, target_data_storage {
     using base::add;
     using base::remove;
 
+    //
+    bool mt{false};
+
     native_target(auto &&s, auto &&id) : base{s, id} {
         *this += native_sources_rule{};
         init_compilers(s);
+
+        bs.os.visit_any([&](os::windows) {
+            *this += "-DSW_EXPORT=__declspec(dllexport)"_def;
+            *this += "-DSW_IMPORT=__declspec(dllimport)"_def;
+        });
     }
 
     void init_compilers(auto &&s) {
@@ -256,6 +264,9 @@ struct native_library_target : native_target {
 };
 struct native_shared_library_target : native_library_target {
     native_shared_library_target(auto &&s, auto &&id) : base{s, id, true} {
+        bs.os.visit_any([&](os::windows) {
+            *this += "_WINDLL"_def;
+        });
     }
 };
 struct native_static_library_target : native_library_target {

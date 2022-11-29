@@ -192,6 +192,7 @@ struct mmap_file {
             }
             operator>>(len);
             if (!has_room(len) || len == 0) {
+                offset -= sizeof(len);
                 return make_eof();
             }
             p.assign((const char8_t *)m.p + offset, (const char8_t *)m.p + offset + len);

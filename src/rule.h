@@ -45,6 +45,21 @@ struct native_sources_rule {
     }
 };
 
+auto format_log_record(auto &&tgt, auto &&second_part) {
+    string s = std::format("[{}]", (string)tgt.name);
+    tgt.bs.arch.visit([&](auto &&a) {
+        s += std::format("/[{}]", std::decay_t<decltype(a)>::name);
+    });
+    tgt.bs.library_type.visit([&](auto &&a) {
+        s += std::format("/[{}]", std::decay_t<decltype(a)>::name);
+    });
+    tgt.bs.build_type.visit_no_special([&](auto &&a) {
+        s += std::format("/[{}]", std::decay_t<decltype(a)>::short_name);
+    });
+    s += second_part;
+    return s;
+}
+
 struct cl_exe_rule {
     using target_type = binary_target_msvc;
 
@@ -54,36 +69,58 @@ struct cl_exe_rule {
 
     void operator()(auto &tgt) requires requires { tgt.compile_options; } {
         for (auto &&[f, rules] : tgt.processed_files) {
-            if (rules.contains(this)) {
+            if (rules.contains(this) || !(is_c_file(f) || is_cpp_file(f))) {
                 continue;
             }
-            if (is_c_file(f) || is_cpp_file(f)) {
-                auto out = tgt.binary_dir / "obj" / f.filename() += ".obj";
-                cl_exe_command c;
-                c.name_ = std::format("[{}]/{}", (string)tgt.name, normalize_path(f.lexically_relative(tgt.source_dir).string()));
-                c.old_includes = compiler.msvc.vs_version < package_version{16,7};
-                c += compiler.executable, "-nologo", "-c", "-std:c++latest", "-EHsc", f, "-Fo" + out.string();
-                auto add = [&](auto &&tgt) {
-                    for (auto &&d : tgt.definitions) {
-                        c += (string)d;
-                    }
-                    for (auto &&i : tgt.include_directories) {
-                        c += "-I", i;
-                    }
-                };
-                add(tgt.compile_options);
-                for (auto &&d : tgt.dependencies) {
-                    visit(*d.target, [&](auto &&v) {
-                        if constexpr (requires { v->definitions; }) {
-                            add(*v);
-                        }
-                    });
-                }
-                c.inputs.insert(f);
-                c.outputs.insert(out);
-                tgt.commands.emplace_back(std::move(c));
-                rules.insert(this);
+            cl_exe_command c;
+            c.working_directory = tgt.binary_dir / "obj";
+            auto out = tgt.binary_dir / "obj" / f.filename() += ".obj";
+            c.name_ = format_log_record(tgt, "/"s + normalize_path(f.lexically_relative(tgt.source_dir).string()));
+            c.old_includes = compiler.msvc.vs_version < package_version{16,7};
+            c += compiler.executable, "-nologo", "-c";
+            c += "-FS"; // ForceSynchronousPDBWrites
+            c += "-Zi"; // DebugInformationFormatType::ProgramDatabase
+            if (tgt.mt) {
+                c += "-MT";
+                c += "-MTd";
+            } else {
+                c += "-MD";
+                c += "-MDd";
             }
+            tgt.bs.build_type.visit_any(
+                [&](build_type::debug) {
+                    c += "-Od";
+                }, [&](build_type::release) {
+                    c += "-O2";
+                });
+            if (is_c_file(f)) {
+            }
+            if (is_cpp_file(f)) {
+                c += "-EHsc"; // enable for c too?
+                c += "-std:c++latest";
+            }
+            c += f, "-Fo" + out.string();
+            auto add = [&](auto &&tgt) {
+                for (auto &&d : tgt.definitions) {
+                    c += (string)d;
+                }
+                for (auto &&i : tgt.include_directories) {
+                    c += "-I", i;
+                }
+            };
+            add(tgt.compile_options);
+            for (auto &&d : tgt.dependencies) {
+                visit(*d.target, [&](auto &&v) {
+                    if constexpr (requires { v->definitions; }) {
+                        add(*v);
+                    }
+                });
+            }
+            c.inputs.insert(compiler.executable);
+            c.inputs.insert(f);
+            c.outputs.insert(out);
+            tgt.commands.emplace_back(std::move(c));
+            rules.insert(this);
         }
     }
 };
@@ -99,21 +136,24 @@ struct link_exe_rule {
         c.err = ""s;
         c.out = ""s;
         c += linker.executable, "-nologo";
-        // add "-NODEFAULTLIB"
+        //c += "-NODEFAULTLIB";
         if constexpr (requires { tgt.executable; }) {
-            c.name_ = std::format("[{}]{}", (string)tgt.name, tgt.executable.extension().string());
+            c.name_ = format_log_record(tgt, tgt.executable.extension().string());
             c += "-OUT:" + tgt.executable.string();
             c.outputs.insert(tgt.executable);
         } else if constexpr (requires { tgt.library; }) {
-            c.name_ = std::format("[{}]{}", (string)tgt.name, tgt.library.extension().string());
+            c.name_ = format_log_record(tgt, tgt.library.extension().string());
             c += "-DLL";
-            c += "-IMPLIB:" + tgt.implib.string();
+            if (!tgt.implib.empty()) {
+                c += "-IMPLIB:" + tgt.implib.string();
+                c.outputs.insert(tgt.implib);
+            }
             c += "-OUT:" + tgt.library.string();
-            c.outputs.insert(tgt.implib);
             c.outputs.insert(tgt.library);
         } else {
             SW_UNIMPLEMENTED;
         }
+        c.inputs.insert(linker.executable);
         for (auto &&[f, rules] : tgt.processed_files) {
             if (f.extension() == ".obj") {
                 c += f;

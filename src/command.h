@@ -396,21 +396,24 @@ struct command_storage {
         file_storage() {
             files.reserve(100'000);
         }
-        void add(auto &&f, auto &&files_stream) {
-            auto [_, inserted] = files.emplace(std::hash<path>()(f), f);
-            if (inserted) {
+        void add(auto &&f, auto &&files_stream, auto &&fs) {
+            auto [it, _] = files.emplace(std::hash<path>()(f), f);
+            auto [_2, inserted2] = fs.insert(&it->second);
+            if (inserted2) {
                 files_stream << f;
             }
         }
-        void read(auto &&files_stream) {
+        void read(auto &&files_stream, auto &&fs) {
             path f;
             while (files_stream && files_stream >> f) {
-                fs.files.emplace(std::hash<decltype(f)>()(f), f);
+                auto h = std::hash<decltype(f)>()(f);
+                auto [it,_] = files.emplace(h, f);
+                fs.insert(&it->second);
             }
         }
         outdated_reason is_outdated(hash_type fh, const time_point &command_time) const {
-            auto it = fs.files.find(fh);
-            if (it == fs.files.end()) {
+            auto it = global_fs.files.find(fh);
+            if (it == global_fs.files.end()) {
                 return not_recorded_file{};
             }
             return it->second.is_outdated(command_time);
@@ -421,7 +424,8 @@ struct command_storage {
 
     mmap_type f_commands, f_files;
     mmap_type::stream cmd_stream, files_stream;
-    static inline file_storage fs;
+    static inline file_storage global_fs;
+    std::unordered_set<file_storage::file*> fs;
     std::unordered_map<hash_type, command_data, hash_type::hasher> commands;
 
     command_storage() : command_storage{".", raw_tag{}} {}
@@ -447,7 +451,7 @@ struct command_storage {
         //f_commands.close();
         //f_commands.open(mmap_type::rw{});
 
-        fs.read(files_stream);
+        global_fs.read(files_stream, fs);
     }
 
     //
@@ -459,10 +463,29 @@ struct command_storage {
         auto cit = commands.find(h);
         if (cit == commands.end()) {
             return new_command{&cmd};
-            //std::cerr << "outdated: command is missing" << "\n";
         }
         for (auto &&f : cit->second.files) {
-            if (auto r = fs.is_outdated(f, cit->second.mtime); !std::holds_alternative<not_outdated>(r)) {
+            if (auto r = global_fs.is_outdated(f, cit->second.mtime); !std::holds_alternative<not_outdated>(r)) {
+                auto s = visit(r, [](not_outdated) {
+                    return string{};
+                    },
+                    [](new_command &) {
+                        return "new command"s;
+                    },
+                    [](new_file &f) {
+                        return "new file: "s + f.p->string();
+                    },
+                    [](not_recorded_file &) {
+                        return "not recorded file"s;
+                    },
+                    [](missing_file &f) {
+                        return "missing file: "s + f.p->string();
+                    },
+                    [](updated_file &f) {
+                        return "updated file: "s + f.p->string();
+                    }
+                );
+                //std::cout << "outdated: " << s << "\n";
                 return r;
             }
         }
@@ -472,7 +495,7 @@ struct command_storage {
         uint64_t n{0};
         auto ins = [&](auto &&v) {
             for (auto &&f : v) {
-                fs.add(f, files_stream);
+                global_fs.add(f, files_stream, fs);
             }
             n += v.size();
         };
@@ -487,7 +510,8 @@ struct command_storage {
         r << h << t << n;
         auto write_h = [&](auto &&v) {
             for (auto &&f : v) {
-                r << (uint64_t)std::hash<path>()(f);
+                auto h = (uint64_t)std::hash<path>()(f);
+                r << h;
             }
         };
         write_h(cmd.inputs);
@@ -521,10 +545,10 @@ struct io_command : raw_command {
         return always || cs && cs->outdated(*this);
     }
     void run(auto &&ex, auto &&cb) {
-        if (!outdated()) {
+        /*if (!outdated()) {
             cb();
             return;
-        }
+        }*/
         // use GetProcessTimes or similar for time
         start = clock::now();
         raw_command::run(ex, [&, cb](auto exit_code) {
@@ -808,10 +832,7 @@ struct command_executor {
             auto c = pending_commands.front();
             pending_commands.pop_front();
             visit(*c, [&](auto &&c) {
-                ++running_commands;
-                std::cout << std::format("[{}/{}] {}\n", ++command_id, external_commands.size(), c.name());
-                c.run(get_executor(), [&] {
-                    --running_commands;
+                auto run_dependents = [&]() {
                     for (auto &&d : c.dependents) {
                         visit(*(command *)d, [&](auto &&d1) {
                             if (!--d1.n_pending_dependencies) {
@@ -820,6 +841,16 @@ struct command_executor {
                             }
                         });
                     }
+                };
+                if (!c.outdated()) {
+                    return run_dependents();
+                }
+                ++running_commands;
+                auto pos = ceil(log10(external_commands.size()));
+                std::cout << "[" << std::setw(pos) << ++command_id << std::format("/{}] {}\n", external_commands.size(), c.name());
+                c.run(get_executor(), [&, run_dependents] {
+                    --running_commands;
+                    run_dependents();
                 });
             });
         }

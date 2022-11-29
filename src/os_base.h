@@ -92,15 +92,19 @@ namespace build_type {
 
 struct debug {
     static constexpr auto name = "debug"sv;
+    static constexpr auto short_name = "d"sv;
 };
 struct minimum_size_release {
     static constexpr auto name = "minimum_size_release"sv;
+    static constexpr auto short_name = "msr"sv;
 };
 struct release_with_debug_information {
     static constexpr auto name = "release_with_debug_information"sv;
+    static constexpr auto short_name = "rwdi"sv;
 };
 struct release {
     static constexpr auto name = "release"sv;
+    static constexpr auto short_name = "r"sv;
 };
 
 } // namespace build_type

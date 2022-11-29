@@ -77,13 +77,20 @@ int main1() {
     auto add = [&](auto f) {
         input_with_settings is{source_code_input{f}};
         auto dbs = default_build_settings();
-        is.settings.insert(dbs);
-        dbs.arch = arch::x86{};
-        is.settings.insert(dbs);
-        dbs.arch = arch::arm64{};
-        is.settings.insert(dbs);
-        dbs.arch = arch::arm{};
-        is.settings.insert(dbs);
+        auto set = [&]() {
+            dbs.arch = arch::x64{};
+            is.settings.insert(dbs);
+            dbs.arch = arch::x86{};
+            is.settings.insert(dbs);
+            dbs.arch = arch::arm64{};
+            is.settings.insert(dbs);
+            dbs.arch = arch::arm{};
+            is.settings.insert(dbs);
+        };
+        dbs.library_type = library_type::shared{};
+        set();
+        dbs.library_type = library_type::static_{};
+        set();
         s.add_input(is);
     };
     add(&self_build);
