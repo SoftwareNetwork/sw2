@@ -113,9 +113,11 @@ namespace library_type {
 
 struct static_ {
     static constexpr auto name = "static"sv;
+    static constexpr auto short_name = "st"sv;
 };
 struct shared {
     static constexpr auto name = "shared"sv;
+    static constexpr auto short_name = "sh"sv;
 };
 
 } // namespace library_type

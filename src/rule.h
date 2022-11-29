@@ -47,16 +47,19 @@ struct native_sources_rule {
 
 auto format_log_record(auto &&tgt, auto &&second_part) {
     string s = std::format("[{}]", (string)tgt.name);
+    string cfg = "/[";
     tgt.bs.arch.visit([&](auto &&a) {
-        s += std::format("/[{}]", std::decay_t<decltype(a)>::name);
+        cfg += std::format("{},", std::decay_t<decltype(a)>::name);
     });
     tgt.bs.library_type.visit([&](auto &&a) {
-        s += std::format("/[{}]", std::decay_t<decltype(a)>::name);
+        cfg += std::format("{},", std::decay_t<decltype(a)>::name); // short?
     });
     tgt.bs.build_type.visit_no_special([&](auto &&a) {
-        s += std::format("/[{}]", std::decay_t<decltype(a)>::short_name);
+        cfg += std::format("{},", std::decay_t<decltype(a)>::short_name);
     });
-    s += second_part;
+    cfg.resize(cfg.size() - 1);
+    cfg += "]";
+    s += cfg + second_part;
     return s;
 }
 

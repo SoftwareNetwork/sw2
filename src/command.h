@@ -824,20 +824,16 @@ struct command_executor {
     }
 
     void run_next() {
-        if (running_commands > maximum_running_commands) {
-            int a = 5;
-            a++;
-        }
         while (running_commands < maximum_running_commands && !pending_commands.empty()) {
             auto c = pending_commands.front();
             pending_commands.pop_front();
             visit(*c, [&](auto &&c) {
+                ++command_id;
                 auto run_dependents = [&]() {
                     for (auto &&d : c.dependents) {
                         visit(*(command *)d, [&](auto &&d1) {
                             if (!--d1.n_pending_dependencies) {
                                 pending_commands.push_back((command *)d);
-                                run_next();
                             }
                         });
                     }
@@ -847,10 +843,11 @@ struct command_executor {
                 }
                 ++running_commands;
                 auto pos = ceil(log10(external_commands.size()));
-                std::cout << "[" << std::setw(pos) << ++command_id << std::format("/{}] {}\n", external_commands.size(), c.name());
+                std::cout << "[" << std::setw(pos) << command_id << std::format("/{}] {}\n", external_commands.size(), c.name());
                 c.run(get_executor(), [&, run_dependents] {
                     --running_commands;
                     run_dependents();
+                    run_next();
                 });
             });
         }
