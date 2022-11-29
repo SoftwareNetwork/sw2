@@ -61,9 +61,11 @@ struct build_settings {
     c_compiler_type c_compiler;
     // make optional?
     unresolved_package_name c_stdlib; // can be mingw64 etc.
+    bool c_static_runtime;
     cpp_compiler_type cpp_compiler;
     // make optional?
     unresolved_package_name cpp_stdlib; // can be libc++ etc.
+    bool cpp_static_runtime;
     linker_type linker;
 
     auto for_each() const {

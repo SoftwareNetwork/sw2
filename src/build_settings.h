@@ -11,6 +11,8 @@ auto default_host_settings() {
     build_settings bs;
     bs.build_type = build_type::release{};
     bs.library_type = library_type::shared{};
+    bs.c_static_runtime = false;
+    bs.cpp_static_runtime = false;
 
 #if defined(__x86_64__) || defined(_M_X64)
     bs.arch = arch::x64{};

@@ -139,9 +139,6 @@ struct native_target : rule_target, target_data_storage {
     using base::add;
     using base::remove;
 
-    //
-    bool mt{false};
-
     native_target(auto &&s, auto &&id) : base{s, id} {
         *this += native_sources_rule{};
         init_compilers(s);

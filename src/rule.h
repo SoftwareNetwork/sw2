@@ -81,14 +81,25 @@ struct cl_exe_rule {
             c.name_ = format_log_record(tgt, "/"s + normalize_path(f.lexically_relative(tgt.source_dir).string()));
             c.old_includes = compiler.msvc.vs_version < package_version{16,7};
             c += compiler.executable, "-nologo", "-c";
+            c.inputs.insert(compiler.executable);
             c += "-FS"; // ForceSynchronousPDBWrites
             c += "-Zi"; // DebugInformationFormatType::ProgramDatabase
-            if (tgt.mt) {
-                c += "-MT";
-                c += "-MTd";
+            if (tgt.bs.cpp_static_runtime) {
+                tgt.bs.build_type.visit_any(
+                    [&](build_type::debug) {
+                        c += "-MTd";
+                    },
+                    [&](build_type::release) {
+                        c += "-MT";
+                    });
             } else {
-                c += "-MD";
-                c += "-MDd";
+                tgt.bs.build_type.visit_any(
+                    [&](build_type::debug) {
+                        c += "-MDd";
+                    },
+                    [&](build_type::release) {
+                        c += "-MD";
+                    });
             }
             tgt.bs.build_type.visit_any(
                 [&](build_type::debug) {
@@ -119,7 +130,6 @@ struct cl_exe_rule {
                     }
                 });
             }
-            c.inputs.insert(compiler.executable);
             c.inputs.insert(f);
             c.outputs.insert(out);
             tgt.commands.emplace_back(std::move(c));
@@ -139,7 +149,8 @@ struct link_exe_rule {
         c.err = ""s;
         c.out = ""s;
         c += linker.executable, "-nologo";
-        //c += "-NODEFAULTLIB";
+        c.inputs.insert(linker.executable);
+        c += "-NODEFAULTLIB";
         if constexpr (requires { tgt.executable; }) {
             c.name_ = format_log_record(tgt, tgt.executable.extension().string());
             c += "-OUT:" + tgt.executable.string();
@@ -156,7 +167,13 @@ struct link_exe_rule {
         } else {
             SW_UNIMPLEMENTED;
         }
-        c.inputs.insert(linker.executable);
+        tgt.bs.build_type.visit_any(
+            [&](build_type::debug) {
+                c += "-DEBUG:FULL";
+            },
+            [&](build_type::release) {
+                c += "-DEBUG:NONE";
+            });
         for (auto &&[f, rules] : tgt.processed_files) {
             if (f.extension() == ".obj") {
                 c += f;

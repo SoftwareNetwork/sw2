@@ -73,7 +73,45 @@ struct msvc_instance {
             // com.Microsoft.VisualStudio.VC.STL?
             auto &t = s.add<binary_library_target>(package_name{"com.Microsoft.VisualStudio.VC.libcpp"s, version()});
             t.include_directories.push_back(root / "include");
-            t.link_directories.push_back(root / "lib" / get_windows_arch(t));
+            auto libdir = root / "lib" / get_windows_arch(t);
+            t.link_directories.push_back(libdir);
+            auto add_if_exists = [&](auto &&fn) {
+                if (fs::exists(libdir / fn)) {
+                    t.link_libraries.push_back(fn);
+                }
+            };
+            add_if_exists("OLDNAMES.LIB");
+            add_if_exists("LEGACY_STDIO_DEFINITIONS.LIB");
+            add_if_exists("LEGACY_STDIO_WIDE_SPECIFIERS.LIB");
+            if (t.bs.cpp_static_runtime) {
+                t.bs.build_type.visit_any(
+                    [&](build_type::debug) {
+                        t.link_libraries.push_back("LIBCONCRTD.LIB");
+                        t.link_libraries.push_back("LIBCPMTD.LIB");
+                        t.link_libraries.push_back("LIBCMTD.LIB");
+                        t.link_libraries.push_back("LIBVCRUNTIMED.LIB");
+                    },
+                    [&](build_type::release) {
+                        t.link_libraries.push_back("LIBCONCRT.LIB");
+                        t.link_libraries.push_back("LIBCPMT.LIB");
+                        t.link_libraries.push_back("LIBCMT.LIB");
+                        t.link_libraries.push_back("LIBVCRUNTIME.LIB");
+                    });
+            } else {
+                t.bs.build_type.visit_any(
+                    [&](build_type::debug) {
+                        t.link_libraries.push_back("CONCRTD.LIB");
+                        t.link_libraries.push_back("MSVCPRTD.LIB");
+                        t.link_libraries.push_back("MSVCRTD.LIB");
+                        t.link_libraries.push_back("VCRUNTIMED.LIB");
+                    },
+                    [&](build_type::release) {
+                        t.link_libraries.push_back("CONCRT.LIB");
+                        t.link_libraries.push_back("MSVCPRT.LIB");
+                        t.link_libraries.push_back("MSVCRT.LIB");
+                        t.link_libraries.push_back("VCRUNTIME.LIB");
+                    });
+            }
         }});
     }
     //auto root() const { return install_location / "VC" / "Tools" / "MSVC"; }
@@ -137,6 +175,9 @@ struct win_kit {
     std::wstring idir_subversion;
     std::wstring ldir_subversion;
 
+    //string debug_lib;
+    //string release_lib;
+
     std::vector<std::wstring> idirs; // additional idirs
     bool without_ldir = false; // when there's not libs
 
@@ -158,6 +199,27 @@ struct win_kit {
                                       t.include_directories.push_back(idir / i);
                                   }
                                   t.link_directories.push_back(libdir);
+                                  if (name == "ucrt") {
+                                      if (t.bs.c_static_runtime) {
+                                          t.bs.build_type.visit_any(
+                                              [&](build_type::debug) {
+                                                  t.link_libraries.push_back("LIBUCRTD.LIB");
+                                              },
+                                              [&](build_type::release) {
+                                                  t.link_libraries.push_back("LIBUCRT.LIB");
+                                              });
+                                      } else {
+                                          t.bs.build_type.visit_any(
+                                              [&](build_type::debug) {
+                                                  t.link_libraries.push_back("UCRTD.LIB");
+                                              },
+                                              [&](build_type::release) {
+                                                  t.link_libraries.push_back("UCRT.LIB");
+                                              });
+                                      }
+                                  } else if (name == "um") {
+                                      t.link_libraries.push_back("KERNEL32.LIB");
+                                  }
                               } else if (without_ldir) {
                                   t.include_directories.push_back(idir / name);
                                   for (auto &i : idirs) {
@@ -389,9 +451,9 @@ struct win_sdk_info {
             wk.idir_subversion = v;
             wk.ldir_subversion = v;
             wk.idirs.push_back(L"shared");
+            //wk.debug_lib = "KERNEL32.LIB";
+            //wk.release_lib = "KERNEL32.LIB";
             wk.add(s, v);
-            //for (auto t : wk.add(v))
-                //t->public_ts["properties"]["6"]["system_link_libraries"].push_back("KERNEL32.LIB");
         }
 
         // km
