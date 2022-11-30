@@ -57,6 +57,12 @@ auto format_log_record(auto &&tgt, auto &&second_part) {
     tgt.bs.build_type.visit_no_special([&](auto &&a) {
         cfg += std::format("{},", std::decay_t<decltype(a)>::short_name);
     });
+    if (tgt.bs.cpp_static_runtime) {
+        cfg += "cppmt,";
+    }
+    if (tgt.bs.c_static_runtime) {
+        cfg += "cmt,";
+    }
     cfg.resize(cfg.size() - 1);
     cfg += "]";
     s += cfg + second_part;
@@ -84,23 +90,6 @@ struct cl_exe_rule {
             c.inputs.insert(compiler.executable);
             c += "-FS"; // ForceSynchronousPDBWrites
             c += "-Zi"; // DebugInformationFormatType::ProgramDatabase
-            if (tgt.bs.cpp_static_runtime) {
-                tgt.bs.build_type.visit_any(
-                    [&](build_type::debug) {
-                        c += "-MTd";
-                    },
-                    [&](build_type::release) {
-                        c += "-MT";
-                    });
-            } else {
-                tgt.bs.build_type.visit_any(
-                    [&](build_type::debug) {
-                        c += "-MDd";
-                    },
-                    [&](build_type::release) {
-                        c += "-MD";
-                    });
-            }
             tgt.bs.build_type.visit_any(
                 [&](build_type::debug) {
                     c += "-Od";
@@ -108,10 +97,45 @@ struct cl_exe_rule {
                     c += "-O2";
                 });
             if (is_c_file(f)) {
+                if (tgt.bs.c_static_runtime) {
+                    tgt.bs.build_type.visit_any(
+                        [&](build_type::debug) {
+                            c += "-MTd";
+                        },
+                        [&](build_type::release) {
+                            c += "-MT";
+                        });
+                } else {
+                    tgt.bs.build_type.visit_any(
+                        [&](build_type::debug) {
+                            c += "-MDd";
+                        },
+                        [&](build_type::release) {
+                            c += "-MD";
+                        });
+                }
             }
             if (is_cpp_file(f)) {
                 c += "-EHsc"; // enable for c too?
                 c += "-std:c++latest";
+
+                if (tgt.bs.cpp_static_runtime) {
+                    tgt.bs.build_type.visit_any(
+                        [&](build_type::debug) {
+                            c += "-MTd";
+                        },
+                        [&](build_type::release) {
+                            c += "-MT";
+                        });
+                } else {
+                    tgt.bs.build_type.visit_any(
+                        [&](build_type::debug) {
+                            c += "-MDd";
+                        },
+                        [&](build_type::release) {
+                            c += "-MD";
+                        });
+                }
             }
             c += f, "-Fo" + out.string();
             auto add = [&](auto &&tgt) {
@@ -137,6 +161,62 @@ struct cl_exe_rule {
         }
     }
 };
+struct lib_exe_rule {
+    using target_type = binary_target;
+
+    target_type &librarian;
+
+    lib_exe_rule(target_uptr &t) : librarian{*std::get<uptr<target_type>>(t)} {
+    }
+
+    void operator()(auto &tgt) requires requires { tgt.library; } {
+        io_command c;
+        c.err = ""s;
+        c.out = ""s;
+        c += librarian.executable, "-nologo";
+        c.inputs.insert(librarian.executable);
+        c.name_ = format_log_record(tgt, tgt.library.extension().string());
+        c += "-OUT:" + tgt.library.string();
+        c.outputs.insert(tgt.library);
+        for (auto &&[f, rules] : tgt.processed_files) {
+            if (f.extension() == ".obj") {
+                c += f;
+                c.inputs.insert(f);
+                rules.insert(this);
+            }
+        }
+        /*if (!static_) {
+            c += "-NODEFAULTLIB";
+            tgt.bs.build_type.visit_any(
+                [&](build_type::debug) {
+                    c += "-DEBUG:FULL";
+                },
+                [&](build_type::release) {
+                    c += "-DEBUG:NONE";
+                });
+            auto add = [&](auto &&tgt) {
+                for (auto &&i : tgt.link_directories) {
+                    c += "-LIBPATH:" + i.string();
+                }
+                for (auto &&d : tgt.link_libraries) {
+                    c += d;
+                }
+                for (auto &&d : tgt.system_link_libraries) {
+                    c += d;
+                }
+            };
+            add(tgt.link_options);
+            for (auto &&d : tgt.dependencies) {
+                visit(*d.target, [&](auto &&v) {
+                    if constexpr (requires { v->link_directories; }) {
+                        add(*v);
+                    }
+                });
+            }
+        }*/
+        tgt.commands.emplace_back(std::move(c));
+    }
+};
 struct link_exe_rule {
     using target_type = binary_target;
 
@@ -150,15 +230,14 @@ struct link_exe_rule {
         c.out = ""s;
         c += linker.executable, "-nologo";
         c.inputs.insert(linker.executable);
-        c += "-NODEFAULTLIB";
         if constexpr (requires { tgt.executable; }) {
             c.name_ = format_log_record(tgt, tgt.executable.extension().string());
             c += "-OUT:" + tgt.executable.string();
             c.outputs.insert(tgt.executable);
         } else if constexpr (requires { tgt.library; }) {
             c.name_ = format_log_record(tgt, tgt.library.extension().string());
-            c += "-DLL";
             if (!tgt.implib.empty()) {
+                c += "-DLL";
                 c += "-IMPLIB:" + tgt.implib.string();
                 c.outputs.insert(tgt.implib);
             }
@@ -167,13 +246,6 @@ struct link_exe_rule {
         } else {
             SW_UNIMPLEMENTED;
         }
-        tgt.bs.build_type.visit_any(
-            [&](build_type::debug) {
-                c += "-DEBUG:FULL";
-            },
-            [&](build_type::release) {
-                c += "-DEBUG:NONE";
-            });
         for (auto &&[f, rules] : tgt.processed_files) {
             if (f.extension() == ".obj") {
                 c += f;
@@ -181,6 +253,14 @@ struct link_exe_rule {
                 rules.insert(this);
             }
         }
+        c += "-NODEFAULTLIB";
+        tgt.bs.build_type.visit_any(
+            [&](build_type::debug) {
+                c += "-DEBUG:FULL";
+            },
+            [&](build_type::release) {
+                c += "-DEBUG:NONE";
+            });
         auto add = [&](auto &&tgt) {
             for (auto &&i : tgt.link_directories) {
                 c += "-LIBPATH:" + i.string();

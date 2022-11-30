@@ -49,6 +49,7 @@ struct build_settings {
     using library_type_type = special_variant<library_type::static_, library_type::shared>;
     using c_compiler_type = special_variant<c_compiler::clang, c_compiler::gcc, c_compiler::msvc>;
     using cpp_compiler_type = special_variant<cpp_compiler::clang, cpp_compiler::gcc, cpp_compiler::msvc>;
+    using librarian_type = special_variant<librarian::msvc>;
     using linker_type = special_variant<linker::msvc>;
 
     os_type os;
@@ -60,12 +61,13 @@ struct build_settings {
     // move under cpp.* (lang.*) struct?
     c_compiler_type c_compiler;
     // make optional?
-    unresolved_package_name c_stdlib; // can be mingw64 etc.
+    std::vector<unresolved_package_name> c_stdlib; // can be mingw64 etc.
     bool c_static_runtime;
     cpp_compiler_type cpp_compiler;
     // make optional?
     unresolved_package_name cpp_stdlib; // can be libc++ etc.
     bool cpp_static_runtime;
+    librarian_type librarian;
     linker_type linker;
 
     auto for_each() const {

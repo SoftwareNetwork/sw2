@@ -32,9 +32,11 @@ auto default_host_settings() {
     bs.kernel_lib = unresolved_package_name{"com.Microsoft.Windows.SDK.um"s};
     if (get_msvc_detector().exists()) {
         bs.c_compiler = c_compiler::msvc{}; // switch to gcc-12+
-        bs.c_stdlib = unresolved_package_name{"com.Microsoft.Windows.SDK.ucrt"s};
+        bs.c_stdlib.emplace_back("com.Microsoft.Windows.SDK.ucrt"s);
+        bs.c_stdlib.emplace_back("com.Microsoft.VisualStudio.VC.libc"s);
         bs.cpp_compiler = cpp_compiler::msvc{}; // switch to gcc-12+
         bs.cpp_stdlib = unresolved_package_name{"com.Microsoft.VisualStudio.VC.libcpp"s};
+        bs.librarian = librarian::msvc{}; // switch to gcc-12+
         bs.linker = linker::msvc{}; // switch to gcc-12+
     } else {
         SW_UNIMPLEMENTED;

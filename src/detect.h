@@ -60,6 +60,14 @@ struct msvc_instance {
             t.executable = root / "bin" / ("Host"s + get_windows_arch(s.host_settings())) / get_windows_arch(t) / "cl.exe";
         }});
     }
+    auto lib_target(auto &&s) const {
+        s.add_entry_point(
+            package_name{"com.Microsoft.VisualStudio.VC.lib"s, version()}, source_code_input{[&](decltype(s) &s) {
+                auto &t = s.add<binary_target>(package_name{"com.Microsoft.VisualStudio.VC.lib"s, version()});
+                t.executable =
+                    root / "bin" / ("Host"s + get_windows_arch(s.host_settings())) / get_windows_arch(t) / "lib.exe";
+            }});
+    }
     auto link_target(auto &&s) const {
         s.add_entry_point(package_name{"com.Microsoft.VisualStudio.VC.link"s, version()}, source_code_input{[&](decltype(s) &s) {
             auto &t = s.add<binary_target>(package_name{"com.Microsoft.VisualStudio.VC.link"s, version()});
@@ -69,6 +77,44 @@ struct msvc_instance {
     auto vcruntime_target(auto &&s) const {
     }
     auto stdlib_target(auto &&s) const {
+        s.add_entry_point(
+            package_name{"com.Microsoft.VisualStudio.VC.libc"s, version()}, source_code_input{[&](decltype(s) &s) {
+                // com.Microsoft.VisualStudio.VC.STL?
+                auto &t =
+                    s.add<binary_library_target>(package_name{"com.Microsoft.VisualStudio.VC.libc"s, version()});
+                t.include_directories.push_back(root / "include");
+                auto libdir = root / "lib" / get_windows_arch(t);
+                t.link_directories.push_back(libdir);
+                auto add_if_exists = [&](auto &&fn) {
+                    if (fs::exists(libdir / fn)) {
+                        t.link_libraries.push_back(fn);
+                    }
+                };
+                add_if_exists("OLDNAMES.LIB");
+                add_if_exists("LEGACY_STDIO_DEFINITIONS.LIB");
+                add_if_exists("LEGACY_STDIO_WIDE_SPECIFIERS.LIB");
+                if (t.bs.c_static_runtime) {
+                    t.bs.build_type.visit_any(
+                        [&](build_type::debug) {
+                            t.link_libraries.push_back("LIBCMTD.LIB");
+                            t.link_libraries.push_back("LIBVCRUNTIMED.LIB");
+                        },
+                        [&](build_type::release) {
+                            t.link_libraries.push_back("LIBCMT.LIB");
+                            t.link_libraries.push_back("LIBVCRUNTIME.LIB");
+                        });
+                } else {
+                    t.bs.build_type.visit_any(
+                        [&](build_type::debug) {
+                            t.link_libraries.push_back("MSVCRTD.LIB");
+                            t.link_libraries.push_back("VCRUNTIMED.LIB");
+                        },
+                        [&](build_type::release) {
+                            t.link_libraries.push_back("MSVCRT.LIB");
+                            t.link_libraries.push_back("VCRUNTIME.LIB");
+                        });
+                }
+            }});
         s.add_entry_point(package_name{"com.Microsoft.VisualStudio.VC.libcpp"s, version()}, source_code_input{[&](decltype(s) &s) {
             // com.Microsoft.VisualStudio.VC.STL?
             auto &t = s.add<binary_library_target>(package_name{"com.Microsoft.VisualStudio.VC.libcpp"s, version()});
@@ -80,36 +126,28 @@ struct msvc_instance {
                     t.link_libraries.push_back(fn);
                 }
             };
-            add_if_exists("OLDNAMES.LIB");
-            add_if_exists("LEGACY_STDIO_DEFINITIONS.LIB");
-            add_if_exists("LEGACY_STDIO_WIDE_SPECIFIERS.LIB");
+            //add_if_exists("OLDNAMES.LIB");
+            //add_if_exists("LEGACY_STDIO_DEFINITIONS.LIB");
+            //add_if_exists("LEGACY_STDIO_WIDE_SPECIFIERS.LIB");
             if (t.bs.cpp_static_runtime) {
                 t.bs.build_type.visit_any(
                     [&](build_type::debug) {
                         t.link_libraries.push_back("LIBCONCRTD.LIB");
                         t.link_libraries.push_back("LIBCPMTD.LIB");
-                        t.link_libraries.push_back("LIBCMTD.LIB");
-                        t.link_libraries.push_back("LIBVCRUNTIMED.LIB");
                     },
                     [&](build_type::release) {
                         t.link_libraries.push_back("LIBCONCRT.LIB");
                         t.link_libraries.push_back("LIBCPMT.LIB");
-                        t.link_libraries.push_back("LIBCMT.LIB");
-                        t.link_libraries.push_back("LIBVCRUNTIME.LIB");
                     });
             } else {
                 t.bs.build_type.visit_any(
                     [&](build_type::debug) {
                         t.link_libraries.push_back("CONCRTD.LIB");
                         t.link_libraries.push_back("MSVCPRTD.LIB");
-                        t.link_libraries.push_back("MSVCRTD.LIB");
-                        t.link_libraries.push_back("VCRUNTIMED.LIB");
                     },
                     [&](build_type::release) {
                         t.link_libraries.push_back("CONCRT.LIB");
                         t.link_libraries.push_back("MSVCPRT.LIB");
-                        t.link_libraries.push_back("MSVCRT.LIB");
-                        t.link_libraries.push_back("VCRUNTIME.LIB");
                     });
             }
         }});
@@ -118,6 +156,7 @@ struct msvc_instance {
 
     void add(auto &&s) {
         cl_target(s);
+        lib_target(s);
         link_target(s);
         stdlib_target(s);
     }

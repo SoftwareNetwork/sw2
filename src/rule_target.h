@@ -162,6 +162,9 @@ struct native_target : rule_target, target_data_storage {
             visit_any(bs.cpp_compiler, [&](cpp_compiler::msvc &c) {
                 std::call_once(once, load);
             });
+            visit_any(bs.linker, [&](librarian::msvc &c) {
+                std::call_once(once, load);
+            });
             visit_any(bs.linker, [&](linker::msvc &c) {
                 std::call_once(once, load);
             });
@@ -170,7 +173,9 @@ struct native_target : rule_target, target_data_storage {
 
         // order
         add(s.load_target(bs.cpp_stdlib, bs));
-        add(s.load_target(bs.c_stdlib, bs));
+        for (auto &&l : bs.c_stdlib) {
+            add(s.load_target(l, bs));
+        }
         add(s.load_target(bs.kernel_lib, bs));
 
         ::sw::visit(
@@ -187,15 +192,6 @@ struct native_target : rule_target, target_data_storage {
             [&](cpp_compiler::msvc &c) {
                 auto &t = s.load_target(c.package, bs);
                 add(cpp_compiler::msvc::rule_type{t});
-            },
-            [](auto &) {
-                SW_UNIMPLEMENTED;
-            });
-        ::sw::visit(
-            bs.linker,
-            [&](linker::msvc &c) {
-                auto &t = s.load_target(c.package, bs);
-                add(linker::msvc::rule_type{t});
             },
             [](auto &) {
                 SW_UNIMPLEMENTED;
@@ -225,10 +221,10 @@ struct native_library_target : native_target {
     native_library_target(auto &&s, auto &&id, const std::optional<bool> &shared = {}) : base{s, id}, shared_{shared} {
         if (!shared_) {
             shared_ = bs.library_type.visit(
-                [](library_type::static_ &){
+                [](const library_type::static_ &){
                     return false;
                 },
-                [](library_type::shared &) {
+                [](const library_type::shared &) {
                     return true;
                 }, [](auto &) {
                     return true; // for now shared if the default
@@ -236,6 +232,16 @@ struct native_library_target : native_target {
             );
         }
         if (is_shared()) {
+            ::sw::visit(
+                bs.linker,
+                [&](linker::msvc &c) {
+                    auto &t = s.load_target(c.package, bs);
+                    add(linker::msvc::rule_type{t});
+                },
+                [](auto &) {
+                    SW_UNIMPLEMENTED;
+                });
+
             library = binary_dir / "bin" / (string)name;
             implib = binary_dir / "lib" / (string)name;
             ::sw::visit(bs.os, [&](auto &&os) {
@@ -246,7 +252,20 @@ struct native_library_target : native_target {
                     implib += os.static_library_extension;
                 }
             });
+            bs.os.visit_any([&](os::windows) {
+                *this += "_WINDLL"_def;
+            });
         } else {
+            ::sw::visit(
+                bs.librarian,
+                [&](librarian::msvc &c) {
+                    auto &t = s.load_target(c.package, bs);
+                    add(librarian::msvc::rule_type{t});
+                },
+                [](auto &) {
+                    SW_UNIMPLEMENTED;
+                });
+
             library = binary_dir / "lib" / (string)name;
             ::sw::visit(bs.os, [&](auto &&os) {
                 if constexpr (requires { os.static_library_extension; }) {
@@ -261,9 +280,6 @@ struct native_library_target : native_target {
 };
 struct native_shared_library_target : native_library_target {
     native_shared_library_target(auto &&s, auto &&id) : base{s, id, true} {
-        bs.os.visit_any([&](os::windows) {
-            *this += "_WINDLL"_def;
-        });
     }
 };
 struct native_static_library_target : native_library_target {

@@ -18,7 +18,7 @@ struct raw_command {
     path working_directory;
     std::map<string, string> environment;
 
-    // exit_code
+    int exit_code{-1};
     // pid, pidfd
 
     // stdin,stdout,stderr
@@ -91,7 +91,9 @@ struct raw_command {
         si.StartupInfo.cb = sizeof(si);
         PROCESS_INFORMATION pi = {0};
         LPVOID env = 0;
-        int inherit_handles = 1; // must be 1
+        int inherit_handles = 1; // must be 1, we pass handles in proc attributes
+        std::vector<HANDLE> handles;
+        handles.reserve(10);
 
         flags |= NORMAL_PRIORITY_CLASS;
         flags |= CREATE_UNICODE_ENVIRONMENT;
@@ -119,6 +121,33 @@ struct raw_command {
         };
         setup_stream(out, si.StartupInfo.hStdOutput, STD_OUTPUT_HANDLE, pout);
         setup_stream(err, si.StartupInfo.hStdError, STD_ERROR_HANDLE, perr);
+
+        auto add_handle = [&](auto &&h) {
+            if (h) {
+                handles.push_back(h);
+            }
+        };
+        add_handle(si.StartupInfo.hStdInput);
+        add_handle(si.StartupInfo.hStdOutput);
+        add_handle(si.StartupInfo.hStdError);
+        SIZE_T size = 0;
+        InitializeProcThreadAttributeList(0, 1, 0, &size);
+        if (GetLastError() != ERROR_INSUFFICIENT_BUFFER) {
+            throw std::runtime_error{"InitializeProcThreadAttributeList()"};
+        }
+        si.lpAttributeList = (LPPROC_THREAD_ATTRIBUTE_LIST)HeapAlloc(GetProcessHeap(), 0, size);
+        scope_exit seh{[&] {
+            HeapFree(GetProcessHeap(), 0, si.lpAttributeList);
+        }};
+        if (!si.lpAttributeList) {
+            throw std::runtime_error{"cannot alloc GetProcessHeap()"};
+        }
+        WINAPI_CALL(InitializeProcThreadAttributeList(si.lpAttributeList, 1, 0, &size));
+        scope_exit sel{[&]{
+            DeleteProcThreadAttributeList(si.lpAttributeList);
+        }};
+        WINAPI_CALL(UpdateProcThreadAttribute(si.lpAttributeList, 0, PROC_THREAD_ATTRIBUTE_HANDLE_LIST, handles.data(),
+                                              handles.size() * sizeof(HANDLE), 0, 0));
 
         WINAPI_CALL(CreateProcessW(0, printw().data(), 0, 0,
             inherit_handles, flags, env,
@@ -255,6 +284,7 @@ struct raw_command {
                 int exit_code = WEXITSTATUS(wstatus);
                 cb(exit_code);
             }
+            // check for signal
         });
 #endif
     }
@@ -269,10 +299,9 @@ struct raw_command {
 #endif
     }
     void run(auto &&ex) {
-        run(ex, [](auto exit_code) {
+        run(ex, [&](auto exit_code) {
             if (exit_code) {
-                throw std::runtime_error(
-                    "process exit code: " + std::to_string(exit_code));
+                throw std::runtime_error{get_error_message(exit_code)};
             }
         });
     }
@@ -294,6 +323,26 @@ struct raw_command {
 
     void operator>(const path &p) {
         out = p;
+    }
+
+    string get_error_message() {
+        return get_error_message(exit_code);
+    }
+    string get_error_message(int exit_code) {
+        if (!exit_code) {
+            return {};
+        }
+        string t;
+        if (auto e = std::get_if<string>(&err); e && !e->empty()) {
+            t = *e;
+        } else if (auto e = std::get_if<string>(&out); e && !e->empty()) {
+            t = *e;
+        } else if (!out_text.empty()) {
+            t = out_text;
+        }
+        return
+            // format("process exit code: {}\nerror: {}", exit_code, std::get<string>(err))
+            "process exit code: " + std::to_string(exit_code) + "\nerror:\n" + t + "";
     }
 };
 
@@ -553,22 +602,8 @@ struct io_command : raw_command {
         start = clock::now();
         raw_command::run(ex, [&, cb](auto exit_code) {
             end = clock::now();
-            if (exit_code) {
-                string t;
-                if (auto e = std::get_if<string>(&err); e && !e->empty()) {
-                    t = *e;
-                } else if (auto e = std::get_if<string>(&out); e && !e->empty()) {
-                    t = *e;
-                } else if (!out_text.empty()) {
-                    t = out_text;
-                }
-                throw std::runtime_error(
-                    //format("process exit code: {}\nerror: {}", exit_code, std::get<string>(err))
-                    "process exit code: " + std::to_string(exit_code) + "\nerror: " + t + ""
-                );
-            }
-            cb();
-            if (cs) {
+            cb(exit_code);
+            if (exit_code == 0 && cs) {
                 cs->add(*this);
             }
         });
@@ -597,6 +632,16 @@ struct io_command : raw_command {
             return s;
         }
         return print();
+    }
+
+    string get_error_message() {
+        return get_error_message(exit_code);
+    }
+    string get_error_message(int exit_code) {
+        if (!exit_code) {
+            return {};
+        }
+        return "command failed: " + name() + ":\n" + raw_command::get_error_message(exit_code);
     }
 };
 
@@ -689,10 +734,11 @@ struct cl_exe_command : io_command {
                     arguments.pop_back();
                     arguments.pop_back();
                 }};
-                io_command::run(ex, [&, depsfile, add_deps, cb] {
-                    cb(); // before processing (start another process)
+                io_command::run(ex, [&, depsfile, add_deps, cb](int exit_code) {
+                    cb(exit_code); // before processing (start another process)
 
-                    if (start == decltype(start){}) {
+                    bool time_not_set = start == decltype(start){};
+                    if (exit_code || time_not_set) {
                         return;
                     }
 
@@ -705,10 +751,11 @@ struct cl_exe_command : io_command {
                 scope_exit se{[&] {
                     arguments.pop_back();
                 }};
-                io_command::run(ex, [&, add_deps, cb] {
-                    cb(); // before processing (start another process)
+                io_command::run(ex, [&, add_deps, cb](int exit_code) {
+                    cb(exit_code); // before processing (start another process)
 
-                    if (start == decltype(start){}) {
+                    bool time_not_set = start == decltype(start){};
+                    if (exit_code || time_not_set) {
                         return;
                     }
 
@@ -804,6 +851,8 @@ struct command_executor {
     executor *ex_external{nullptr};
     std::vector<command*> external_commands;
     int command_id{0};
+    std::vector<command*> errors;
+    int ignore_errors{0};
 
     command_executor() {
         init();
@@ -822,12 +871,14 @@ struct command_executor {
     auto &get_executor() {
         return ex_external ? *ex_external : ex;
     }
-
+    bool is_stopped() const {
+        return ignore_errors < errors.size();
+    }
     void run_next() {
-        while (running_commands < maximum_running_commands && !pending_commands.empty()) {
-            auto c = pending_commands.front();
+        while (running_commands < maximum_running_commands && !pending_commands.empty() && !is_stopped()) {
+            auto cmd = pending_commands.front();
             pending_commands.pop_front();
-            visit(*c, [&](auto &&c) {
+            visit(*cmd, [&](auto &&c) {
                 ++command_id;
                 auto run_dependents = [&]() {
                     for (auto &&d : c.dependents) {
@@ -844,9 +895,14 @@ struct command_executor {
                 ++running_commands;
                 auto pos = ceil(log10(external_commands.size()));
                 std::cout << "[" << std::setw(pos) << command_id << std::format("/{}] {}\n", external_commands.size(), c.name());
-                c.run(get_executor(), [&, run_dependents] {
+                c.run(get_executor(), [&, run_dependents, cmd](int exit_code) {
                     --running_commands;
-                    run_dependents();
+                    c.exit_code = exit_code;
+                    if (exit_code) {
+                        errors.push_back(cmd);
+                    } else {
+                        run_dependents();
+                    }
                     run_next();
                 });
             });
@@ -876,6 +932,17 @@ struct command_executor {
         }
         run_next();
         get_executor().run();
+
+        if (!errors.empty()) {
+            string t;
+            for (auto &&cmd : errors) {
+                visit(*cmd, [&](auto &&c) {
+                    t += c.get_error_message() + "\n";
+                });
+            }
+            t += "Total errors: " + std::to_string(errors.size());
+            throw std::runtime_error{t};
+        }
     }
 
     void operator+=(std::vector<command> &commands) {

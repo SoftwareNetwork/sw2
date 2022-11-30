@@ -56,14 +56,16 @@ auto zlib(solution &s) {
     auto &tgt = s.add<native_library_target>(package_name{"zlib"});
     tgt.source_dir /= ".sw4/1";
     tgt += ".*\\.[hc]"_r;
-    tgt += "ZLIB_DLL"_def;
+    if (tgt.is<library_type::shared>()) {
+        tgt += "ZLIB_DLL"_def;
+    }
     tgt.source_dir = tgt.source_dir.parent_path().parent_path();
 }
 
 int main1() {
     solution s;
     //s.add_input(source_code_input{&build_some_package});
-    s.add_input(source_code_input{&self_build});
+    //s.add_input(source_code_input{&self_build});
     auto add = [&](auto f) {
         input_with_settings is{source_code_input{f}};
         auto dbs = default_build_settings();
@@ -83,14 +85,20 @@ int main1() {
             dbs.library_type = library_type::static_{};
             set1();
         };
-        dbs.build_type = build_type::debug{};
-        set2();
-        dbs.build_type = build_type::release{};
-        set2();
+        auto set3 = [&] {
+            dbs.build_type = build_type::debug{};
+            set2();
+            dbs.build_type = build_type::release{};
+            set2();
+        };
+        dbs.c_static_runtime = true;
+        set3();
+        dbs.c_static_runtime = false;
+        set3();
         s.add_input(is);
     };
     //add(&self_build);
-    //add(&zlib);
+    add(&zlib);
     s.build();
 
 	/*file_storage<physical_file_storage_single_file<basic_contents_hash>> fst{ {"single_file2.bin"} };

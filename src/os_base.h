@@ -227,6 +227,15 @@ struct gcc {
 
 } // namespace objcpp_compiler
 
+namespace librarian {
+
+struct msvc {
+    using rule_type = lib_exe_rule;
+    unresolved_package_name package{"com.Microsoft.VisualStudio.VC.lib"s};
+};
+
+} // namespace librarian
+
 namespace linker {
 
 struct msvc {
