@@ -65,7 +65,7 @@ auto zlib(solution &s) {
 int main1() {
     solution s;
     //s.add_input(source_code_input{&build_some_package});
-    //s.add_input(source_code_input{&self_build});
+    s.add_input(source_code_input{&self_build});
     auto add = [&](auto f) {
         input_with_settings is{source_code_input{f}};
         auto dbs = default_build_settings();
@@ -98,7 +98,7 @@ int main1() {
         s.add_input(is);
     };
     //add(&self_build);
-    add(&zlib);
+    //add(&zlib);
     s.build();
 
 	/*file_storage<physical_file_storage_single_file<basic_contents_hash>> fst{ {"single_file2.bin"} };

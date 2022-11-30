@@ -12,6 +12,11 @@
 
 #define WINAPI_CALL(x) if (!(x)) {throw ::sw::win32::winapi_exception{#x};}
 
+// we use this for easy command line building/bootstrapping
+#pragma comment(lib, "advapi32.lib")
+#pragma comment(lib, "ole32.lib")
+#pragma comment(lib, "OleAut32.lib")
+
 namespace sw::win32 {
 
 struct winapi_exception : std::runtime_error {

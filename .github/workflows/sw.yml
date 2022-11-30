@@ -4,11 +4,11 @@ on: [push, pull_request]
 
 jobs:
   windows:
-    runs-on: windows-2022    
+    runs-on: windows-2022
     steps:
     - uses: actions/checkout@v3
     - uses: ilammy/msvc-dev-cmd@v1
-    - run: cl -nologo -std:c++latest -EHsc src/*.cpp advapi32.lib ole32.lib OleAut32.lib -link -OUT:sw.exe
+    - run: cl -nologo -std:c++latest -EHsc src/*.cpp -link -OUT:sw.exe
     - run: .\sw.exe
     - uses: actions/upload-artifact@v3
       with:
@@ -31,7 +31,7 @@ jobs:
       with:
         name: sw
         path: sw
-                
+
   macos:
     runs-on: macos-12
     steps:

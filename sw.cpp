@@ -13,6 +13,6 @@ void build(Solution &s) {
     }
 }
 
-// cl -nologo -std:c++latest -EHsc src/*.cpp advapi32.lib ole32.lib OleAut32.lib -link -OUT:sw.exe
-// g++ -std=c++2b src/*.cpp -o sw
-// g++-12 -std=c++2b src/*.cpp -o sw
+// win: cl -nologo -std:c++latest -EHsc src/*.cpp -link -OUT:sw.exe
+// lin: g++ -std=c++2b src/*.cpp -o sw
+// mac: g++-12 -std=c++2b src/*.cpp -o sw
