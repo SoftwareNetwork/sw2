@@ -185,35 +185,6 @@ struct lib_exe_rule {
                 rules.insert(this);
             }
         }
-        /*if (!static_) {
-            c += "-NODEFAULTLIB";
-            tgt.bs.build_type.visit_any(
-                [&](build_type::debug) {
-                    c += "-DEBUG:FULL";
-                },
-                [&](build_type::release) {
-                    c += "-DEBUG:NONE";
-                });
-            auto add = [&](auto &&tgt) {
-                for (auto &&i : tgt.link_directories) {
-                    c += "-LIBPATH:" + i.string();
-                }
-                for (auto &&d : tgt.link_libraries) {
-                    c += d;
-                }
-                for (auto &&d : tgt.system_link_libraries) {
-                    c += d;
-                }
-            };
-            add(tgt.link_options);
-            for (auto &&d : tgt.dependencies) {
-                visit(*d.target, [&](auto &&v) {
-                    if constexpr (requires { v->link_directories; }) {
-                        add(*v);
-                    }
-                });
-            }
-        }*/
         tgt.commands.emplace_back(std::move(c));
     }
 };

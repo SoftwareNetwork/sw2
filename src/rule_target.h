@@ -298,6 +298,15 @@ struct executable_target : native_target {
                 executable += os.executable_extension;
             }
         });
+        ::sw::visit(
+            bs.linker,
+            [&](linker::msvc &c) {
+                auto &t = s.load_target(c.package, bs);
+                add(linker::msvc::rule_type{t});
+            },
+            [](auto &) {
+                SW_UNIMPLEMENTED;
+            });
     }
 
     void run(auto && ... args) {
