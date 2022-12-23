@@ -7,15 +7,6 @@
 
 namespace sw {
 
-auto read_file(const path &fn) {
-    auto sz = fs::file_size(fn);
-    string s(sz, 0);
-    FILE *f = fopen(fn.string().c_str(), "rb");
-    fread(s.data(), s.size(), 1, f);
-    fclose(f);
-    return s;
-}
-
 struct basic_contents_hash {
     using hash_type = size_t;
 
@@ -224,4 +215,11 @@ struct file_storage {
     }
 };
 
+/*void add_file_to_storage(auto &&s, auto &&f) {
+}
+void add_transform_to_storage(auto &&s, auto &&f) {
+    add_file_to_storage(s, f);
+}*/
+
 } // namespace sw
+

@@ -158,7 +158,7 @@ struct target_map {
 
 struct solution {
     abspath source_dir{"."};
-    abspath binary_dir{".sw4"};
+    abspath binary_dir{".sw"};
     // config
 
     const build_settings *bs{nullptr};

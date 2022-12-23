@@ -2,6 +2,8 @@
 
 #include "helpers.h"
 
+#include "input.h"
+
 namespace sw {
 
 struct command_line_parser {
@@ -14,12 +16,15 @@ struct command_line_parser {
         void parse(auto &&args) {
             auto check_spec = [&](auto &&fn) {
                 if (fs::exists(fn)) {
-                    // i = specification_file_input{fn};
+                    i = specification_file_input{fn};
                     return true;
                 }
                 return false;
             };
-            0 || check_spec("sw.h") || check_spec("sw2.cpp");
+            0 || check_spec("sw.h")
+              || check_spec("sw.cpp") // old compat. After rewrite remove sw.h
+              //|| check_spec("sw2.cpp")
+            ;
         }
     };
     struct generate {

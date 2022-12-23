@@ -191,6 +191,21 @@ struct static_string {
 template<static_string s>
 constexpr auto operator""_s() { return s; }
 
+auto read_file(const path &fn) {
+    auto sz = fs::file_size(fn);
+    string s(sz, 0);
+    FILE *f = fopen(fn.string().c_str(), "rb");
+    fread(s.data(), s.size(), 1, f);
+    fclose(f);
+    return s;
+}
+
+void write_file(const path &fn, const string &s) {
+    FILE *f = fopen(fn.string().c_str(), "wb");
+    fwrite(s.data(), s.size(), 1, f);
+    fclose(f);
+}
+
 } // namespace sw
 
 namespace std {
