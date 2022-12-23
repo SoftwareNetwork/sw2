@@ -42,6 +42,8 @@ struct binary_target_msvc : binary_target {
 };
 
 struct files_target : target_base {
+    using base = target_base;
+    using base::base;
     using files_t = std::set<path>; // unordered?
 
     path source_dir;

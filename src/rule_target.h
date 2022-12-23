@@ -144,9 +144,12 @@ struct native_target : rule_target, target_data_storage {
         init_compilers(s);
 
         bs.os.visit_any([&](os::windows) {
-            *this += "-DSW_EXPORT=__declspec(dllexport)"_def;
-            *this += "-DSW_IMPORT=__declspec(dllimport)"_def;
+            *this += "SW_EXPORT=__declspec(dllexport)"_def;
+            *this += "SW_IMPORT=__declspec(dllimport)"_def;
         });
+        if (!bs.build_type.is<build_type::debug>()) {
+            *this += "NDEBUG"_def;
+        }
     }
 
     void init_compilers(auto &&s) {
@@ -279,10 +282,12 @@ struct native_library_target : native_target {
     }
 };
 struct native_shared_library_target : native_library_target {
+    using base = native_library_target;
     native_shared_library_target(auto &&s, auto &&id) : base{s, id, true} {
     }
 };
 struct native_static_library_target : native_library_target {
+    using base = native_library_target;
     native_static_library_target(auto &&s, auto &&id) : base{s, id, false} {
     }
 };
@@ -313,6 +318,7 @@ struct executable_target : native_target {
         // make rule?
     }
 };
+using executable = executable_target;
 
 using target = target_type::variant_type;
 

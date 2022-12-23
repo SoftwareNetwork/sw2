@@ -23,7 +23,9 @@ struct source_code_input {
     }
 };
 
-struct specification_file_input {};
+struct specification_file_input {
+    path fn;
+};
 
 /// no input file, use some heuristics
 struct directory_input {};
@@ -32,7 +34,7 @@ struct directory_input {};
 struct directory_specification_file_input {};
 
 using input = variant<source_code_input>;
-using entry_point = input;
+using entry_point = source_code_input;
 
 struct input_with_settings {
     input i;

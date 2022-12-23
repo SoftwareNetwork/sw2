@@ -127,7 +127,6 @@ struct raw_command {
                 handles.push_back(h);
             }
         };
-        add_handle(si.StartupInfo.hStdInput);
         add_handle(si.StartupInfo.hStdOutput);
         add_handle(si.StartupInfo.hStdError);
         SIZE_T size = 0;
@@ -136,12 +135,12 @@ struct raw_command {
             throw std::runtime_error{"InitializeProcThreadAttributeList()"};
         }
         si.lpAttributeList = (LPPROC_THREAD_ATTRIBUTE_LIST)HeapAlloc(GetProcessHeap(), 0, size);
-        scope_exit seh{[&] {
-            HeapFree(GetProcessHeap(), 0, si.lpAttributeList);
-        }};
         if (!si.lpAttributeList) {
             throw std::runtime_error{"cannot alloc GetProcessHeap()"};
         }
+        scope_exit seh{[&] {
+            HeapFree(GetProcessHeap(), 0, si.lpAttributeList);
+        }};
         WINAPI_CALL(InitializeProcThreadAttributeList(si.lpAttributeList, 1, 0, &size));
         scope_exit sel{[&]{
             DeleteProcThreadAttributeList(si.lpAttributeList);

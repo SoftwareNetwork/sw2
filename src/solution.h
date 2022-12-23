@@ -34,7 +34,7 @@ struct target_map {
         auto &load(auto &s, const build_settings &bs) {
             auto it = targets.find(bs);
             if (it == targets.end()) {
-                visit(ep, [&](auto &&v){v(s, bs);});
+                ep(s, bs);
             }
             it = targets.find(bs);
             if (it == targets.end()) {

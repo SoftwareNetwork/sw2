@@ -83,6 +83,9 @@ template <typename ... Types> struct types {
     static constexpr bool contains() {
         return (false || ... || std::same_as<Types, T>);
     }
+    static auto for_each(auto &&f) {
+        return (f((Types**)nullptr) || ... || false);
+    }
 };
 
 #ifndef FWD
@@ -175,6 +178,18 @@ string &&normalize_path(string &&s) {
     std::replace(s.begin(), s.end(), '\\', '/');
     return std::move(s);
 }
+
+template<std::size_t N>
+struct static_string {
+    char p[N]{};
+    constexpr static_string(char const(&pp)[N]) {
+        std::ranges::copy(pp, p);
+    }
+    operator auto() const { return &p[0]; }
+    operator string_view() const { return string_view{p, N-1}; }
+};
+template<static_string s>
+constexpr auto operator""_s() { return s; }
 
 } // namespace sw
 

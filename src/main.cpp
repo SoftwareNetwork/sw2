@@ -9,6 +9,7 @@
 #include "rule_target.h"
 #include "os.h"
 #include "solution.h"
+#include "command_line.h"
 
 #include <map>
 #include <regex>
@@ -23,49 +24,24 @@ void add_transform_to_storage(auto &&s, auto &&f) {
 
 } // namespace sw
 
+namespace sw::self_build {
+#include "../sw.h"
+} // namespace sw::self_build
+
 using namespace sw;
 
-auto build_some_package(solution &s) {
-    files_target tgt{package_name{"pkg1"}};
-    tgt.source_dir = s.source_dir;
-    tgt +=
-        "src"_rdir,
-        "src/main.cpp",
-        "src/.*\\.cpp"_r,
-        "src/.*\\.h"_rr
-        ;
-    return tgt;
-}
+int main1(int argc, char *argv[]) {
+    command_line_parser cl{argc, argv};
 
-auto self_build(solution &s) {
-    auto &tgt = s.add<executable_target>(package_name{"pkg2"});
-    tgt +=
-        "src"_rdir,
-        "src/main.cpp",
-        "src/.*\\.cpp"_r,
-        "src/.*\\.h"_rr
-        ;
-    if (tgt.is<os::windows>()) {
-        tgt += "advapi32.lib"_slib;
-        tgt += "ole32.lib"_slib;
-        tgt += "OleAut32.lib"_slib;
+    visit_any(cl.c, [](command_line_parser::build &) {
+    });
+    if (cl.working_directory) {
+        fs::current_path(cl.working_directory);
     }
-}
 
-auto zlib(solution &s) {
-    auto &tgt = s.add<native_library_target>(package_name{"zlib"});
-    tgt.source_dir /= ".sw4/1";
-    tgt += ".*\\.[hc]"_r;
-    if (tgt.is<library_type::shared>()) {
-        tgt += "ZLIB_DLL"_def;
-    }
-    tgt.source_dir = tgt.source_dir.parent_path().parent_path();
-}
-
-int main1() {
     solution s;
     //s.add_input(source_code_input{&build_some_package});
-    s.add_input(source_code_input{&self_build});
+    s.add_input(source_code_input{&self_build::build});
     auto add = [&](auto f) {
         input_with_settings is{source_code_input{f}};
         auto dbs = default_build_settings();
@@ -98,7 +74,6 @@ int main1() {
         s.add_input(is);
     };
     //add(&self_build);
-    //add(&zlib);
     s.build();
 
 	/*file_storage<physical_file_storage_single_file<basic_contents_hash>> fst{ {"single_file2.bin"} };
@@ -109,9 +84,9 @@ int main1() {
     return 0;
 }
 
-int main() {
+int main(int argc, char *argv[]) {
     try {
-        return main1();
+        return main1(argc, argv);
     } catch (std::exception &e) {
         std::cerr << e.what();
     } catch (...) {
