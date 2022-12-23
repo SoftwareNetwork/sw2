@@ -33,11 +33,17 @@ using namespace sw;
 int main1(int argc, char *argv[]) {
     command_line_parser cl{argc, argv};
 
-    visit_any(cl.c, [](command_line_parser::build &) {
-    });
     if (cl.working_directory) {
         fs::current_path(cl.working_directory);
     }
+    visit_any(cl.c, [](command_line_parser::build &b) {
+        solution s;
+        auto fn = s.binary_dir / "cfg" / "main.cpp";
+        fs::create_directories(fn.parent_path());
+        string t;
+        write_file(fn, t);
+    });
+    return 0;
 
     solution s;
     //s.add_input(source_code_input{&build_some_package});
@@ -82,15 +88,4 @@ int main1(int argc, char *argv[]) {
 		handle.copy("myfile.txt");
 	}*/
     return 0;
-}
-
-int main(int argc, char *argv[]) {
-    try {
-        return main1(argc, argv);
-    } catch (std::exception &e) {
-        std::cerr << e.what();
-    } catch (...) {
-        std::cerr << "unknown exception";
-    }
-    return 1;
 }

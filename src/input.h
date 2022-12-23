@@ -5,44 +5,34 @@
 
 #include "helpers.h"
 #include "os.h"
+#include "entry_point.h"
 
 namespace sw {
 
 struct solution;
-
-// from source code
-/// from some regular file
-//InlineSpecification,
-// entry point
-struct source_code_input {
-    std::function<void(solution &)> entry_point;
-
-    void operator()(auto &sln, const build_settings &bs) {
-        sln.bs = &bs;
-        entry_point(sln);
-    }
-};
 
 struct specification_file_input {
     path fn;
 };
 
 /// no input file, use some heuristics
-struct directory_input {};
+struct directory_input {
+    path dir;
+};
 
 /// only try to find spec file
 struct directory_specification_file_input {};
 
-using input = variant<source_code_input>;
-using entry_point = source_code_input;
+using input = variant<specification_file_input, directory_input>;
 
 struct input_with_settings {
-    input i;
+    entry_point i;
     std::set<build_settings> settings;
 
     void operator()(auto &sln) {
         for (auto &&s : settings) {
-            visit(i, [&](auto &&v){v(sln, s);});
+            i(sln, s);
+            //visit(i, [&](auto &&v){v(sln, s);});
         }
     }
 };
