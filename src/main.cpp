@@ -47,9 +47,9 @@ int main1(int argc, char *argv[]) {
 
     solution s;
     //s.add_input(source_code_input{&build_some_package});
-    s.add_input(source_code_input{&self_build::build});
+    s.add_input(entry_point{&self_build::build});
     auto add = [&](auto f) {
-        input_with_settings is{source_code_input{f}};
+        input_with_settings is{entry_point{f}};
         auto dbs = default_build_settings();
         auto set1 = [&]() {
             dbs.arch = arch::x64{};
@@ -77,7 +77,7 @@ int main1(int argc, char *argv[]) {
         set3();
         dbs.c_static_runtime = false;
         set3();
-        s.add_input(is);
+        s.add_input(std::move(is));
     };
     //add(&self_build);
     s.build();

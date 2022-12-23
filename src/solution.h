@@ -195,18 +195,21 @@ struct solution {
         return t;
     }
 
-    void add_entry_point(const package_name &n, source_code_input &&ep) {
+    void add_entry_point(const package_name &n, entry_point &&ep) {
         targets[n].ep = std::move(ep);
     }
     void add_input(auto &&i) {
         static const auto bs = default_build_settings();
-        inputs.emplace_back(input_with_settings{i, {bs}});
+        input_with_settings is;
+        is.i = i;
+        is.settings.insert(bs);
+        inputs.emplace_back(is);
     }
-    void add_input(input_with_settings &i) {
+    /*void add_input(input_with_settings &i) {
         inputs.emplace_back(i);
-    }
+    }*/
     void add_input(const input_with_settings &i) {
-        inputs.emplace_back(i);
+        inputs.push_back(i);
     }
 
     auto &load_target(const unresolved_package_name &pkg, const build_settings &bs) {

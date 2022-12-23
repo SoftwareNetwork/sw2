@@ -9,8 +9,6 @@
 
 namespace sw {
 
-struct solution;
-
 struct specification_file_input {
     path fn;
 };
