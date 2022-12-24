@@ -901,8 +901,7 @@ struct command_executor {
                 }
                 ++running_commands;
                 auto pos = ceil(log10(external_commands.size()));
-                SW_UNIMPLEMENTED;
-                //std::cout << "[" << std::setw(pos) << command_id << std::format("/{}] {}\n", external_commands.size(), c.name());
+                std::cout << "[" << std::setw(pos) << command_id << format("/{}] {}\n", external_commands.size(), c.name());
                 c.run(get_executor(), [&, run_dependents, cmd](int exit_code) {
                     --running_commands;
                     c.exit_code = exit_code;

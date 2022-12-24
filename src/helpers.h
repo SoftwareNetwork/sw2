@@ -30,14 +30,23 @@ using fmt::format;
 #include <ranges>
 #include <regex>
 #include <set>
+#include <source_location>
 #include <thread>
 #include <unordered_set>
 #include <variant>
+
+template <>
+struct std::formatter<std::source_location> : std::formatter<std::string> {
+    auto format(const std::source_location &p, format_context &ctx) {
+        return formatter<std::string>::format(std::format("{}:{}", p.file_name(), p.line()), ctx);
+    }
+};
 
 namespace sw {
 
 namespace fs = std::filesystem;
 using path = fs::path;
+using std::format;
 using std::string;
 using std::string_view;
 using std::variant;
@@ -172,7 +181,8 @@ struct abspath : path {
 };
 
 struct unimplemented_exception : std::runtime_error {
-    unimplemented_exception() : runtime_error{"unimplemented"} {}
+    unimplemented_exception(std::source_location sl = std::source_location::current())
+        : runtime_error{std::format("unimplemented: {}", sl)} {}
 };
 #define SW_UNIMPLEMENTED throw unimplemented_exception{}
 
@@ -208,15 +218,20 @@ void write_file(const path &fn, const string &s) {
     fclose(f);
 }
 
+void write_file_if_different(const path &fn, const string &s) {
+    if (read_file(fn) == s) {
+        return;
+    }
+    FILE *f = fopen(fn.string().c_str(), "wb");
+    fwrite(s.data(), s.size(), 1, f);
+    fclose(f);
+}
+
 } // namespace sw
 
-namespace std {
-
 template <>
-struct hash<::sw::abspath> {
+struct std::hash<::sw::abspath> {
     size_t operator()(const ::sw::abspath &p) {
-        return hash<sw::path>()(p);
+        return std::hash<sw::path>()(p);
     }
 };
-
-} // namespace std

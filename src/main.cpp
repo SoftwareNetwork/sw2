@@ -1,35 +1,34 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2022 Egor Pugin <egor.pugin@gmail.com>
 
-#include "command.h"
-#include "storage.h"
-#include "vs_instance_helpers.h"
-#include "package.h"
-#include "detect.h"
-#include "rule_target.h"
-#include "os.h"
-#include "solution.h"
+#include "sw.h"
 #include "command_line.h"
 #include "main.h"
 
-#include <map>
-#include <regex>
-
-namespace sw {
-
-void add_file_to_storage(auto &&s, auto &&f) {
+void lower_drive_letter(string &s) {
+    if (!s.empty()) {
+        s[0] = tolower(s[0]);
+    }
 }
-void add_transform_to_storage(auto &&s, auto &&f) {
-    add_file_to_storage(s,f);
+auto normalize_path(const path &p) {
+    auto fn = p.string();
+    std::replace(fn.begin(), fn.end(), '\\', '/');
+    return fn;
 }
 
-} // namespace sw
+struct cpp_emitter {
+    struct ns {
+    };
 
-namespace sw::self_build {
-#include "../sw.h"
-} // namespace sw::self_build
+    string s;
+    int indent{};
 
-using namespace sw;
+    void include(const path &p) {
+        auto fn = normalize_path(p);
+        lower_drive_letter(fn);
+        s += "#include \"" + fn + "\"\n";
+    }
+};
 
 int main1(int argc, char *argv[]) {
     command_line_parser cl{argc, argv};
@@ -39,10 +38,23 @@ int main1(int argc, char *argv[]) {
     }
     visit_any(cl.c, [](command_line_parser::build &b) {
         solution s;
-        auto fn = s.binary_dir / "cfg" / "main.cpp";
+        auto fn = s.binary_dir / "cfg" / "src" / "main.cpp";
         fs::create_directories(fn.parent_path());
-        string t;
-        write_file(fn, t);
+        cpp_emitter e;
+        e.include(path{std::source_location::current().file_name()}.parent_path() / "sw.h");
+        visit_any(b.i, [&](specification_file_input &i) {
+            e.include(fs::absolute(i.fn));
+        });
+        e.include(path{std::source_location::current().file_name()}.parent_path() / "main.cpp");
+        write_file_if_different(fn, e.s);
+
+        s.source_dir = s.binary_dir / "cfg";
+        s.add_input(entry_point{&self_build::build});
+        s.build();
+
+        auto &&t = s.targets.find_first<executable>("sw");
+        int a = 5;
+        a++;
     });
     return 0;
 

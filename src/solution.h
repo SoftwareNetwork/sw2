@@ -15,6 +15,7 @@ struct target_map {
         targets_type targets;
         entry_point ep;
 
+        auto empty() const { return targets.empty(); }
         bool emplace(const package_id &id, target_uptr ptr) {
             auto it = targets.find(id.settings);
             if (it == targets.end()) {
@@ -94,6 +95,16 @@ struct target_map {
             throw std::runtime_error{"cannot load package: "s + string{pkg} + ": not found"};
         }
         return it2->second;
+    }
+    template <typename T>
+    auto &find_first(const unresolved_package_name &pkg) {
+        auto &&t = find(pkg);
+        if (t.empty()) {
+            // logic error?
+            SW_UNIMPLEMENTED;
+            //throw std::runtime_error{"cannot load package: "s + string{pkg} + ": not found"};
+        }
+        return *std::get<uptr<T>>(t.targets.begin()->second);
     }
 
     struct end_sentinel{};

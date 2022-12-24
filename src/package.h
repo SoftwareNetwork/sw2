@@ -277,7 +277,6 @@ struct package_name {
     auto hash() const {
         return path.hash() ^ version.hash();
     }
-
     bool operator<(const package_name &rhs) const {
         return std::tie(path, version) < std::tie(rhs.path, rhs.version);
     }
@@ -286,6 +285,11 @@ struct package_name {
 struct unresolved_package_name {
     package_path path;
     package_version_range range;
+
+    unresolved_package_name() = default;
+    unresolved_package_name(const char *p) : path{p} {}
+    unresolved_package_name(const std::string &p) : path{p} {}
+    unresolved_package_name(auto &&p, auto &&r) : path{p}, range{r} {}
 
     bool contains(const package_version &v) {
         if (v.is_branch() && range.is_branch()) {
@@ -296,7 +300,6 @@ struct unresolved_package_name {
         }
         return std::get<version_range>(range.range).contains(std::get<package_version::number_version>(v.version));
     }
-
     operator string() const {
         string s = path;
         s += "-"s + string{range};

@@ -46,17 +46,16 @@ struct native_sources_rule {
 };
 
 string format_log_record(auto &&tgt, auto &&second_part) {
-    SW_UNIMPLEMENTED;
-    /*string s = std::format("[{}]", (string)tgt.name);
+    string s = format("[{}]", (string)tgt.name);
     string cfg = "/[";
     tgt.bs.arch.visit([&](auto &&a) {
-        cfg += std::format("{},", std::decay_t<decltype(a)>::name);
+        cfg += format("{},", std::decay_t<decltype(a)>::name);
     });
     tgt.bs.library_type.visit([&](auto &&a) {
-        cfg += std::format("{},", std::decay_t<decltype(a)>::name); // short?
+        cfg += format("{},", std::decay_t<decltype(a)>::name); // short?
     });
     tgt.bs.build_type.visit_no_special([&](auto &&a) {
-        cfg += std::format("{},", std::decay_t<decltype(a)>::short_name);
+        cfg += format("{},", std::decay_t<decltype(a)>::short_name);
     });
     if (tgt.bs.cpp_static_runtime) {
         cfg += "cppmt,";
@@ -67,7 +66,7 @@ string format_log_record(auto &&tgt, auto &&second_part) {
     cfg.resize(cfg.size() - 1);
     cfg += "]";
     s += cfg + second_part;
-    return s;*/
+    return s;
 }
 
 struct cl_exe_rule {
