@@ -8,6 +8,7 @@
 #include <atomic>
 #include <cassert>
 #include <charconv>
+#include <cmath>
 #include <deque>
 #include <filesystem>
 /*#if __has_include(<format>)
@@ -25,6 +26,7 @@ using fmt::format;
 #include <iostream>
 #include <limits>
 #include <map>
+#include <mutex>
 #include <ranges>
 #include <regex>
 #include <set>

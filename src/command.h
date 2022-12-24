@@ -161,16 +161,16 @@ struct raw_command {
                 },
                 [&](string &s) {
                     pipe.w.reset();
-                    ex.read_async(pipe.r, [&](this auto &&f, auto &&buf, auto &&ec) {
+                    ex.read_async(pipe.r, [&](auto &&f, auto &&buf, auto &&ec) mutable {
                         if (!ec) {
                             s += buf;
-                            ex.read_async(pipe.r, f);
+                            ex.read_async(pipe.r, std::move(f));
                         }
                     });
                 },
                 [&](stream_callback &cb) {
                     pipe.w.reset();
-                    ex.read_async(pipe.r, [&, cb, s = string()](this auto &&f, auto &&buf, auto &&ec) {
+                    ex.read_async(pipe.r, [&, cb, s = string{}](auto &&f, auto &&buf, auto &&ec) mutable {
                         if (!ec) {
                             s += buf;
                             if (auto p = s.find_first_of("\r\n"); p != -1) {
@@ -178,7 +178,7 @@ struct raw_command {
                                 p = s.find("\n", p);
                                 s = s.substr(p + 1);
                             }
-                            ex.read_async(pipe.r, f);
+                            ex.read_async(pipe.r, std::move(f));
                         }
                     });
                 },
@@ -409,7 +409,13 @@ struct command_storage {
 #ifdef _MSC_VER
                     mtime = std::chrono::clock_cast<std::chrono::system_clock>(lwt);
 #else
+                    //mtime = lwt;
+                    //mtime = std::chrono::clock_cast<std::chrono::system_clock>(lwt);
+#ifdef __MINGW32__
+                    mtime = decltype(lwt)::clock::to_sys(lwt);
+#else
                     mtime = lwt;
+#endif
 #endif
                 }
                 checked = true;
@@ -625,8 +631,10 @@ struct io_command : raw_command {
         }
         if (!outputs.empty()) {
             string s = "generating: ";
-            for (auto &&o : outputs)
-                s += std::format("\"{}\", ", (const char *)o.u8string().c_str());
+            for (auto &&o : outputs) {
+                SW_UNIMPLEMENTED;
+                //s += std::format("\"{}\", ", (const char *) o.u8string().c_str());
+            }
             s.resize(s.size() - 2);
             return s;
         }
@@ -893,7 +901,8 @@ struct command_executor {
                 }
                 ++running_commands;
                 auto pos = ceil(log10(external_commands.size()));
-                std::cout << "[" << std::setw(pos) << command_id << std::format("/{}] {}\n", external_commands.size(), c.name());
+                SW_UNIMPLEMENTED;
+                //std::cout << "[" << std::setw(pos) << command_id << std::format("/{}] {}\n", external_commands.size(), c.name());
                 c.run(get_executor(), [&, run_dependents, cmd](int exit_code) {
                     --running_commands;
                     c.exit_code = exit_code;

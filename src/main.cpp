@@ -10,6 +10,7 @@
 #include "os.h"
 #include "solution.h"
 #include "command_line.h"
+#include "main.h"
 
 #include <map>
 #include <regex>

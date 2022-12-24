@@ -201,18 +201,18 @@ struct executor {
         cb->buf.resize(4096);
         cb->f = [cb, f = std::move(f)](size_t sz) mutable {
             if (sz == 0) {
-                f(cb->buf, std::error_code(1, std::generic_category()));
+                f(std::move(f), cb->buf, std::error_code(1, std::generic_category()));
                 return;
             }
             cb->buf.resize(sz);
-            f(cb->buf, std::error_code{});
+            f(std::move(f), cb->buf, std::error_code{});
         };
         ++jobs;
         if (!ReadFile(h, cb->buf.data(), cb->buf.size(), 0, (OVERLAPPED *)cb)) {
             auto err = GetLastError();
             if (err != ERROR_IO_PENDING) {
                 --jobs;
-                f(cb->buf, std::error_code(err, std::generic_category()));
+                f(std::move(f), cb->buf, std::error_code(err, std::generic_category()));
                 delete cb;
                 return;
             }

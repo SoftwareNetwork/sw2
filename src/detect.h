@@ -56,21 +56,21 @@ struct msvc_instance {
     }
     auto cl_target(auto &&s) const {
         s.add_entry_point(package_name{"com.Microsoft.VisualStudio.VC.cl"s, version()}, entry_point{[&](decltype(s) &s) {
-            auto &t = s.add<binary_target_msvc>(package_name{"com.Microsoft.VisualStudio.VC.cl"s, version()}, *this);
+            auto &t = s.template add<binary_target_msvc>(package_name{"com.Microsoft.VisualStudio.VC.cl"s, version()}, *this);
             t.executable = root / "bin" / ("Host"s + get_windows_arch(s.host_settings())) / get_windows_arch(t) / "cl.exe";
         }});
     }
     auto lib_target(auto &&s) const {
         s.add_entry_point(
             package_name{"com.Microsoft.VisualStudio.VC.lib"s, version()}, entry_point{[&](decltype(s) &s) {
-                auto &t = s.add<binary_target>(package_name{"com.Microsoft.VisualStudio.VC.lib"s, version()});
+                auto &t = s.template add<binary_target>(package_name{"com.Microsoft.VisualStudio.VC.lib"s, version()});
                 t.executable =
                     root / "bin" / ("Host"s + get_windows_arch(s.host_settings())) / get_windows_arch(t) / "lib.exe";
             }});
     }
     auto link_target(auto &&s) const {
         s.add_entry_point(package_name{"com.Microsoft.VisualStudio.VC.link"s, version()}, entry_point{[&](decltype(s) &s) {
-            auto &t = s.add<binary_target>(package_name{"com.Microsoft.VisualStudio.VC.link"s, version()});
+            auto &t = s.template add<binary_target>(package_name{"com.Microsoft.VisualStudio.VC.link"s, version()});
             t.executable = root / "bin" / ("Host"s + get_windows_arch(s.host_settings())) / get_windows_arch(t) / "link.exe";
         }});
     }
@@ -80,8 +80,7 @@ struct msvc_instance {
         s.add_entry_point(
             package_name{"com.Microsoft.VisualStudio.VC.libc"s, version()}, entry_point{[&](decltype(s) &s) {
                 // com.Microsoft.VisualStudio.VC.STL?
-                auto &t =
-                    s.add<binary_library_target>(package_name{"com.Microsoft.VisualStudio.VC.libc"s, version()});
+                auto &t = s.template add<binary_library_target>(package_name{"com.Microsoft.VisualStudio.VC.libc"s, version()});
                 t.include_directories.push_back(root / "include");
                 auto libdir = root / "lib" / get_windows_arch(t);
                 t.link_directories.push_back(libdir);
@@ -117,7 +116,7 @@ struct msvc_instance {
             }});
         s.add_entry_point(package_name{"com.Microsoft.VisualStudio.VC.libcpp"s, version()}, entry_point{[&](decltype(s) &s) {
             // com.Microsoft.VisualStudio.VC.STL?
-            auto &t = s.add<binary_library_target>(package_name{"com.Microsoft.VisualStudio.VC.libcpp"s, version()});
+            auto &t = s.template add<binary_library_target>(package_name{"com.Microsoft.VisualStudio.VC.libcpp"s, version()});
             t.include_directories.push_back(root / "include");
             auto libdir = root / "lib" / get_windows_arch(t);
             t.link_directories.push_back(libdir);
@@ -229,7 +228,7 @@ struct win_kit {
 
         s.add_entry_point(package_name{"com.Microsoft.Windows.SDK."s + name, path{v}.string()},
                           entry_point{[=, *this](decltype(s) &s) {
-                              auto &t = s.add<binary_library_target>(
+                              auto &t = s.template add<binary_library_target>(
                                   package_name{"com.Microsoft.Windows.SDK."s + name, path{v}.string()});
                               auto libdir = kit_root / "Lib" / ldir_subversion / name / get_windows_arch(t);
                               if (fs::exists(libdir)) {

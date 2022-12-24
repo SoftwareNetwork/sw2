@@ -65,7 +65,7 @@ struct rule_target : files_target {
                 }
             }, r);
             for (auto &&c : self.commands) {
-                ::visit(c, [&](auto &&c) {
+                ::sw::visit(c, [&](auto &&c) {
                     for (auto &&o : c.outputs) {
                         self.processed_files[o];
                     }
@@ -73,7 +73,7 @@ struct rule_target : files_target {
             }
         }
         for (auto &&c : self.commands) {
-            ::visit(c, [&](auto &&c2) {
+            ::sw::visit(c, [&](auto &&c2) {
                 c2.cs = &self.cs;
             });
         }

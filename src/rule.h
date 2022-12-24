@@ -45,8 +45,9 @@ struct native_sources_rule {
     }
 };
 
-auto format_log_record(auto &&tgt, auto &&second_part) {
-    string s = std::format("[{}]", (string)tgt.name);
+string format_log_record(auto &&tgt, auto &&second_part) {
+    SW_UNIMPLEMENTED;
+    /*string s = std::format("[{}]", (string)tgt.name);
     string cfg = "/[";
     tgt.bs.arch.visit([&](auto &&a) {
         cfg += std::format("{},", std::decay_t<decltype(a)>::name);
@@ -66,7 +67,7 @@ auto format_log_record(auto &&tgt, auto &&second_part) {
     cfg.resize(cfg.size() - 1);
     cfg += "]";
     s += cfg + second_part;
-    return s;
+    return s;*/
 }
 
 struct cl_exe_rule {
