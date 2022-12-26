@@ -170,7 +170,7 @@ struct msvc_detector {
             path root = i.VSInstallLocation;
             auto preview = i.VSInstallLocation.contains(L"Preview");
             if (preview) {
-                continue;
+                //continue;
             }
             auto d = root / "VC" / "Tools" / "MSVC";
             for (auto &&p : fs::directory_iterator{d}) {

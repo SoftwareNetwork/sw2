@@ -141,6 +141,9 @@ struct command_line_parser {
             bool iscmd{};
             if constexpr (requires {obj.c;}) {
                 iscmd = type::command_types::for_each([&]<typename T>(T **) {
+                    if (args.empty()) {
+                        return false;
+                    }
                     if (T::name == args[0]) {
                         obj.c = T{};
                         std::get<T>(obj.c).parse(args = args.subspan(1));
@@ -154,6 +157,9 @@ struct command_line_parser {
                 std::apply(
                     [&](auto &&...opts) {
                         auto f = [&](auto &&opt) {
+                            if (args.empty()) {
+                                return;
+                            }
                             if (is_option_flag(opt, args[0])) {
                                 opt.parse(args = args.subspan(1));
                                 parsed = true;
@@ -163,6 +169,9 @@ struct command_line_parser {
                     },
                     obj.options());
                 if (!parsed) {
+                    if (args.empty()) {
+                        continue;
+                    }
                     std::cerr << "unknown option: " << args[0] << "\n";
                     args = args.subspan(1);
                 }
