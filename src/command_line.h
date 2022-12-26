@@ -47,27 +47,34 @@ struct command_line_parser {
         explicit operator bool() const {
             return !!value;
         }
-        operator T() const {
+        operator T() const requires (!std::same_as<T, bool>) {
             return *value;
         }
         void parse(auto &&args) {
             if (args.size() < nargs) {
                 throw std::runtime_error{std::format("no value for argument {}", option_name())};
             }
-            value = args[0];
-            args = args.subspan(nargs);
+            if constexpr (std::same_as<T, bool>) {
+                value = true;
+            } else {
+                value = args[0];
+                args = args.subspan(nargs);
+            }
         }
     };
 
     command c;
     argument<"-d"_s, path> working_directory;
+    argument<"-sw1"_s, bool> sw1; // not a driver, but a real invocation
 
     auto options() {
-        return std::tie(working_directory);
+        return std::tie(
+            working_directory,
+            sw1
+        );
     }
 
-    command_line_parser(int argc, char *argv[]) {
-        std::vector<string_view> args((const char **)argv, (const char **)argv + argc);
+    command_line_parser(std::span<string_view> args) {
         parse(args);
         // run()?
     }
@@ -88,16 +95,22 @@ struct command_line_parser {
                 return false;
             });
             if (!iscmd) {
+                bool parsed{};
                 std::apply(
                     [&](auto &&...opts) {
                         auto f = [&](auto &&opt) {
                             if (args[0] == opt.option_name()) {
                                 opt.parse(args = args.subspan(1));
+                                parsed = true;
                             }
                         };
                         (f(FWD(opts)), ...);
                     },
                     options());
+                if (!parsed) {
+                    std::cerr << "unknown option: " << args[0] << "\n";
+                    args = args.subspan(1);
+                }
             }
         }
     }

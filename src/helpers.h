@@ -31,6 +31,7 @@ using fmt::format;
 #include <regex>
 #include <set>
 #include <source_location>
+#include <span>
 #include <thread>
 #include <unordered_set>
 #include <variant>
@@ -219,7 +220,7 @@ void write_file(const path &fn, const string &s) {
 }
 
 void write_file_if_different(const path &fn, const string &s) {
-    if (read_file(fn) == s) {
+    if (fs::exists(fn) && read_file(fn) == s) {
         return;
     }
     FILE *f = fopen(fn.string().c_str(), "wb");

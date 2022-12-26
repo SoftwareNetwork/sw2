@@ -162,6 +162,11 @@ struct executor {
             switch (bytes) {
             case JOB_OBJECT_MSG_NEW_PROCESS:
                 break;
+            case JOB_OBJECT_MSG_ACTIVE_PROCESS_ZERO:
+                if (process_callbacks.size() != 1) {
+                    throw std::logic_error{"bad process_callbacks, you did not call something"};
+                }
+                (uint64_t&)o = process_callbacks.begin()->first;
             case JOB_OBJECT_MSG_EXIT_PROCESS:
                 if (auto it = process_callbacks.find(static_cast<DWORD>((uint64_t)o)); it != process_callbacks.end()) {
                     it->second();
@@ -169,7 +174,7 @@ struct executor {
                 }
                 break;
             default:
-                break;
+                throw std::runtime_error{"unhandled process completion status"};
             }
             return;
         }

@@ -195,7 +195,10 @@ struct raw_command {
         // won't stop.
         ex.register_process(pi.hProcess, pi.dwProcessId, [this, cb, h = pi.hProcess]() {
             DWORD exit_code;
-            GetExitCodeProcess(h, &exit_code);
+            WINAPI_CALL(GetExitCodeProcess(h, &exit_code));
+            while (exit_code == STILL_ACTIVE) {
+                WINAPI_CALL(GetExitCodeProcess(h, &exit_code));
+            }
             scope_exit se{[&] {
                 CloseHandle(h); // we may want to use h in the callback
             }};
@@ -304,9 +307,20 @@ struct raw_command {
             }
         });
     }
+    void run() {
+        executor ex;
+        run(ex);
+        ex.run();
+    }
 
     void add(auto &&p) {
-        arguments.push_back(p);
+        if constexpr (requires {arguments.push_back(p);}) {
+            arguments.push_back(p);
+        } else {
+            for (auto &&a : p) {
+                add(a);
+            }
+        }
     }
     void add(const char *p) {
         arguments.push_back(string{p});
@@ -339,9 +353,12 @@ struct raw_command {
         } else if (!out_text.empty()) {
             t = out_text;
         }
+        if (!t.empty()) {
+            t = "\nerror:\n" + t;
+        }
         return
             // format("process exit code: {}\nerror: {}", exit_code, std::get<string>(err))
-            "process exit code: " + std::to_string(exit_code) + "\nerror:\n" + t + "";
+            "process exit code: " + std::to_string(exit_code) + t;
     }
 };
 
@@ -450,11 +467,14 @@ struct command_storage {
         file_storage() {
             files.reserve(100'000);
         }
-        void add(auto &&f, auto &&files_stream, auto &&fs) {
+        void add(auto &&f, auto &&files_stream, auto &&fs, bool reset) {
             auto [it, _] = files.emplace(std::hash<path>()(f), f);
             auto [_2, inserted2] = fs.insert(&it->second);
             if (inserted2) {
                 files_stream << f;
+            }
+            if (reset) {
+                it->second.checked = false;
             }
         }
         void read(auto &&files_stream, auto &&fs) {
@@ -547,15 +567,15 @@ struct command_storage {
     }
     void add(auto &&cmd) {
         uint64_t n{0};
-        auto ins = [&](auto &&v) {
+        auto ins = [&](auto &&v, bool reset) {
             for (auto &&f : v) {
-                global_fs.add(f, files_stream, fs);
+                global_fs.add(f, files_stream, fs, reset);
             }
             n += v.size();
         };
-        ins(cmd.inputs);
-        ins(cmd.implicit_inputs);
-        ins(cmd.outputs);
+        ins(cmd.inputs, false);
+        ins(cmd.implicit_inputs, false);
+        ins(cmd.outputs, true);
 
         auto h = cmd.hash();
         auto t = *(uint64_t*)&cmd.end; // on mac it's 128 bit
@@ -607,10 +627,11 @@ struct io_command : raw_command {
         start = clock::now();
         raw_command::run(ex, [&, cb](auto exit_code) {
             end = clock::now();
-            cb(exit_code);
+            // before cb
             if (exit_code == 0 && cs) {
                 cs->add(*this);
             }
+            cb(exit_code);
         });
     }
     auto hash() const {
@@ -902,6 +923,7 @@ struct command_executor {
                 ++running_commands;
                 auto pos = ceil(log10(external_commands.size()));
                 std::cout << "[" << std::setw(pos) << command_id << format("/{}] {}\n", external_commands.size(), c.name());
+                //std::cout.flush(); // for now
                 c.run(get_executor(), [&, run_dependents, cmd](int exit_code) {
                     --running_commands;
                     c.exit_code = exit_code;

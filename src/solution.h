@@ -202,6 +202,9 @@ struct solution {
             throw std::runtime_error{"cannot create target: "s + e.what()};
         }
         auto &t = *ptr;
+        //if constexpr (requires {t.source_dir = source_dir;}) {
+            //t.source_dir = source_dir;
+        //}
         targets.emplace(id, std::move(ptr));
         return t;
     }
@@ -209,7 +212,7 @@ struct solution {
     void add_entry_point(const package_name &n, entry_point &&ep) {
         targets[n].ep = std::move(ep);
     }
-    void add_input(auto &&i) {
+    void add_input(const entry_point &i) {
         static const auto bs = default_build_settings();
         input_with_settings is;
         is.i = i;

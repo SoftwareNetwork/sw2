@@ -15,46 +15,109 @@ auto normalize_path(const path &p) {
     std::replace(fn.begin(), fn.end(), '\\', '/');
     return fn;
 }
+auto normalize_path_and_drive(const path &p) {
+    auto fn = normalize_path(p);
+    lower_drive_letter(fn);
+    return fn;
+}
 
 struct cpp_emitter {
     struct ns {
+        cpp_emitter &e;
+        ns(cpp_emitter &e, auto &&name) : e{e} {
+            e += "namespace "s + name + " {";
+        }
+        ~ns() {
+            e += "}";
+        }
     };
 
     string s;
     int indent{};
 
+    cpp_emitter &operator+=(auto &&s) {
+        add_line(s);
+        return *this;
+    }
+    void add_line(auto &&s) {
+        this->s += s + "\n"s;
+    }
     void include(const path &p) {
-        auto fn = normalize_path(p);
-        lower_drive_letter(fn);
+        auto fn = normalize_path_and_drive(p);
         s += "#include \"" + fn + "\"\n";
+    }
+    auto namespace_(auto &&name) {
+        return ns{*this, name};
     }
 };
 
-int main1(int argc, char *argv[]) {
-    command_line_parser cl{argc, argv};
+int main1(std::span<string_view> args) {
+    command_line_parser cl{args};
 
+    auto this_path = fs::current_path();
     if (cl.working_directory) {
         fs::current_path(cl.working_directory);
     }
-    visit_any(cl.c, [](command_line_parser::build &b) {
+    if (cl.sw1) {
+        //Sleep(15000);
         solution s;
-        auto fn = s.binary_dir / "cfg" / "src" / "main.cpp";
+        auto f = [&](auto) {
+            if constexpr (requires {sw1_build(s);}) {
+                sw1_build(s);
+            } else {
+                throw std::runtime_error{"no entry function was specified"};
+            }
+        };
+        f(0);
+        s.build();
+        return 0;
+    }
+    visit_any(cl.c, [&](command_line_parser::build &b) {
+        solution s;
+        auto cfg_dir = s.binary_dir / "cfg";
+        auto fn = cfg_dir / "src" / "main.cpp";
         fs::create_directories(fn.parent_path());
         cpp_emitter e;
         e.include(path{std::source_location::current().file_name()}.parent_path() / "sw.h");
+        e += "";
+        std::vector<string> nses;
         visit_any(b.i, [&](specification_file_input &i) {
-            e.include(fs::absolute(i.fn));
+            auto fn = fs::absolute(i.fn);
+            auto fns = normalize_path_and_drive(fn);
+            auto fnh = std::hash<string>{}(fns);
+            auto nsname = "sw_ns_" + std::to_string(fnh);
+            nses.push_back(nsname);
+            auto ns = e.namespace_(nsname);
+            // add inline ns?
+            e.include(fn);
         });
+        e += "";
+        e += "void sw1_build(solution &s);";
+        e += "";
         e.include(path{std::source_location::current().file_name()}.parent_path() / "main.cpp");
+        e += "";
+        e += "void sw1_build(solution &s) {";
+        for (auto &&ns : nses) {
+            e += "s.add_input(entry_point{&" + ns + "::build});";
+        }
+        e += "}";
         write_file_if_different(fn, e.s);
 
-        s.source_dir = s.binary_dir / "cfg";
-        s.add_input(entry_point{&self_build::build});
+        //fs::current_path(cfg_dir);
+        s.source_dir = cfg_dir;
+        input_with_settings is{entry_point{&self_build::build}};
+        auto dbs = default_build_settings();
+        dbs.build_type = build_type::debug{};
+        is.settings.insert(dbs);
+        s.add_input(is);
         s.build();
 
         auto &&t = s.targets.find_first<executable>("sw");
-        int a = 5;
-        a++;
+
+        raw_command c;
+        c.working_directory = this_path;
+        c += t.executable, "-sw1", args.subspan(1);
+        c.run();
     });
     return 0;
 
