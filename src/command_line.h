@@ -8,33 +8,6 @@ namespace sw {
 
 struct command_line_parser {
     using args = std::span<string_view>;
-    struct build {
-        static constexpr inline auto name = "build"sv;
-
-        input i;
-
-        void parse(auto &&args) {
-            auto check_spec = [&](auto &&fn) {
-                if (fs::exists(fn)) {
-                    i = specification_file_input{fn};
-                    return true;
-                }
-                return false;
-            };
-            0 || check_spec("sw.h")
-              || check_spec("sw.cpp") // old compat. After rewrite remove sw.h
-              //|| check_spec("sw2.cpp")
-            ;
-        }
-    };
-    struct generate {
-        static constexpr inline auto name = "generate"sv;
-
-        void parse(auto &&args) {
-        }
-    };
-    using command_types = types<build, generate>;
-    using command = command_types::variant_type;
 
     template <auto OptionName, typename T, auto nargs = 1>
     struct argument {
@@ -47,7 +20,7 @@ struct command_line_parser {
         explicit operator bool() const {
             return !!value;
         }
-        operator T() const requires (!std::same_as<T, bool>) {
+        operator T() const {
             return *value;
         }
         void parse(auto &&args) {
@@ -62,10 +35,69 @@ struct command_line_parser {
             }
         }
     };
+    template <auto OptionName> struct flag {
+        bool value{};
+
+        static constexpr string_view option_name() {
+            return OptionName;
+        }
+        explicit operator bool() const {
+            return value;
+        }
+        void parse(auto &&args) {
+            value = true;
+        }
+    };
+
+    // subcommands
+
+    struct build {
+        static constexpr inline auto name = "build"sv;
+
+        input i;
+        flag<"-static"_s> static_;
+        flag<"-shared"_s> shared;
+
+        auto options() {
+            return std::tie(
+                static_,
+                shared
+            );
+        }
+
+        void parse(auto &&args) {
+            auto check_spec = [&](auto &&fn) {
+                if (fs::exists(fn)) {
+                    i = specification_file_input{fn};
+                    return true;
+                }
+                return false;
+            };
+            0 || check_spec("sw.h")
+              || check_spec("sw.cpp") // old compat. After rewrite remove sw.h
+              //|| check_spec("sw2.cpp")
+                ;
+            parse1(*this, args);
+        }
+    };
+    struct test {
+        static constexpr inline auto name = "test"sv;
+
+        void parse(auto &&args) {
+        }
+    };
+    struct generate {
+        static constexpr inline auto name = "generate"sv;
+
+        void parse(auto &&args) {
+        }
+    };
+    using command_types = types<build, generate, test>;
+    using command = command_types::variant_type;
 
     command c;
     argument<"-d"_s, path> working_directory;
-    argument<"-sw1"_s, bool> sw1; // not a driver, but a real invocation
+    flag<"-sw1"_s> sw1; // not a driver, but a real invocation
 
     auto options() {
         return std::tie(
@@ -82,18 +114,22 @@ struct command_line_parser {
         if (args.size() <= 1) {
             throw std::runtime_error{"no command was issued"};
         }
-        parse1(args.subspan(1));
+        parse1(*this, args.subspan(1));
     }
-    void parse1(auto &&args) {
+    static void parse1(auto &&obj, auto &&args) {
+        using type = std::decay_t<decltype(obj)>;
         while (!args.empty()) {
-            auto iscmd = command_types::for_each([&]<typename T>(T **) {
-                if (T::name == args[0]) {
-                    c = T{};
-                    std::get<T>(c).parse(args = args.subspan(1));
-                    return true;
-                }
-                return false;
-            });
+            bool iscmd{};
+            if constexpr (requires {obj.c;}) {
+                iscmd = type::command_types::for_each([&]<typename T>(T **) {
+                    if (T::name == args[0]) {
+                        obj.c = T{};
+                        std::get<T>(obj.c).parse(args = args.subspan(1));
+                        return true;
+                    }
+                    return false;
+                });
+            }
             if (!iscmd) {
                 bool parsed{};
                 std::apply(
@@ -106,7 +142,7 @@ struct command_line_parser {
                         };
                         (f(FWD(opts)), ...);
                     },
-                    options());
+                    obj.options());
                 if (!parsed) {
                     std::cerr << "unknown option: " << args[0] << "\n";
                     args = args.subspan(1);

@@ -38,7 +38,9 @@ struct rule_target : files_target {
         binary_dir = make_binary_dir(solution.binary_dir);
     }
     auto make_binary_dir(const path &parent) {
-        auto config = bs.hash();
+        return make_binary_dir(parent, bs.hash());
+    }
+    auto make_binary_dir(const path &parent, auto &&config) {
         return parent / "t" / std::to_string(config) / std::to_string(name.hash());
     }
 
@@ -221,11 +223,10 @@ struct native_library_target : native_target {
     using base = native_target;
     path library;
     path implib;
-    std::optional<bool> shared_;
 
-    native_library_target(auto &&s, auto &&id, const std::optional<bool> &shared = {}) : base{s, id}, shared_{shared} {
-        if (!shared_) {
-            shared_ = bs.library_type.visit(
+    native_library_target(auto &&s, auto &&id, std::optional<bool> shared = {}) : base{s, id} {
+        if (!shared) {
+            shared = bs.library_type.visit(
                 [](const library_type::static_ &){
                     return false;
                 },
@@ -236,7 +237,14 @@ struct native_library_target : native_target {
                 }
             );
         }
-        if (is_shared()) {
+        if (*shared) {
+            bs.library_type = library_type::shared{};
+        } else if (!*shared) {
+            bs.library_type = library_type::static_{};
+        }
+        binary_dir = make_binary_dir(s.binary_dir);
+
+        if (is<library_type::shared>()) {
             ::sw::visit(
                 bs.linker,
                 [&](linker::msvc &c) {
@@ -278,9 +286,6 @@ struct native_library_target : native_target {
                 }
             });
         }
-    }
-    bool is_shared() const {
-        return *shared_;
     }
 };
 struct native_shared_library_target : native_library_target {
