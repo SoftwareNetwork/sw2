@@ -80,13 +80,17 @@ int main1(std::span<string_view> args) {
         cpp_emitter e;
         e.include(path{std::source_location::current().file_name()}.parent_path() / "sw.h");
         e += "";
-        std::vector<string> nses;
+        struct spec_data {
+            path fn;
+            string ns;
+        };
+        std::vector<spec_data> nses;
         visit_any(b.i, [&](specification_file_input &i) {
             auto fn = fs::absolute(i.fn);
             auto fns = normalize_path_and_drive(fn);
             auto fnh = std::hash<string>{}(fns);
             auto nsname = "sw_ns_" + std::to_string(fnh);
-            nses.push_back(nsname);
+            nses.push_back({fns,nsname});
             auto ns = e.namespace_(nsname);
             // add inline ns?
             e.include(fn);
@@ -98,7 +102,7 @@ int main1(std::span<string_view> args) {
         e += "";
         e += "void sw1_build(solution &s) {";
         for (auto &&ns : nses) {
-            e += "s.add_input(entry_point{&" + ns + "::build});";
+            e += "s.add_input(entry_point{&" + ns.ns + "::build, \"" + ns.fn.parent_path().string() + "\"});";
         }
         e += "}";
         write_file_if_different(fn, e.s);

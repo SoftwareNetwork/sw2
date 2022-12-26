@@ -55,10 +55,19 @@ struct mmap_file {
     T *p{nullptr};
     size_type sz;
 
+    mmap_file() = default;
     mmap_file(const fs::path &fn) : fn{fn} {
         open(ro{});
     }
     mmap_file(const fs::path &fn, rw v) : fn{fn} {
+        open(v);
+    }
+    void open(const fs::path &fn) {
+        this->fn = fn;
+        open(ro{});
+    }
+    void open(const fs::path &fn, rw v) {
+        this->fn = fn;
         open(v);
     }
     void open(auto mode) {
@@ -124,41 +133,45 @@ struct mmap_file {
     }
 
     struct stream {
-        mmap_file &m;
+        mmap_file *m_{};
         size_type offset{0};
         bool ok{true};
 
-        auto size() const { return m.sz; }
-        bool has_room(auto sz) const { return offset + sz <= m.sz; }
+        mmap_file &m() const {
+            return *m_;
+        }
+
+        auto size() const { return m().sz; }
+        bool has_room(auto sz) const { return offset + sz <= m().sz; }
         explicit operator bool() const {
-            return ok && offset != -1 && !m.eof(offset);
+            return ok && offset != -1 && !m().eof(offset);
         }
 
         auto write_record(size_type sz) {
             if (!has_room(sz)) {
-                m.alloc(sz);
+                m().alloc(sz);
             }
             *this << sz;
             auto oldoff = offset;
             offset += sz;
-            return stream{m,oldoff};
+            return stream{m_,oldoff};
         }
         auto read_record() {
             size_type sz;
             if (!has_room(sizeof(sz))) {
-                return stream{m, (size_type)-1};
+                return stream{m_, (size_type)-1};
             }
             *this >> sz;
             if (sz == 0) {
                 offset -= sizeof(sz);
-                return stream{m, (size_type)-1};
+                return stream{m_, (size_type)-1};
             }
             if (!has_room(sz)) {
-                return stream{m, (size_type)-1};
+                return stream{m_, (size_type)-1};
             }
             auto oldoff = offset;
             offset += sz;
-            return stream{m,oldoff};
+            return stream{m_,oldoff};
         }
 
         template <typename U>
@@ -166,16 +179,16 @@ struct mmap_file {
             if (!has_room(sizeof(U))) {
                 throw std::runtime_error{"no more data"};
             }
-            v = *(U*)(m.p + offset);
+            v = *(U*)(m().p + offset);
             offset += sizeof(U);
             return *this;
         }
         template <typename U>
         stream &operator<<(const U &v) {
             if (!has_room(sizeof(U))) {
-                m.alloc(sizeof(U));
+                m().alloc(sizeof(U));
             }
-            *(U *)(m.p + offset) = v;
+            *(U *)(m().p + offset) = v;
             offset += sizeof(U);
             return *this;
         }
@@ -195,7 +208,7 @@ struct mmap_file {
                 offset -= sizeof(len);
                 return make_eof();
             }
-            p.assign((const char8_t *)m.p + offset, (const char8_t *)m.p + offset + len);
+            p.assign((const char8_t *)m().p + offset, (const char8_t *)m().p + offset + len);
             offset += len;
             return *this;
         }
@@ -203,21 +216,21 @@ struct mmap_file {
             auto s = p.u8string();
             uint64_t len = s.size();
             if (!has_room(len + sizeof(len))) {
-                m.alloc(len + sizeof(len));
+                m().alloc(len + sizeof(len));
             }
             operator<<(len);
-            memcpy(m.p + offset, s.data(), len);
+            memcpy(m().p + offset, s.data(), len);
             offset += len;
             return *this;
         }
 
         template <typename U>
         auto make_span(uint64_t n) {
-            return std::span<U>((U *)(m.p + offset), (U *)(m.p + offset) + n);
+            return std::span<U>((U *)(m().p + offset), (U *)(m().p + offset) + n);
         }
     };
     auto get_stream() {
-        return stream{*this};
+        return stream{this};
     }
 };
 

@@ -21,7 +21,8 @@ struct rule_target : files_target {
     using base::add;
     using base::remove;
 
-    build_settings bs; // ref? but how to deal in visit const/non const?
+    const build_settings solution_bs;
+    build_settings bs;
     path binary_dir;
     command_storage cs;
     std::vector<rule> rules;
@@ -30,11 +31,11 @@ struct rule_target : files_target {
 
     rule_target(auto &&solution, auto &&id)
         : files_target{id}
+        , solution_bs{*solution.bs}
         , bs{*solution.bs}
-        , binary_dir{make_binary_dir(solution.binary_dir)}
-        , cs{binary_dir}
    {
         source_dir = solution.source_dir;
+        binary_dir = make_binary_dir(solution.binary_dir);
     }
     auto make_binary_dir(const path &parent) {
         auto config = bs.hash();
@@ -72,6 +73,7 @@ struct rule_target : files_target {
                 });
             }
         }
+        self.cs.open(self.binary_dir);
         for (auto &&c : self.commands) {
             ::sw::visit(c, [&](auto &&c2) {
                 c2.cs = &self.cs;

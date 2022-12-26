@@ -502,13 +502,19 @@ struct command_storage {
     std::unordered_set<file_storage::file*> fs;
     std::unordered_map<hash_type, command_data, hash_type::hasher> commands;
 
-    command_storage() : command_storage{".", raw_tag{}} {}
-    command_storage(const path &fn) : command_storage{fn / "db" / "9", raw_tag{}} {
+    command_storage() = default;
+    command_storage(const path &fn) {
+        open(fn);
     }
-    command_storage(const path &fn, raw_tag)
-            : f_commands{fn / "commands.bin", mmap_type::rw{}}
-            , f_files{fn / "commands.files.bin", mmap_type::rw{}}
-            , cmd_stream{f_commands.get_stream()}, files_stream{f_files.get_stream()} {
+    void open(const path &fn) {
+        open1(fn / "db" / "9");
+    }
+    void open1(const path &fn) {
+        f_commands.open(fn / "commands.bin", mmap_type::rw{});
+        f_files.open(fn / "commands.files.bin", mmap_type::rw{});
+        cmd_stream = f_commands.get_stream();
+        files_stream = f_files.get_stream();
+
         if (cmd_stream.size() == 0) {
             return;
         }
@@ -522,8 +528,8 @@ struct command_storage {
             std::ranges::copy(s.make_span<uint64_t>(n), std::inserter(v.files, v.files.end()));
             commands[h] = v;
         }
-        //f_commands.close();
-        //f_commands.open(mmap_type::rw{});
+        // f_commands.close();
+        // f_commands.open(mmap_type::rw{});
 
         global_fs.read(files_stream, fs);
     }
