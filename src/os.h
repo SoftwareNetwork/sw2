@@ -24,7 +24,11 @@ struct build_settings {
 
         template <typename T>
         bool is() const {
-            return contains<T, Types...>();
+            constexpr auto c = contains<T, Types...>();
+            if constexpr (c) {
+                return std::holds_alternative<T>(*this);
+            }
+            return false;
         }
 
         decltype(auto) visit(auto &&... args) const {
@@ -52,21 +56,24 @@ struct build_settings {
     using librarian_type = special_variant<librarian::msvc>;
     using linker_type = special_variant<linker::msvc>;
 
+    template <typename CompilerType>
+    struct native_language {
+        CompilerType compiler;
+        // optional?
+        // vector is needed to provide winsdk.um, winsdk.ucrt
+        // c++ lib and c++ rt lib (exceptions)
+        std::vector<unresolved_package_name> stdlib; // can be mingw64 etc. can be libc++ etc.
+        library_type_type runtime; // move this flag into dependency settings
+    };
+
     os_type os;
     arch_type arch;
     build_type_type build_type;
     library_type_type library_type;
-    // make optional?
+    // optional?
     unresolved_package_name kernel_lib; // can be winsdk.um, mingw64, linux kernel etc.
-    // move under cpp.* (lang.*) struct?
-    c_compiler_type c_compiler;
-    // make optional?
-    std::vector<unresolved_package_name> c_stdlib; // can be mingw64 etc.
-    bool c_static_runtime;
-    cpp_compiler_type cpp_compiler;
-    // make optional?
-    unresolved_package_name cpp_stdlib; // can be libc++ etc.
-    bool cpp_static_runtime;
+    native_language<c_compiler_type> c;
+    native_language<cpp_compiler_type> cpp;
     librarian_type librarian;
     linker_type linker;
 

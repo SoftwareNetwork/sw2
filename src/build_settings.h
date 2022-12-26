@@ -11,8 +11,8 @@ auto default_host_settings() {
     build_settings bs;
     bs.build_type = build_type::release{};
     bs.library_type = library_type::shared{};
-    bs.c_static_runtime = false;
-    bs.cpp_static_runtime = false;
+    bs.c.runtime = library_type::shared{};
+    bs.cpp.runtime = library_type::shared{};
 
 #if defined(__x86_64__) || defined(_M_X64)
     bs.arch = arch::x64{};
@@ -31,11 +31,11 @@ auto default_host_settings() {
     bs.os = os::windows{};
     bs.kernel_lib = unresolved_package_name{"com.Microsoft.Windows.SDK.um"s};
     if (get_msvc_detector().exists()) {
-        bs.c_compiler = c_compiler::msvc{}; // switch to gcc-12+
-        bs.c_stdlib.emplace_back("com.Microsoft.Windows.SDK.ucrt"s);
-        bs.c_stdlib.emplace_back("com.Microsoft.VisualStudio.VC.libc"s);
-        bs.cpp_compiler = cpp_compiler::msvc{}; // switch to gcc-12+
-        bs.cpp_stdlib = unresolved_package_name{"com.Microsoft.VisualStudio.VC.libcpp"s};
+        bs.c.compiler = c_compiler::msvc{}; // switch to gcc-12+
+        bs.c.stdlib.emplace_back("com.Microsoft.Windows.SDK.ucrt"s);
+        bs.c.stdlib.emplace_back("com.Microsoft.VisualStudio.VC.libc"s);
+        bs.cpp.compiler = cpp_compiler::msvc{}; // switch to gcc-12+
+        bs.cpp.stdlib.emplace_back("com.Microsoft.VisualStudio.VC.libcpp"s);
         bs.librarian = librarian::msvc{}; // switch to gcc-12+
         bs.linker = linker::msvc{}; // switch to gcc-12+
     } else {

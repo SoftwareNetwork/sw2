@@ -163,10 +163,10 @@ struct native_target : rule_target, target_data_storage {
                 detect_winsdk(s);
                 get_msvc_detector().add(s);
             };
-            visit_any(bs.c_compiler, [&](c_compiler::msvc &c) {
+            visit_any(bs.c.compiler, [&](c_compiler::msvc &c) {
                 std::call_once(once, load);
             });
-            visit_any(bs.cpp_compiler, [&](cpp_compiler::msvc &c) {
+            visit_any(bs.cpp.compiler, [&](cpp_compiler::msvc &c) {
                 std::call_once(once, load);
             });
             visit_any(bs.linker, [&](librarian::msvc &c) {
@@ -179,14 +179,16 @@ struct native_target : rule_target, target_data_storage {
         std::call_once(s.system_targets_detected, load);
 
         // order
-        add(s.load_target(bs.cpp_stdlib, bs));
-        for (auto &&l : bs.c_stdlib) {
+        for (auto &&l : bs.cpp.stdlib) {
+            add(s.load_target(l, bs));
+        }
+        for (auto &&l : bs.c.stdlib) {
             add(s.load_target(l, bs));
         }
         add(s.load_target(bs.kernel_lib, bs));
 
         ::sw::visit(
-            bs.c_compiler,
+            bs.c.compiler,
             [&](c_compiler::msvc &c) {
                 auto &t = s.load_target(c.package, bs);
                 add(c_compiler::msvc::rule_type{t});
@@ -195,7 +197,7 @@ struct native_target : rule_target, target_data_storage {
                 SW_UNIMPLEMENTED;
             });
         ::sw::visit(
-            bs.cpp_compiler,
+            bs.cpp.compiler,
             [&](cpp_compiler::msvc &c) {
                 auto &t = s.load_target(c.package, bs);
                 add(cpp_compiler::msvc::rule_type{t});

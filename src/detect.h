@@ -92,7 +92,7 @@ struct msvc_instance {
                 add_if_exists("OLDNAMES.LIB");
                 add_if_exists("LEGACY_STDIO_DEFINITIONS.LIB");
                 add_if_exists("LEGACY_STDIO_WIDE_SPECIFIERS.LIB");
-                if (t.bs.c_static_runtime) {
+                if (t.bs.c.runtime.is<library_type::static_>()) {
                     t.bs.build_type.visit_any(
                         [&](build_type::debug) {
                             t.link_libraries.push_back("LIBCMTD.LIB");
@@ -128,7 +128,7 @@ struct msvc_instance {
             //add_if_exists("OLDNAMES.LIB");
             //add_if_exists("LEGACY_STDIO_DEFINITIONS.LIB");
             //add_if_exists("LEGACY_STDIO_WIDE_SPECIFIERS.LIB");
-            if (t.bs.cpp_static_runtime) {
+            if (t.bs.cpp.runtime.is<library_type::static_>()) {
                 t.bs.build_type.visit_any(
                     [&](build_type::debug) {
                         t.link_libraries.push_back("LIBCONCRTD.LIB");
@@ -238,7 +238,7 @@ struct win_kit {
                                   }
                                   t.link_directories.push_back(libdir);
                                   if (name == "ucrt") {
-                                      if (t.bs.c_static_runtime) {
+                                      if (t.bs.c.runtime.is<library_type::static_>()) {
                                           t.bs.build_type.visit_any(
                                               [&](build_type::debug) {
                                                   t.link_libraries.push_back("LIBUCRTD.LIB");

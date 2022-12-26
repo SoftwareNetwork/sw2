@@ -66,6 +66,7 @@ void sw1(auto &cl) {
             std::vector<build_settings> settings{default_build_settings()};
             auto apply = [&]() {
             };
+            //
             if (b.static_ || b.shared) {
                 if (b.static_ && b.shared) {
                     for (auto &&s : settings) {
@@ -87,6 +88,23 @@ void sw1(auto &cl) {
                             s.library_type = library_type::shared{};
                         }
                     }
+                }
+            }
+            //
+            if (b.c_static_runtime) {
+                for (auto &&s : settings) {
+                    s.c.runtime = library_type::static_{};
+                }
+            }
+            if (b.cpp_static_runtime) {
+                for (auto &&s : settings) {
+                    s.cpp.runtime = library_type::static_{};
+                }
+            }
+            if (b.c_and_cpp_static_runtime) {
+                for (auto &&s : settings) {
+                    s.c.runtime = library_type::static_{};
+                    s.cpp.runtime = library_type::static_{};
                 }
             }
 
@@ -114,8 +132,10 @@ int main1(std::span<string_view> args) {
     if (cl.sw1) {
         //Sleep(15000);
         sw1(cl);
-        return 0;
     }
+#ifdef SW1_BUILD
+    return 0;
+#endif
     visit_any(cl.c, [&](command_line_parser::build &b) {
         solution s;
         auto cfg_dir = s.binary_dir / "cfg";
@@ -172,46 +192,18 @@ int main1(std::span<string_view> args) {
     return 0;
 
     solution s;
-    //s.add_input(source_code_input{&build_some_package});
-    s.add_input(entry_point{&self_build::build});
     auto add = [&](auto f) {
         input_with_settings is{entry_point{f}};
         auto dbs = default_build_settings();
         auto set1 = [&]() {
             dbs.arch = arch::x64{};
-            is.settings.insert(dbs);
             dbs.arch = arch::x86{};
-            is.settings.insert(dbs);
             dbs.arch = arch::arm64{};
-            is.settings.insert(dbs);
             dbs.arch = arch::arm{};
-            is.settings.insert(dbs);
-        };
-        auto set2 = [&] {
-            dbs.library_type = library_type::shared{};
-            set1();
-            dbs.library_type = library_type::static_{};
-            set1();
         };
         auto set3 = [&] {
             dbs.build_type = build_type::debug{};
-            set2();
             dbs.build_type = build_type::release{};
-            set2();
         };
-        dbs.c_static_runtime = true;
-        set3();
-        dbs.c_static_runtime = false;
-        set3();
-        s.add_input(std::move(is));
     };
-    //add(&self_build);
-    s.build();
-
-	/*file_storage<physical_file_storage_single_file<basic_contents_hash>> fst{ {"single_file2.bin"} };
-    fst += tgt;
-	for (auto &&handle : fst) {
-		handle.copy("myfile.txt");
-	}*/
-    return 0;
 }

@@ -6,4 +6,8 @@ void build(solution &s) {
         tgt += "ole32.lib"_slib;
         tgt += "OleAut32.lib"_slib;
     }
+    {
+        //s.add<test>();
+        //s.add<test_command>();
+    }
 }

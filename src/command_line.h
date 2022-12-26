@@ -35,9 +35,12 @@ struct command_line_parser {
             }
         }
     };
-    template <auto OptionName> struct flag {
+    template <auto OptionName, auto ... Aliases> struct flag {
         bool value{};
 
+        static bool is_option_flag(auto &&arg) {
+            return option_name() == arg || (((string_view)Aliases == arg) || ... || false);
+        }
         static constexpr string_view option_name() {
             return OptionName;
         }
@@ -54,14 +57,20 @@ struct command_line_parser {
     struct build {
         static constexpr inline auto name = "build"sv;
 
-        input i;
+        input i; // inputs
         flag<"-static"_s> static_;
         flag<"-shared"_s> shared;
+        flag<"-c_static_runtime"_s> c_static_runtime;
+        flag<"-cpp_static_runtime"_s> cpp_static_runtime;
+        flag<"-mt"_s> c_and_cpp_static_runtime; // windows compat
 
         auto options() {
             return std::tie(
                 static_,
-                shared
+                shared,
+                c_static_runtime,
+                cpp_static_runtime,
+                c_and_cpp_static_runtime
             );
         }
 
@@ -98,11 +107,15 @@ struct command_line_parser {
     command c;
     argument<"-d"_s, path> working_directory;
     flag<"-sw1"_s> sw1; // not a driver, but a real invocation
+    flag<"-sfc"_s> sfc;
+    flag<"-sec"_s> sec;
 
     auto options() {
         return std::tie(
             working_directory,
-            sw1
+            sw1,
+            sfc,
+            sec
         );
     }
 
@@ -115,6 +128,12 @@ struct command_line_parser {
             throw std::runtime_error{"no command was issued"};
         }
         parse1(*this, args.subspan(1));
+    }
+    static bool is_option_flag(auto &&opt, auto &&arg) {
+        if constexpr (requires {opt.is_option_flag(arg);}) {
+            return opt.is_option_flag(arg);
+        }
+        return arg == opt.option_name();
     }
     static void parse1(auto &&obj, auto &&args) {
         using type = std::decay_t<decltype(obj)>;
@@ -135,7 +154,7 @@ struct command_line_parser {
                 std::apply(
                     [&](auto &&...opts) {
                         auto f = [&](auto &&opt) {
-                            if (args[0] == opt.option_name()) {
+                            if (is_option_flag(opt, args[0])) {
                                 opt.parse(args = args.subspan(1));
                                 parsed = true;
                             }

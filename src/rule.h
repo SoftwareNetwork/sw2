@@ -57,10 +57,10 @@ string format_log_record(auto &&tgt, auto &&second_part) {
     tgt.bs.build_type.visit_no_special([&](auto &&a) {
         cfg += format("{},", std::decay_t<decltype(a)>::short_name);
     });
-    if (tgt.bs.cpp_static_runtime) {
+    if (tgt.bs.cpp.runtime.is<library_type::static_>()) {
         cfg += "cppmt,";
     }
-    if (tgt.bs.c_static_runtime) {
+    if (tgt.bs.c.runtime.is<library_type::static_>()) {
         cfg += "cmt,";
     }
     cfg.resize(cfg.size() - 1);
@@ -96,8 +96,8 @@ struct cl_exe_rule {
                 }, [&](build_type::release) {
                     c += "-O2";
                 });
-            if (is_c_file(f)) {
-                if (tgt.bs.c_static_runtime) {
+            auto mt_md = [&](auto &&obj) {
+                if (obj.is<library_type::static_>()) {
                     tgt.bs.build_type.visit_any(
                         [&](build_type::debug) {
                             c += "-MTd";
@@ -114,28 +114,13 @@ struct cl_exe_rule {
                             c += "-MD";
                         });
                 }
-            }
-            if (is_cpp_file(f)) {
+            };
+            if (is_c_file(f)) {
+                mt_md(tgt.bs.c.runtime);
+            } else if (is_cpp_file(f)) {
                 c += "-EHsc"; // enable for c too?
                 c += "-std:c++latest";
-
-                if (tgt.bs.cpp_static_runtime) {
-                    tgt.bs.build_type.visit_any(
-                        [&](build_type::debug) {
-                            c += "-MTd";
-                        },
-                        [&](build_type::release) {
-                            c += "-MT";
-                        });
-                } else {
-                    tgt.bs.build_type.visit_any(
-                        [&](build_type::debug) {
-                            c += "-MDd";
-                        },
-                        [&](build_type::release) {
-                            c += "-MD";
-                        });
-                }
+                mt_md(tgt.bs.cpp.runtime);
             }
             c += f, "-Fo" + out.string();
             auto add = [&](auto &&tgt) {
