@@ -260,6 +260,9 @@ struct native_target : rule_target, target_data_storage {
     void add(const definition &d) {
         compile_options.definitions.push_back(d);
     }
+    void add(const include_directory &d) {
+        compile_options.include_directories.push_back(d);
+    }
 
     //void build() { operator()(); }
     //void run(){}

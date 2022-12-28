@@ -6,6 +6,10 @@ void build(solution &s) {
         tgt += "ole32.lib"_slib;
         tgt += "OleAut32.lib"_slib;
     }
+    if (tgt.is<os::macos>()) {
+        // for now
+        tgt += "/usr/local/opt/fmt/include"_idir;
+    }
     {
         //s.add<test>();
         //s.add<test_command>();
