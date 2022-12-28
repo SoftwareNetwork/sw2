@@ -6,8 +6,11 @@
 #ifdef __APPLE__
 #include "helpers.h"
 
+#include <spawn.h>
 #include <sys/event.h>
 #include <unistd.h>
+
+extern char **environ;
 
 namespace sw::macos {
 
@@ -66,22 +69,18 @@ struct executor {
         if (kevent(kfd, &ev, 1, 0, 0, 0) == -1) {
             throw std::runtime_error{"error kevent queue"};
         }
-        /*epoll_event ev{};
-        ev.events = EPOLLIN;
-        ev.data.fd = fd;
-        if (epoll_ctl(efd, EPOLL_CTL_ADD, fd, &ev) == -1) {
-            throw std::runtime_error{"error epoll_ctl: " + std::to_string(errno)};
-        }*/
     }
-    void register_process(auto &&fd, auto &&f) {
-        process_callbacks.emplace(fd, std::move(f));
-
-        /*epoll_event ev{};
-        ev.events = EPOLLIN | EPOLLONESHOT;
-        ev.data.fd = fd;
-        if (epoll_ctl(efd, EPOLL_CTL_ADD, fd, &ev) == -1) {
-            throw std::runtime_error{"error epoll_ctl: " + std::to_string(errno)};
-        }*/
+    void register_process(auto &&pid, auto &&f) {
+        struct kevent ev{};
+        EV_SET(&ev, pid, EVFILT_PROC, EV_ADD | EV_ENABLE, NOTE_EXIT, 0, 0);
+        if (kevent(kfd, &ev, 1, 0, 0, 0) == -1) {
+            if (errno == ESRCH) {
+                f();
+                return;
+            }
+            throw std::runtime_error{"error kevent queue"};
+        }
+        process_callbacks.emplace(pid, std::move(f));
     }
 };
 

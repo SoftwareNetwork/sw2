@@ -102,6 +102,7 @@ struct command_line_parser {
             0 || check_spec("sw.h")
               || check_spec("sw.cpp") // old compat. After rewrite remove sw.h
               //|| check_spec("sw2.cpp")
+              //|| (i = directory_input{"."}, true)
                 ;
             parse1(*this, args);
         }

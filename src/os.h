@@ -53,8 +53,8 @@ struct build_settings {
     using library_type_type = special_variant<library_type::static_, library_type::shared>;
     using c_compiler_type = special_variant<c_compiler::clang, c_compiler::gcc, c_compiler::msvc>;
     using cpp_compiler_type = special_variant<cpp_compiler::clang, cpp_compiler::gcc, cpp_compiler::msvc>;
-    using librarian_type = special_variant<librarian::msvc>;
-    using linker_type = special_variant<linker::msvc>;
+    using librarian_type = special_variant<librarian::ar,librarian::msvc>;
+    using linker_type = special_variant<linker::gcc, linker::gpp, linker::msvc>;
 
     template <typename CompilerType>
     struct native_language {

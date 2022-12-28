@@ -14,7 +14,7 @@ jobs:
       with:
         name: sw
         path: "*.exe"
-        
+
   mingw64:
     if: ${{ false }}
     runs-on: windows-2022
@@ -49,7 +49,7 @@ jobs:
         sudo dnf -y install gcc g++ fmt-devel
     - name: build
       run: |
-        g++ -std=c++2b src/*.cpp -fpermissive -o sw
+        g++ -std=c++2b src/*.cpp -o sw
     #- run: ./sw build
     - uses: actions/upload-artifact@v3
       with:
@@ -65,7 +65,7 @@ jobs:
     - name: build
       run: |
         export PATH="/usr/local/opt/gcc/bin:$PATH"
-        g++-12 -std=c++2b src/*.cpp -fpermissive -I/usr/local/opt/fmt/include -o sw
+        g++-12 -std=c++2b src/*.cpp -I/usr/local/opt/fmt/include -o sw
     #- run: ./sw build
     - uses: actions/upload-artifact@v3
       with:

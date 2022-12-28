@@ -255,25 +255,34 @@ struct gcc_instance {
     }
 };
 
-auto detect_gcc_clang() {
-    std::vector<gcc_instance> cls;
-    cls.emplace_back("/usr/bin/g++"s);
-    return cls;
+auto detect_gcc_clang(auto &s) {
+    s.add_entry_point(package_name{"org.gnu.gcc"s}, entry_point{[&](decltype(s) &s) {
+        auto &t = s.template add<binary_target>(package_name{"org.gnu.gcc"s});
+        t.executable = "/usr/bin/gcc";
+    }});
+    s.add_entry_point(package_name{"org.gnu.g++"s}, entry_point{[&](decltype(s) &s) {
+        auto &t = s.template add<binary_target>(package_name{"org.gnu.g++"s});
+        t.executable = "/usr/bin/g++";
+    }});
+    s.add_entry_point(package_name{"org.gnu.binutils.ar"s}, entry_point{[&](decltype(s) &s) {
+        auto &t = s.template add<binary_target>(package_name{"org.gnu.binutils.ar"s});
+        t.executable = "/usr/bin/ar";
+    }});
 }
 
 struct gcc_compile_rule {
-    gcc_instance gcc;
+    using target_type = binary_target;
 
-    gcc_compile_rule() {
-        //gcc = detect_gcc_clang().at(0);
-    }
+    target_type &compiler;
+
+    gcc_compile_rule(target_uptr &t) : compiler{*std::get<uptr<target_type>>(t)} {}
 
     void operator()(auto &tgt) requires requires { tgt.compile_options; } {
-        /*auto compiler = gcc.cl_target();
         for (auto &&[f, rules] : tgt.processed_files) {
             if (is_cpp_file(f) && !rules.contains(this)) {
                 auto out = tgt.binary_dir / "obj" / f.filename() += ".o";
                 gcc_command c;
+                c.name_ = format_log_record(tgt, "/"s + normalize_path(f.lexically_relative(tgt.source_dir).string()));
                 c += compiler.executable, "-c", "-std=c++2b", f, "-o", out;
                 auto add = [&](auto &&tgt) {
                     for (auto &&d : tgt.definitions) {
@@ -289,17 +298,69 @@ struct gcc_compile_rule {
                 tgt.commands.emplace_back(std::move(c));
                 rules.insert(this);
             }
-        }*/
+        }
     }
 };
 struct gcc_link_rule {
-    gcc_instance gcc;
+    using target_type = binary_target;
 
-    gcc_link_rule() {
-        gcc = detect_gcc_clang().at(0);
-    }
+    target_type &linker;
+
+    gcc_link_rule(target_uptr &t) : linker{*std::get<uptr<target_type>>(t)} {}
 
     void operator()(auto &tgt) requires requires { tgt.link_options; } {
+        io_command c;
+        c += linker.executable;
+        if constexpr (requires { tgt.executable; }) {
+            c.name_ = format_log_record(tgt, tgt.executable.extension().string());
+            c += "-o", tgt.executable.string();
+            c.outputs.insert(tgt.executable);
+        } else if constexpr (requires { tgt.library; }) {
+            c.name_ = format_log_record(tgt, tgt.library.extension().string());
+            if (!tgt.implib.empty()) {
+                //mingw?cygwin?
+                //c += "-DLL";
+                //c += "-IMPLIB:" + tgt.implib.string();
+                //c.outputs.insert(tgt.implib);
+            }
+            c += "-o", tgt.library.string();
+            c.outputs.insert(tgt.library);
+        } else {
+            SW_UNIMPLEMENTED;
+        }
+        for (auto &&[f, rules] : tgt.processed_files) {
+            if (f.extension() == ".o") {
+                c += f;
+                c.inputs.insert(f);
+                rules.insert(this);
+            }
+        }
+        auto add = [&](auto &&tgt) {
+            for (auto &&i : tgt.link_directories) {
+                c += "-L", i;
+            }
+            for (auto &&d : tgt.link_libraries) {
+                c += d;
+            }
+            for (auto &&d : tgt.system_link_libraries) {
+                c += d;
+            }
+        };
+        add(tgt.link_options);
+        tgt.commands.emplace_back(std::move(c));
+    }
+};
+struct lib_ar_rule {
+    using target_type = binary_target;
+
+    target_type &compiler;
+
+    lib_ar_rule(target_uptr &t) : compiler{*std::get<uptr<target_type>>(t)} {}
+
+    void operator()(auto &tgt) requires requires { tgt.link_options; } {
+        int a = 5;
+        a++;
+
         /*path out = tgt.binary_dir / "bin" / (string)tgt.name;
         auto linker = gcc.link_target();
         io_command c;

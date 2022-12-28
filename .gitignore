@@ -1,5 +1,6 @@
 .sw
 .sw4
+sw
 *.lnk
 *.o
 *.obj

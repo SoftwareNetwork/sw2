@@ -43,8 +43,10 @@ auto default_host_settings() {
     }
 #elif defined(__APPLE__)
     bs.os = os::macos{};
-    // bs.c_compiler = c_compiler::gcc{}; // gcc-12+
-    // bs.cpp_compiler = cpp_compiler::gcc{}; // gcc-12+
+    bs.c.compiler = c_compiler::gcc{}; // gcc-12+
+    bs.cpp.compiler = cpp_compiler::gcc{}; // gcc-12+
+    bs.librarian = librarian::ar{}; // switch to gcc-12+
+    bs.linker = linker::gcc{}; // switch to gcc-12+
 #elif defined(__linux__)
     bs.os = os::linux{};
     // bs.c_compiler = c_compiler::gcc{};

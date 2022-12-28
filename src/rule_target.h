@@ -57,12 +57,12 @@ struct rule_target : files_target {
     }
 #endif
 
-    auto &build_settings() {
+    /*auto &build_settings() {
         return bs;
     }
     auto &build_settings() const {
         return bs;
-    }
+    }*/
 
     template <typename T, typename ... Types>
     bool is() { return bs.is<T, Types...>(); }
@@ -97,10 +97,10 @@ struct rule_target : files_target {
     }
 
     void prepare(/*this */auto &&self) {
-        self.init_rules();
+        self.init_rules(self);
     }
     void build(/*this */auto &&self) {
-        self.prepare();
+        self.prepare(self);
 
         command_executor ce;
         ce.run(self);
@@ -178,12 +178,18 @@ struct native_target : rule_target, target_data_storage {
 #ifdef _WIN32
                 detect_winsdk(s);
                 get_msvc_detector().add(s);
+#else
+                detect_gcc_clang(s);
 #endif
             };
             visit_any(bs.c.compiler, [&](c_compiler::msvc &c) {
                 std::call_once(once, load);
+            }, [&](c_compiler::gcc &c) {
+                std::call_once(once, load);
             });
             visit_any(bs.cpp.compiler, [&](cpp_compiler::msvc &c) {
+                std::call_once(once, load);
+            }, [&](cpp_compiler::gcc &c) {
                 std::call_once(once, load);
             });
             visit_any(bs.linker, [&](librarian::msvc &c) {
@@ -202,13 +208,19 @@ struct native_target : rule_target, target_data_storage {
         for (auto &&l : bs.c.stdlib) {
             add(s.load_target(l, bs));
         }
+#if defined(_WIN32)
         add(s.load_target(bs.kernel_lib, bs));
+#endif
 
         ::sw::visit(
             bs.c.compiler,
             [&](c_compiler::msvc &c) {
                 auto &t = s.load_target(c.package, bs);
                 add(c_compiler::msvc::rule_type{t});
+            },
+            [&](c_compiler::gcc &c) {
+                auto &t = s.load_target(c.package, bs);
+                add(c_compiler::gcc::rule_type{t});
             },
             [](auto &) {
                 SW_UNIMPLEMENTED;
@@ -218,6 +230,10 @@ struct native_target : rule_target, target_data_storage {
             [&](cpp_compiler::msvc &c) {
                 auto &t = s.load_target(c.package, bs);
                 add(cpp_compiler::msvc::rule_type{t});
+            },
+            [&](cpp_compiler::gcc &c) {
+                auto &t = s.load_target(c.package, bs);
+                add(cpp_compiler::gcc::rule_type{t});
             },
             [](auto &) {
                 SW_UNIMPLEMENTED;
@@ -345,6 +361,14 @@ struct executable_target : native_target {
             [&](linker::msvc &c) {
                 auto &t = s.load_target(c.package, bs);
                 add(linker::msvc::rule_type{t});
+            },
+            [&](linker::gcc &c) {
+                auto &t = s.load_target(c.package, bs);
+                add(linker::gcc::rule_type{t});
+            },
+            [&](linker::gpp &c) {
+                auto &t = s.load_target(c.package, bs);
+                add(linker::gpp::rule_type{t});
             },
             [](auto &) {
                 SW_UNIMPLEMENTED;

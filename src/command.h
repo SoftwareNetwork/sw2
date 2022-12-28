@@ -282,22 +282,69 @@ struct raw_command {
             if (waitpid(pid, &wstatus, 0) == -1) {
                 throw std::runtime_error{"error waitpid: " + std::to_string(errno)};
             }
-            if (WIFEXITED(wstatus)) {
+            if (WIFSIGNALED(wstatus)) {
+                int exit_code = WTERMSIG(wstatus);
+                cb(exit_code);
+            } else if (WIFEXITED(wstatus)) {
                 int exit_code = WEXITSTATUS(wstatus);
                 cb(exit_code);
             }
-            // check for signal
         });
 #endif
     }
-    void run_macos() {
-        //
+    void run_macos(auto &&ex, auto &&cb) {
+#if defined (__APPLE__)
+        std::vector<string> args;
+        args.reserve(arguments.size());
+        for (auto &&a : arguments) {
+            visit(a, overload{[&](string &s) {
+                args.push_back(s);
+            },
+                              [&](string_view &s) {
+                                  args.push_back(string{s.data(), s.size()});
+                              },
+                              [&](path &p) {
+                                  args.push_back(p.string());
+                              }});
+        }
+        std::vector<char *> args2;
+        args2.reserve(args.size() + 1);
+        for (auto &&a : args) {
+            args2.push_back(a.data());
+        }
+        args2.push_back(0);
+
+        // use simple posix_spawn atm
+        pid_t pid;
+        auto r = posix_spawn(&pid, args2[0], 0, 0, args2.data(), environ);
+        if (r) {
+            throw std::runtime_error{"cant posix_spawn: "s + std::to_string(errno)};
+        }
+
+        ex.register_process(pid, [pid, cb](){
+            int wstatus;
+            if (waitpid(pid, &wstatus, 0) == -1) {
+                throw std::runtime_error{"error waitpid: " + std::to_string(errno)};
+            }
+            if (WIFSIGNALED(wstatus)) {
+                int exit_code = WTERMSIG(wstatus);
+                cb(exit_code);
+            } else if (WIFEXITED(wstatus)) {
+                int exit_code = WEXITSTATUS(wstatus);
+                cb(exit_code);
+            }
+        });
+#endif
     }
     void run(auto &&ex, auto &&cb) {
 #ifdef _WIN32
         run_win32(ex, cb);
 #elif defined(__linux__)
         run_linux(ex, cb);
+#elif defined(__APPLE__)
+        run_macos(ex, cb);
+#else
+#error "unknown platform"
 #endif
     }
     void run(auto &&ex) {

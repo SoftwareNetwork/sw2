@@ -11,8 +11,6 @@
 
 namespace sw {
 
-#ifdef _WIN32
-
 auto get_windows_arch(const build_settings &bs) {
     auto arch = "x64";
     if (bs.is<arch::x64>()) {
@@ -165,6 +163,7 @@ struct msvc_detector {
     std::vector<msvc_instance> msvc;
 
     msvc_detector() {
+#ifdef _WIN32
         auto instances = enumerate_vs_instances();
         for (auto &&i : instances) {
             path root = i.VSInstallLocation;
@@ -180,6 +179,7 @@ struct msvc_detector {
                 }
             }
         }
+#endif
     }
     bool exists() const { return !msvc.empty(); }
     void add(auto &&s) {
@@ -198,9 +198,11 @@ static const char *known_kits[]{"8.1A", "8.1", "8.0", "7.1A", "7.1", "7.0A", "7.
 static const auto reg_root = L"SOFTWARE\\Microsoft\\Windows Kits\\Installed Roots";
 // list all registry views
 static const int reg_access_list[] = {
+#ifdef _WIN32
     KEY_READ,
     KEY_READ | KEY_WOW64_32KEY,
-    KEY_READ | KEY_WOW64_64KEY
+    KEY_READ | KEY_WOW64_64KEY,
+#endif
 };
 static const auto win10_kit_name = "10"s;
 
@@ -342,6 +344,7 @@ struct win_kit {
 };
 
 struct win_sdk_info {
+#ifdef _WIN32
     struct reg {
         struct iter {
             HKEY k;
@@ -403,6 +406,7 @@ struct win_sdk_info {
             return str.c_str();
         }
     };
+#endif
 
     using files = std::set<path>;
 
@@ -418,12 +422,14 @@ struct win_sdk_info {
         list_windows_kits();
     }
     auto list_windows10_kits_from_reg() {
+#ifdef _WIN32
         for (auto access : reg_access_list) {
             reg r{HKEY_LOCAL_MACHINE, reg_root, access};
             for (auto &&s : r) {
                 kits10.insert(s);
             }
         }
+#endif
     }
     auto list_windows10_kits_from_fs() {
         for (auto &d : default_sdk_roots) {
@@ -625,6 +631,7 @@ struct win_sdk_info {
     }
     static files get_windows_kit_root_from_reg(const std::wstring &key) {
         files dirs;
+#ifdef _WIN32
         for (auto access : reg_access_list) {
             if (reg r{HKEY_LOCAL_MACHINE, reg_root, access}; r) {
                 if (auto v = r.string_value(L"KitsRoot" + key); v) {
@@ -636,6 +643,7 @@ struct win_sdk_info {
                 }
             }
         }
+#endif
         return dirs;
     }
 };
@@ -644,7 +652,5 @@ void detect_winsdk(auto &&s) {
     static win_sdk_info sdk;
     sdk.add_kits(s);
 }
-
-#endif
 
 } // namespace sw

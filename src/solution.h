@@ -242,6 +242,9 @@ struct solution {
                 if constexpr (requires { v.prepare(); }) {
                     v.prepare();
                 }
+                if constexpr (requires { v.prepare(v); }) {
+                    v.prepare(v);
+                }
             });
         }
     }
