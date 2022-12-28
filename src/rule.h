@@ -57,10 +57,10 @@ string format_log_record(auto &&tgt, auto &&second_part) {
     tgt.bs.build_type.visit_no_special([&](auto &&a) {
         cfg += format("{},", std::decay_t<decltype(a)>::short_name);
     });
-    if (tgt.bs.cpp.runtime.is<library_type::static_>()) {
+    if (tgt.bs.cpp.runtime.template is<library_type::static_>()) {
         cfg += "cppmt,";
     }
-    if (tgt.bs.c.runtime.is<library_type::static_>()) {
+    if (tgt.bs.c.runtime.template is<library_type::static_>()) {
         cfg += "cmt,";
     }
     cfg.resize(cfg.size() - 1);
@@ -97,7 +97,7 @@ struct cl_exe_rule {
                     c += "-O2";
                 });
             auto mt_md = [&](auto &&obj) {
-                if (obj.is<library_type::static_>()) {
+                if (obj.template is<library_type::static_>()) {
                     tgt.bs.build_type.visit_any(
                         [&](build_type::debug) {
                             c += "-MTd";

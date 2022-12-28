@@ -192,7 +192,7 @@ struct solution {
     T &add(const package_name &name, Args &&...args) {
         package_id id{name, *bs};
         if (targets.contains(id)) {
-            throw std::runtime_error{std::format("target already exists: {}", (string)name)};
+            throw std::runtime_error{format("target already exists: {}", (string)name)};
         }
         // msvc bug? without upt it converts to basic type
         std::unique_ptr<T> ptr;

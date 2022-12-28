@@ -66,6 +66,7 @@ struct files_target : target_base {
     }
 
     // this auto &&self,
+#ifdef _MSC_VER
     auto operator+=(this auto &&self, auto &&v) {
         self.add(v);
         return appender{[&](auto &&v) { self.add(v); }};
@@ -74,6 +75,7 @@ struct files_target : target_base {
         self.remove(v);
         return appender{[&](auto &&v) { self.remove(v); }};
     }
+#endif
 
     auto range() const {
         return files | std::views::transform([&](auto &&p) {

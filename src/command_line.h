@@ -38,7 +38,7 @@ struct command_line_parser {
         }
         void parse(auto &&args) {
             if (args.size() < nargs) {
-                throw std::runtime_error{std::format("no value for argument {}", option_name())};
+                throw std::runtime_error{format("no value for argument {}", option_name())};
             }
             if constexpr (std::same_as<T, bool>) {
                 value = true;
@@ -51,7 +51,9 @@ struct command_line_parser {
         }
     };
     template <auto OptionName, auto ... Aliases> struct flag {
-        bool value{};
+        bool value;
+
+        flag() : value{false} {}
 
         static bool is_option_flag(auto &&arg) {
             return option_name() == arg || (((string_view)Aliases == arg) || ... || false);

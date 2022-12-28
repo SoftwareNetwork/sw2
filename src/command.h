@@ -1038,7 +1038,8 @@ struct command_executor {
         }
         external_commands.clear();
         *this += tgt.commands;
-        run();
+        SW_UNIMPLEMENTED;
+        //run();
     }
     void run(auto &&cl, auto &&sln) {
         create_output_dirs(external_commands);

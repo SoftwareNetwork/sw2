@@ -17,7 +17,9 @@ struct dependency {
 struct rule_target : files_target {
     using base = files_target;
 
+#ifdef _MSC_VER
     using base::operator+=;
+#endif
     using base::add;
     using base::remove;
 
@@ -37,12 +39,23 @@ struct rule_target : files_target {
         source_dir = solution.source_dir;
         binary_dir = make_binary_dir(solution.binary_dir);
     }
-    auto make_binary_dir(const path &parent) {
+    path make_binary_dir(const path &parent) {
         return make_binary_dir(parent, bs.hash());
     }
-    auto make_binary_dir(const path &parent, auto &&config) {
+    path make_binary_dir(const path &parent, auto &&config) {
         return parent / "t" / std::to_string(config) / std::to_string(name.hash());
     }
+
+#ifndef _MSC_VER
+    auto operator+=(auto &&v) {
+        add(v);
+        return appender{[&](auto &&v) { add(v); }};
+    }
+    auto operator-=(auto &&v) {
+        remove(v);
+        return appender{[&](auto &&v) { remove(v); }};
+    }
+#endif
 
     auto &build_settings() {
         return bs;
@@ -60,7 +73,7 @@ struct rule_target : files_target {
     void add(const rule &r) {
         rules.push_back(r);
     }
-    void init_rules(this auto &&self) {
+    void init_rules(/*this */auto &&self) {
         for (auto &&r : self.rules) {
             std::visit([&](auto &&v){
                 if constexpr (requires {v(self);}) {
@@ -83,10 +96,10 @@ struct rule_target : files_target {
         }
     }
 
-    void prepare(this auto &&self) {
+    void prepare(/*this */auto &&self) {
         self.init_rules();
     }
-    void build(this auto &&self) {
+    void build(/*this */auto &&self) {
         self.prepare();
 
         command_executor ce;
@@ -139,7 +152,9 @@ private:
 struct native_target : rule_target, target_data_storage {
     using base = rule_target;
 
+#ifdef _MSC_VER
     using base::operator+=;
+#endif
     using base::add;
     using base::remove;
 
@@ -206,6 +221,17 @@ struct native_target : rule_target, target_data_storage {
                 SW_UNIMPLEMENTED;
             });
     }
+
+#ifndef _MSC_VER
+    auto operator+=(auto &&v) {
+        add(v);
+        return appender{[&](auto &&v) { add(v); }};
+    }
+    auto operator-=(auto &&v) {
+        remove(v);
+        return appender{[&](auto &&v) { remove(v); }};
+    }
+#endif
 
     void add(target_uptr &ptr) {
         dependencies.push_back({&ptr});

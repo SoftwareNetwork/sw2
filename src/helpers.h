@@ -11,7 +11,7 @@
 #include <cmath>
 #include <deque>
 #include <filesystem>
-/*#if __has_include(<format>)
+#if __has_include(<format>)
 #include <format>
 using std::format;
 #elif __has_include(<format.h>)
@@ -20,7 +20,7 @@ using fmt::format;
 #else
 #include <fmt/format.h>
 using fmt::format;
-#endif*/
+#endif
 #include <fstream>
 #include <functional>
 #include <iostream>
@@ -36,18 +36,26 @@ using fmt::format;
 #include <unordered_set>
 #include <variant>
 
+#ifdef _MSC_VER
 template <>
 struct std::formatter<std::source_location> : std::formatter<std::string> {
     auto format(const std::source_location &p, format_context &ctx) {
         return formatter<std::string>::format(std::format("{}:{}", p.file_name(), p.line()), ctx);
     }
 };
+#else
+template <>
+struct fmt::formatter<std::source_location> : fmt::formatter<std::string> {
+    auto format(const std::source_location &p, format_context &ctx) {
+        return formatter<std::string>::format(fmt::format("{}:{}", p.file_name(), p.line()), ctx);
+    }
+};
+#endif
 
 namespace sw {
 
 namespace fs = std::filesystem;
 using path = fs::path;
-using std::format;
 using std::string;
 using std::string_view;
 using std::variant;
@@ -183,7 +191,7 @@ struct abspath : path {
 
 struct unimplemented_exception : std::runtime_error {
     unimplemented_exception(std::source_location sl = std::source_location::current())
-        : runtime_error{std::format("unimplemented: {}", sl)} {}
+        : runtime_error{format("unimplemented: {}", sl)} {}
 };
 #define SW_UNIMPLEMENTED throw unimplemented_exception{}
 
