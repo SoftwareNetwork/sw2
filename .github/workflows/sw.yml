@@ -47,7 +47,9 @@ jobs:
     - name: prepare
       run: |
         sudo dnf -y install gcc g++ fmt-devel
-    - run: g++ -std=c++2b src/*.cpp -fpermissive -o sw
+    - name: build
+      run: |
+        g++ -std=c++2b src/*.cpp -fpermissive -o sw
     - run: ./sw build
     - uses: actions/upload-artifact@v3
       with:
@@ -58,7 +60,9 @@ jobs:
     runs-on: macos-12
     steps:
     - uses: actions/checkout@v3
+    - run: sudo xcode-select --switch /Library/Developer/CommandLineTools
     - run: brew install fmt
+    - run: ls /usr/local/opt/
     - name: build
       run: |
         export PATH="/usr/local/opt/gcc/bin:$PATH"
