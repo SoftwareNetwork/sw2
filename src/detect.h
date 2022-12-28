@@ -675,34 +675,21 @@ path resolve_executable(auto &&exe) {
 }
 
 void detect_gcc_clang(auto &s) {
-    s.add_entry_point(package_name{"org.gnu.gcc"s}, entry_point{[&](decltype(s) &s) {
-        auto &t = s.template add<binary_target>(package_name{"org.gnu.gcc"s});
-        t.executable = "/usr/bin/gcc";
-    }});
-    s.add_entry_point(package_name{"org.gnu.g++"s}, entry_point{[&](decltype(s) &s) {
-        auto &t = s.template add<binary_target>(package_name{"org.gnu.g++"s});
-        t.executable = "/usr/bin/g++";
-    }});
+    auto detect = [&](auto &&prog, auto &&pkg) {
+        if (auto p = resolve_executable(prog); !p.empty()) {
+            s.add_entry_point(pkg, entry_point{[=](decltype(s) &s) {
+                auto &t = s.template add<binary_target>(pkg);
+                t.executable = p;
+            }});
+        }
+    };
+    detect("gcc", c_compiler::gcc::package_name);
+    detect("g++", cpp_compiler::gcc::package_name);
     for (int i = 3; i < 15; ++i) {
-        auto gcc = resolve_executable("gcc-" + std::to_string(i));
-        if (!gcc.empty()) {
-            s.add_entry_point(package_name{"org.gnu.gcc"s, package_version{i}}, entry_point{[&](decltype(s) &s) {
-                auto &t = s.template add<binary_target>(package_name{"org.gnu.gcc"s, package_version{i}});
-                t.executable = "/usr/bin/gcc";
-            }});
-        }
-        auto gpp = resolve_executable("g++-" + std::to_string(i));
-        if (!gpp.empty()) {
-            s.add_entry_point(package_name{"org.gnu.g++"s, package_version{i}}, entry_point{[&](decltype(s) &s) {
-                auto &t = s.template add<binary_target>(package_name{"org.gnu.g++"s, package_version{i}});
-                t.executable = "/usr/bin/g++";
-            }});
-        }
+        detect("gcc-" + std::to_string(i), package_name{c_compiler::gcc::package_name,package_version{i}});
+        detect("g++-" + std::to_string(i), package_name{cpp_compiler::gcc::package_name,package_version{i}});
     }
-    s.add_entry_point(package_name{"org.gnu.binutils.ar"s}, entry_point{[&](decltype(s) &s) {
-        auto &t = s.template add<binary_target>(package_name{"org.gnu.binutils.ar"s});
-        t.executable = "/usr/bin/ar";
-    }});
+    detect("ar", "org.gnu.binutils.ar");
 }
 
 } // namespace sw

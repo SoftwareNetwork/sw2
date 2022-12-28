@@ -139,7 +139,7 @@ struct clang_base : compiler_base {
 struct gcc_base : compiler_base {
     static constexpr auto name = "gcc"sv;
     using compiler_base::compiler_base;
-    gcc_base() : compiler_base{unresolved_package_name{"org.gnu.gcc", "*"}} {
+    gcc_base(const unresolved_package_name &name) : compiler_base{name} {
     }
 
     void detect(auto &sln) {
@@ -175,8 +175,11 @@ struct clang : clang_base {
     using clang_base::clang_base;
 };
 struct gcc : gcc_base {
-    using gcc_base::gcc_base;
     using rule_type = gcc_compile_rule;
+    static inline constexpr auto package_name = "org.gnu.ggcc";
+
+    gcc() : gcc_base{unresolved_package_name{package_name, "*"}} {
+    }
 };
 struct msvc : msvc_base {
     using msvc_base::msvc_base;
@@ -191,8 +194,11 @@ struct clang : clang_base {
     using clang_base::clang_base;
 };
 struct gcc : gcc_base {
-    using gcc_base::gcc_base;
     using rule_type = gcc_compile_rule;
+    static inline constexpr auto package_name = "org.gnu.g++";
+
+    gcc() : gcc_base{unresolved_package_name{package_name, "*"}} {
+    }
 };
 struct msvc : msvc_base {
     using msvc_base::msvc_base;
