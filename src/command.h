@@ -257,25 +257,35 @@ struct raw_command {
                 close(my_pipe[0]);
                 close(my_pipe[1]);
             };
-            setup_pipe(pout, STDOUT_FILENO);
-            setup_pipe(perr, STDERR_FILENO);
+            //setup_pipe(pout, STDOUT_FILENO);
+            //setup_pipe(perr, STDERR_FILENO);
             // child
             if (execve(args2[0], args2.data(), environ) == -1) {
                 std::cerr << "execve error: " << errno << "\n";
                 exit(1);
             }
         }
-        auto postsetup_pipe = [&](auto my_pipe) {
+        auto postsetup_pipe = [&](auto my_pipe, auto &&s) {
             close(my_pipe[1]);
-            ex.register_read_handle(my_pipe[0]);
+            ex.register_read_handle(my_pipe[0], [&s](auto &&buf, int count) {
+                if (count == -1) {
+                    SW_UNIMPLEMENTED;
+                    perror("read failed");
+                    exit(1);
+                } else if (count == 0) {
+                    return;
+                } else {
+                    s.append(buf, count);
+                }
+            });
         };
-        postsetup_pipe(pout);
-        postsetup_pipe(perr);
+        //postsetup_pipe(pout, out);
+        //postsetup_pipe(perr, err);
         ex.register_process(pidfd, [pid, pidfd, pout = pout[0], perr = perr[0], cb](){
             scope_exit se{[&] {
-                close(pout);
-                close(perr);
-                close(pidfd);
+                //close(pout);
+                //close(perr);
+                close(pidfd);;
             }};
 
             int wstatus;
@@ -680,7 +690,7 @@ setlocal
 
 )";
             static inline constexpr auto epilog = R"(E=$?
-if [ $E -ne 0 ]; then echo \"Error code: $E\"; fi
+if [ $E -ne 0 ]; then echo "Error code: $E"; fi
 )";
             static inline constexpr auto arg_delim = "\\";
             static inline constexpr auto any_arg = "$*";
@@ -692,7 +702,7 @@ if [ $E -ne 0 ]; then echo \"Error code: $E\"; fi
         struct sh : sh_base {
         };
     };
-    using shell_type = variant<shell::cmd>;
+    using shell_type = variant<shell::cmd, shell::sh>;
 
     bool always{false};
     std::set<path> inputs;
@@ -805,9 +815,14 @@ if [ $E -ne 0 ]; then echo \"Error code: $E\"; fi
         }
         s += visit(t,[](auto &&v){return v.epilog;});
         write_file(fn, s);
+        fs::permissions(fn, fs::status(fn).permissions() | fs::perms::owner_exec);
     }
     static shell_type detect_shell() {
+#ifdef _WIN32
         return io_command::shell::cmd{};
+#else
+        return io_command::shell::sh{};
+#endif
     }
 };
 

@@ -45,6 +45,7 @@ struct executor {
     int efd;
     std::atomic_bool stopped{false};
     std::atomic_int jobs{0};
+    std::map<int, std::move_only_function<void()>> read_callbacks;
     std::map<int, std::move_only_function<void()>> process_callbacks;
 
     executor() {
@@ -71,27 +72,24 @@ struct executor {
             process_callbacks.erase(it);
             return;
         }
+        auto it = read_callbacks.find(ev.data.fd);
         char buffer[4096];
         while (1) {
             auto count = read(ev.data.fd, buffer, sizeof(buffer));
             if (count == -1) {
                 if (errno == EINTR) {
                     continue;
-                } else {
-                    perror("read");
-                    exit(1);
                 }
-            } else if (count == 0) {
-                break;
-            } else {
-                //handle_child_process_output(buffer, count);
-                int a = 5;
-                a++;
+            }
+            if (it != read_callbacks.end()) {
+                it->second();
             }
         }
     }
 
-    void register_read_handle(auto &&fd) {
+    void register_read_handle(auto &&fd, auto &&f) {
+        read_callbacks.emplace(fd, f);
+
         epoll_event ev{};
         ev.events = EPOLLIN;
         ev.data.fd = fd;

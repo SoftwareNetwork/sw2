@@ -312,7 +312,7 @@ struct gcc_link_rule {
         io_command c;
         c += linker.executable;
         if constexpr (requires { tgt.executable; }) {
-            c.name_ = format_log_record(tgt, tgt.executable.extension().string());
+            c.name_ = format_log_record(tgt, "");
             c += "-o", tgt.executable.string();
             c.outputs.insert(tgt.executable);
         } else if constexpr (requires { tgt.library; }) {
@@ -360,6 +360,7 @@ struct lib_ar_rule {
     void operator()(auto &tgt) requires requires { tgt.link_options; } {
         int a = 5;
         a++;
+        SW_UNIMPLEMENTED;
 
         /*path out = tgt.binary_dir / "bin" / (string)tgt.name;
         auto linker = gcc.link_target();
