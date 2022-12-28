@@ -653,4 +653,56 @@ void detect_winsdk(auto &&s) {
     sdk.add_kits(s);
 }
 
+path resolve_executable(auto &&exe) {
+#ifdef _WIN32
+    auto p = getenv("Path");
+    auto delim = ';';
+#else
+    auto p = getenv("PATH");
+    auto delim = ':';
+#endif
+    if (!p) {
+        return {};
+    }
+    string p2 = p;
+    for (const auto word : std::views::split(p2, delim) | std::views::transform([](auto &&word){return std::string_view{word.begin(), word.end()};})) {
+         auto p = path{word} / exe;
+         if (fs::exists(p)) {
+             return p;
+         }
+    }
+    return {};
+}
+
+void detect_gcc_clang(auto &s) {
+    s.add_entry_point(package_name{"org.gnu.gcc"s}, entry_point{[&](decltype(s) &s) {
+        auto &t = s.template add<binary_target>(package_name{"org.gnu.gcc"s});
+        t.executable = "/usr/bin/gcc";
+    }});
+    s.add_entry_point(package_name{"org.gnu.g++"s}, entry_point{[&](decltype(s) &s) {
+        auto &t = s.template add<binary_target>(package_name{"org.gnu.g++"s});
+        t.executable = "/usr/bin/g++";
+    }});
+    for (int i = 3; i < 15; ++i) {
+        auto gcc = resolve_executable("gcc-" + std::to_string(i));
+        if (!gcc.empty()) {
+            s.add_entry_point(package_name{"org.gnu.gcc"s, package_version{i}}, entry_point{[&](decltype(s) &s) {
+                auto &t = s.template add<binary_target>(package_name{"org.gnu.gcc"s, package_version{i}});
+                t.executable = "/usr/bin/gcc";
+            }});
+        }
+        auto gpp = resolve_executable("g++-" + std::to_string(i));
+        if (!gpp.empty()) {
+            s.add_entry_point(package_name{"org.gnu.g++"s, package_version{i}}, entry_point{[&](decltype(s) &s) {
+                auto &t = s.template add<binary_target>(package_name{"org.gnu.g++"s, package_version{i}});
+                t.executable = "/usr/bin/g++";
+            }});
+        }
+    }
+    s.add_entry_point(package_name{"org.gnu.binutils.ar"s}, entry_point{[&](decltype(s) &s) {
+        auto &t = s.template add<binary_target>(package_name{"org.gnu.binutils.ar"s});
+        t.executable = "/usr/bin/ar";
+    }});
+}
+
 } // namespace sw

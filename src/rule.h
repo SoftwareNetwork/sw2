@@ -240,36 +240,6 @@ struct link_exe_rule {
     }
 };
 
-struct gcc_instance {
-    path bin;
-
-    auto cl_target() const {
-        /*binary_target t{package_name{"org.gnu.gcc"s, "0.0.1"}};
-        t.executable = bin;
-        return t;*/
-    }
-    auto link_target() const {
-        /*binary_target t{package_name{"org.gnu.gcc"s, "0.0.1"}};
-        t.executable = bin;
-        return t;*/
-    }
-};
-
-auto detect_gcc_clang(auto &s) {
-    s.add_entry_point(package_name{"org.gnu.gcc"s}, entry_point{[&](decltype(s) &s) {
-        auto &t = s.template add<binary_target>(package_name{"org.gnu.gcc"s});
-        t.executable = "/usr/bin/gcc";
-    }});
-    s.add_entry_point(package_name{"org.gnu.g++"s}, entry_point{[&](decltype(s) &s) {
-        auto &t = s.template add<binary_target>(package_name{"org.gnu.g++"s});
-        t.executable = "/usr/bin/g++";
-    }});
-    s.add_entry_point(package_name{"org.gnu.binutils.ar"s}, entry_point{[&](decltype(s) &s) {
-        auto &t = s.template add<binary_target>(package_name{"org.gnu.binutils.ar"s});
-        t.executable = "/usr/bin/ar";
-    }});
-}
-
 struct gcc_compile_rule {
     using target_type = binary_target;
 
