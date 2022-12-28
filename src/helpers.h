@@ -219,6 +219,34 @@ static bool is_mingw_shell() {
     return b;
 }
 
+template <typename T>
+struct swap_and_restore {
+    T &restore;
+    T original_value;
+    bool should_restore{true};
+
+public:
+    swap_and_restore(T &restore) : swap_and_restore(restore, restore) {
+    }
+    template <typename U>
+    swap_and_restore(T &restore, U NewVal) : restore(restore), original_value(restore) {
+        restore = std::move(NewVal);
+    }
+    ~swap_and_restore() {
+        if (should_restore)
+            restore = std::move(original_value);
+    }
+    void restore_now(bool force) {
+        if (!force && !should_restore)
+            return;
+        restore = std::move(original_value);
+        should_restore = false;
+    }
+
+    swap_and_restore(const swap_and_restore &) = delete;
+    swap_and_restore &operator=(const swap_and_restore &) = delete;
+};
+
 auto read_file(const path &fn) {
     auto sz = fs::file_size(fn);
     string s(sz, 0);

@@ -10,6 +10,9 @@ void build(Solution &s) {
             t += "OleAut32.lib"_slib;
             t += "advapi32.lib"_slib;
         }
+        if (t.getCompilerType() == CompilerType::MSVC) {
+            t.CompileOptions.push_back("/bigobj");
+        }
     }
 }
 

@@ -73,29 +73,34 @@ void sw1(auto &cl) {
             auto apply = [&]() {
             };
             //
-            if (b.static_ || b.shared) {
-                if (b.static_ && b.shared) {
-                    for (auto &&s : settings) {
-                        s.library_type = library_type::static_{};
-                    }
-                    auto s2 = settings;
-                    for (auto &&s : s2) {
-                        s.library_type = library_type::shared{};
-                        settings.push_back(s);
-                    }
-                } else {
-                    if (b.static_) {
+            auto static_shared_product = [&](auto &&v1, auto &v2, auto &&f) {
+                if (v1 || v2) {
+                    if (v1 && v2) {
                         for (auto &&s : settings) {
-                            s.library_type = library_type::static_{};
+                            f(s, library_type::static_{});
                         }
-                    }
-                    if (b.shared) {
-                        for (auto &&s : settings) {
-                            s.library_type = library_type::shared{};
+                        auto s2 = settings;
+                        for (auto &&s : s2) {
+                            f(s, library_type::shared{});
+                            settings.push_back(s);
+                        }
+                    } else {
+                        if (v1) {
+                            for (auto &&s : settings) {
+                                f(s, library_type::static_{});
+                            }
+                        }
+                        if (v2) {
+                            for (auto &&s : settings) {
+                                f(s, library_type::shared{});
+                            }
                         }
                     }
                 }
-            }
+            };
+            static_shared_product(b.static_, b.shared, [](auto &&s, auto &&v) {
+                s.library_type = v;
+            });
             //
             if (b.c_static_runtime) {
                 for (auto &&s : settings) {
@@ -107,12 +112,50 @@ void sw1(auto &cl) {
                     s.cpp.runtime = library_type::static_{};
                 }
             }
-            if (b.c_and_cpp_static_runtime) {
-                for (auto &&s : settings) {
-                    s.c.runtime = library_type::static_{};
-                    s.cpp.runtime = library_type::static_{};
+            static_shared_product(b.c_and_cpp_static_runtime, b.c_and_cpp_dynamic_runtime, [](auto &&s, auto &&v) {
+                s.c.runtime = v;
+                s.cpp.runtime = v;
+            });
+            /*static_shared_product(b.c_and_cpp_static_runtime, b.c_and_cpp_dynamic_runtime, [](auto &&s, auto &&v) {
+                s.cpp.runtime = v;
+            });*/
+
+            auto cfg_product = [&](auto &&v1, auto &&f2) {
+                if (!v1) {
+                    return;
                 }
-            }
+                auto values = (string)v1;
+                auto r = values | std::views::split(',') | std::views::transform([](auto &&word) {
+                             return std::string_view{word.begin(), word.end()};
+                         });
+                auto s2 = settings;
+                for (int i = 0; auto &&value : r) {
+                    if (i++) {
+                        for (auto &&s : s2) {
+                            auto &v2 = s.*f2;
+                            v2.for_each([&](auto &&a) {
+                                using T = std::decay_t<decltype(a)>;
+                                if (T::is(value)) {
+                                    v2 = T{};
+                                }
+                            });
+                            settings.push_back(s);
+                        }
+                    } else {
+                        for (auto &&s : settings) {
+                            auto &v2 = s.*f2;
+                            v2.for_each([&](auto &&a) {
+                                using T = std::decay_t<decltype(a)>;
+                                if (T::is(value)) {
+                                    v2 = T{};
+                                }
+                            });
+                        }
+                    }
+                }
+            };
+            cfg_product(b.arch, &build_settings::arch);
+            cfg_product(b.config, &build_settings::build_type);
 
             auto add_input = [&](auto &&f, auto &&dir) {
                 input_with_settings is;
@@ -140,7 +183,9 @@ int main1(int argc, char *argv[]) {
         fs::current_path(cl.working_directory);
     }
     if (cl.sw1) {
-        //Sleep(15000);
+        if (cl.int3) {
+            debug_break();
+        }
         sw1(cl);
     }
 #ifdef SW1_BUILD
@@ -188,7 +233,7 @@ int main1(int argc, char *argv[]) {
         s.source_dir = cfg_dir;
         input_with_settings is{entry_point{&self_build::build}};
         auto dbs = default_build_settings();
-        //dbs.build_type = build_type::debug{};
+        dbs.build_type = build_type::debug{};
         is.settings.insert(dbs);
         s.add_input(is);
         s.build(cl);
@@ -196,7 +241,6 @@ int main1(int argc, char *argv[]) {
         auto &&t = s.targets.find_first<executable>("sw");
 
         auto setup_path = [](auto &&in) {
-            //string s = in.string();
             auto s = normalize_path_and_drive(in);
             if (is_mingw_shell()) {
                //mingw_drive_letter(s);
@@ -212,12 +256,4 @@ int main1(int argc, char *argv[]) {
         c.run();
     });
     return 0;
-
-    /*dbs.arch = arch::x64{};
-    dbs.arch = arch::x86{};
-    dbs.arch = arch::arm64{};
-    dbs.arch = arch::arm{};
-
-    dbs.build_type = build_type::debug{};
-    dbs.build_type = build_type::release{};*/
 }

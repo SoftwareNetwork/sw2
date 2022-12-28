@@ -115,6 +115,15 @@ namespace sw {
 
 using linux::executor;
 
+inline void debug_break() {
+#ifdef _WIN32
+#elif defined(__aarch64__)
+    __asm__("brk #0x1"); // "trap" does not work for gcc
+#else
+    __asm__("int3");
+#endif
+}
+
 }
 
 #endif

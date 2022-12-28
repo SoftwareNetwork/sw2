@@ -52,31 +52,35 @@ struct msvc_instance {
     auto version() const {
         return package_version{package_version::number_version{root.filename().string(), std::get<package_version::number_version>(vs_version.version).extra}};
     }
-    auto cl_target(auto &&s) const {
-        s.add_entry_point(package_name{"com.Microsoft.VisualStudio.VC.cl"s, version()}, entry_point{[&](decltype(s) &s) {
-            auto &t = s.template add<binary_target_msvc>(package_name{"com.Microsoft.VisualStudio.VC.cl"s, version()}, *this);
-            t.executable = root / "bin" / ("Host"s + get_windows_arch(s.host_settings())) / get_windows_arch(t) / "cl.exe";
-        }});
+    auto get_program_path(auto &&s, auto &&t) const {
+        return root / "bin" / ("Host"s + get_windows_arch(s.host_settings())) / get_windows_arch(t);
     }
-    auto lib_target(auto &&s) const {
-        s.add_entry_point(
-            package_name{"com.Microsoft.VisualStudio.VC.lib"s, version()}, entry_point{[&](decltype(s) &s) {
-                auto &t = s.template add<binary_target>(package_name{"com.Microsoft.VisualStudio.VC.lib"s, version()});
-                t.executable =
-                    root / "bin" / ("Host"s + get_windows_arch(s.host_settings())) / get_windows_arch(t) / "lib.exe";
+    bool has_cl_exe(auto &&s, auto &&t) const {
+        return fs::exists(get_program_path(s,t) / "cl.exe");
+    }
+    auto bin_targets(auto &&s) const {
+        auto add_target = [&](const char *name, const char *pgmname) {
+            s.add_entry_point(package_name{name, version()}, entry_point{[this, name, pgmname](decltype(s) &s) {
+                auto prog = get_program_path(s,*s.bs) / pgmname;
+                if (!fs::exists(prog)) {
+                    return;
+                }
+                auto &t = s.template add<binary_target_msvc>(package_name{name, version()}, *this);
+                t.executable = prog;
             }});
-    }
-    auto link_target(auto &&s) const {
-        s.add_entry_point(package_name{"com.Microsoft.VisualStudio.VC.link"s, version()}, entry_point{[&](decltype(s) &s) {
-            auto &t = s.template add<binary_target>(package_name{"com.Microsoft.VisualStudio.VC.link"s, version()});
-            t.executable = root / "bin" / ("Host"s + get_windows_arch(s.host_settings())) / get_windows_arch(t) / "link.exe";
-        }});
+        };
+        add_target("com.Microsoft.VisualStudio.VC.cl", "cl.exe");
+        add_target("com.Microsoft.VisualStudio.VC.lib", "lib.exe");
+        add_target("com.Microsoft.VisualStudio.VC.link", "link.exe");
     }
     auto vcruntime_target(auto &&s) const {
     }
     auto stdlib_target(auto &&s) const {
         s.add_entry_point(
             package_name{"com.Microsoft.VisualStudio.VC.libc"s, version()}, entry_point{[&](decltype(s) &s) {
+                if (!has_cl_exe(s,*s.bs)) {
+                    return;
+                }
                 // com.Microsoft.VisualStudio.VC.STL?
                 auto &t = s.template add<binary_library_target>(package_name{"com.Microsoft.VisualStudio.VC.libc"s, version()});
                 t.include_directories.push_back(root / "include");
@@ -113,6 +117,9 @@ struct msvc_instance {
                 }
             }});
         s.add_entry_point(package_name{"com.Microsoft.VisualStudio.VC.libcpp"s, version()}, entry_point{[&](decltype(s) &s) {
+            if (!has_cl_exe(s,*s.bs)) {
+                return;
+            }
             // com.Microsoft.VisualStudio.VC.STL?
             auto &t = s.template add<binary_library_target>(package_name{"com.Microsoft.VisualStudio.VC.libcpp"s, version()});
             t.include_directories.push_back(root / "include");
@@ -152,9 +159,7 @@ struct msvc_instance {
     //auto root() const { return install_location / "VC" / "Tools" / "MSVC"; }
 
     void add(auto &&s) {
-        cl_target(s);
-        lib_target(s);
-        link_target(s);
+        bin_targets(s);
         stdlib_target(s);
     }
 };
@@ -683,13 +688,22 @@ void detect_gcc_clang(auto &s) {
             }});
         }
     };
+
+    detect("ar", "org.gnu.binutils.ar");
+
     detect("gcc", c_compiler::gcc::package_name);
     detect("g++", cpp_compiler::gcc::package_name);
     for (int i = 3; i < 15; ++i) {
         detect("gcc-" + std::to_string(i), package_name{c_compiler::gcc::package_name,package_version{i}});
         detect("g++-" + std::to_string(i), package_name{cpp_compiler::gcc::package_name,package_version{i}});
     }
-    detect("ar", "org.gnu.binutils.ar");
+
+    detect("clang", c_compiler::clang::package_name);
+    detect("clang++", cpp_compiler::clang::package_name);
+    for (int i = 2; i < 25; ++i) {
+        detect("clangcc-" + std::to_string(i), package_name{c_compiler::clang::package_name, package_version{i}});
+        detect("clang++-" + std::to_string(i), package_name{cpp_compiler::clang::package_name, package_version{i}});
+    }
 }
 
 } // namespace sw

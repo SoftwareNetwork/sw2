@@ -71,20 +71,36 @@ namespace arch {
 
 struct x86 {
     static constexpr auto name = "x86"sv;
+
+    static bool is(string_view sv) {
+        return name == sv;
+    }
 };
 struct x64 {
     static constexpr auto name = "x64"sv;
+
+    static bool is(string_view sv) {
+        return name == sv;
+    }
 };
-using amd64 = x64;
-using x86_64 = x64;
+using amd64 = x64; // give alternative names
+using x86_64 = x64; // give alternative names
 
 struct arm {
     static constexpr auto name = "arm"sv;
+
+    static bool is(string_view sv) {
+        return name == sv;
+    }
 };
 struct arm64 {
     static constexpr auto name = "arm64"sv;
+
+    static bool is(string_view sv) {
+        return name == sv;
+    }
 };
-using aarch64 = arm64;
+using aarch64 = arm64; // give alternative names
 
 } // namespace arch
 
@@ -93,18 +109,34 @@ namespace build_type {
 struct debug {
     static constexpr auto name = "debug"sv;
     static constexpr auto short_name = "d"sv;
+
+    static bool is(string_view sv) {
+        return name == sv || short_name == sv;
+    }
 };
 struct minimum_size_release {
     static constexpr auto name = "minimum_size_release"sv;
     static constexpr auto short_name = "msr"sv;
+
+    static bool is(string_view sv) {
+        return name == sv || short_name == sv;
+    }
 };
 struct release_with_debug_information {
     static constexpr auto name = "release_with_debug_information"sv;
     static constexpr auto short_name = "rwdi"sv;
+
+    static bool is(string_view sv) {
+        return name == sv || short_name == sv;
+    }
 };
 struct release {
     static constexpr auto name = "release"sv;
     static constexpr auto short_name = "r"sv;
+
+    static bool is(string_view sv) {
+        return name == sv || short_name == sv;
+    }
 };
 
 } // namespace build_type
@@ -130,7 +162,7 @@ struct compiler_base {
 struct clang_base : compiler_base {
     static constexpr auto name = "clang"sv;
     using compiler_base::compiler_base;
-    clang_base() : compiler_base{unresolved_package_name{"org.llvm.clang", "*"}} {
+    clang_base(const unresolved_package_name &name) : compiler_base{name} {
     }
 
     void detect(auto &sln) {
@@ -172,11 +204,15 @@ struct msvc {
 namespace c_compiler {
 
 struct clang : clang_base {
-    using clang_base::clang_base;
+    using rule_type = gcc_compile_rule;
+    static inline constexpr auto package_name = "org.llvm.clang";
+
+    clang() : clang_base{unresolved_package_name{package_name, "*"}} {
+    }
 };
 struct gcc : gcc_base {
     using rule_type = gcc_compile_rule;
-    static inline constexpr auto package_name = "org.gnu.ggcc";
+    static inline constexpr auto package_name = "org.gnu.gcc";
 
     gcc() : gcc_base{unresolved_package_name{package_name, "*"}} {
     }
@@ -191,7 +227,11 @@ struct msvc : msvc_base {
 namespace cpp_compiler {
 
 struct clang : clang_base {
-    using clang_base::clang_base;
+    using rule_type = gcc_compile_rule;
+    static inline constexpr auto package_name = "org.llvm.clang++";
+
+    clang() : clang_base{unresolved_package_name{package_name, "*"}} {
+    }
 };
 struct gcc : gcc_base {
     using rule_type = gcc_compile_rule;

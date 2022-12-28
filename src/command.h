@@ -157,27 +157,10 @@ struct raw_command {
 
         auto cmd = printw();
         auto wdir = working_directory.wstring();
-        try {
         WINAPI_CALL(CreateProcessW(0, cmd.data(), 0, 0,
             inherit_handles, flags, env,
-            wdir.empty() ? 0 : wdir.c_str(),
+            wdir.empty() ? 0 : wdir.data(),
             (LPSTARTUPINFOW)&si, &pi));
-        } catch (std::exception &) {
-            auto b = getenv("MSYSTEM");
-            if (b) {
-                int r{};
-                int flags = 0;
-                flags |= NORMAL_PRIORITY_CLASS;
-                STARTUPINFOW si{};
-                si.cb = sizeof(si);
-                r = CreateProcessW(0, cmd.data(), 0, 0,
-            inherit_handles, flags, env,
-            wdir.empty() ? 0 : wdir.c_str(),
-            (LPSTARTUPINFOW)&si, &pi);
-                std::cerr << r << " " << GetLastError() << "\n";
-            }
-            throw;
-        }
         CloseHandle(pi.hThread);
 
         auto post_setup_stream = [&](auto &&s, auto &&h, auto &&pipe) {
@@ -1122,19 +1105,29 @@ struct command_executor {
                 auto pos = ceil(log10(external_commands.size()));
                 std::cout << "[" << std::setw(pos) << command_id << format("/{}] {}\n", external_commands.size(), c.name());
                 //std::cout.flush(); // for now
-                c.run(get_executor(), [&, run_dependents, cmd](int exit_code) {
+                try {
+                    c.run(get_executor(), [&, run_dependents, cmd](int exit_code) {
+                        --running_commands;
+                        c.exit_code = exit_code;
+                        if (exit_code) {
+                            errors.push_back(cmd);
+                        } else {
+                            run_dependents();
+                        }
+                        if (cl.save_executed_commands || cl.save_failed_commands && exit_code) {
+                            c.save(get_saved_commands_dir(sln));
+                        }
+                        run_next(cl, sln);
+                    });
+                } catch (std::exception &e) {
                     --running_commands;
-                    c.exit_code = exit_code;
-                    if (exit_code) {
-                        errors.push_back(cmd);
-                    } else {
-                        run_dependents();
-                    }
-                    if (cl.save_executed_commands || cl.save_failed_commands && exit_code) {
-                        c.save(get_saved_commands_dir(sln));
+                    c.out_text = e.what();
+                    errors.push_back(cmd);
+                    if (cl.save_executed_commands || cl.save_failed_commands) {
+                        //c.save(get_saved_commands_dir(sln));
                     }
                     run_next(cl, sln);
-                });
+                }
             });
         }
     }

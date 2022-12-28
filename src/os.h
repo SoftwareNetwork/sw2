@@ -31,6 +31,10 @@ struct build_settings {
             return false;
         }
 
+        auto for_each(auto &&f) {
+            (f(Types{}),...);
+        }
+
         decltype(auto) visit(auto &&... args) const {
             return ::sw::visit(*this, FWD(args)...);
         }
@@ -78,7 +82,9 @@ struct build_settings {
     linker_type linker;
 
     auto for_each() const {
-        return std::tie(os, arch, build_type, library_type);
+        // same types wont work and will give wrong results
+        // i.e. library_type and runtimes
+        return std::tie(os, arch, build_type, library_type, c.runtime, cpp.runtime);
     }
     auto for_each(auto &&f) const {
         std::apply(
@@ -112,7 +118,8 @@ struct build_settings {
         return (is1<T>() && ... && is1<Types>());
     }
 
-    size_t hash() const {
+    // faster?
+    size_t hash_old() const {
         size_t h = 0;
         for_each([&](auto &&a) {
             ::sw::visit(a, [&](auto &&v) {
@@ -120,6 +127,15 @@ struct build_settings {
             });
         });
         return h;
+    }
+    size_t hash() const {
+        string s;
+        for_each([&](auto &&a) {
+            ::sw::visit(a, [&](auto &&v) {
+                s += v.name;
+            });
+        });
+        return std::hash<string>()(s);
     }
 
     auto operator<(const build_settings &rhs) const {

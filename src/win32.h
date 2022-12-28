@@ -233,6 +233,12 @@ namespace sw {
 
 using win32::executor;
 
+inline void debug_break() {
+#ifdef _WIN32
+    DebugBreak();
+#endif
+}
+
 }
 
 //#undef WINAPI_CALL

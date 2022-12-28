@@ -36,12 +36,20 @@ struct target_map {
             auto it = targets.find(bs);
             if (it == targets.end()) {
                 ep(s, bs);
+                it = targets.find(bs);
             }
-            it = targets.find(bs);
             if (it == targets.end()) {
                 throw std::runtime_error{"target was not loaded with provided settings"};
             }
             return it->second;
+        }
+        auto try_load(auto &s, const build_settings &bs) {
+            auto it = targets.find(bs);
+            if (it == targets.end()) {
+                ep(s, bs);
+                it = targets.find(bs);
+            }
+            return it;
         }
     };
     struct target_versions {
@@ -105,6 +113,23 @@ struct target_map {
             //throw std::runtime_error{"cannot load package: "s + string{pkg} + ": not found"};
         }
         return *std::get<uptr<T>>(t.targets.begin()->second);
+    }
+    auto &find_and_load(auto &&s, const unresolved_package_name &pkg, const build_settings &bs) {
+        auto it = packages.find(pkg.path);
+        if (it == packages.end()) {
+            throw std::runtime_error{"cannot load package: "s + string{pkg.path} + ": not found"};
+        }
+        auto &r = pkg.range;
+        auto &cnt = it->second.container();
+        for (auto &&[v,d] : cnt | std::views::reverse) {
+            if (r.contains(v)) {
+                auto it = d.try_load(s, bs);
+                if (it != d.container().end()) {
+                    return it->second;
+                }
+            }
+        }
+        throw std::runtime_error{"target was not loaded with provided settings"};
     }
 
     struct end_sentinel{};
@@ -227,9 +252,8 @@ struct solution {
     }
 
     auto &load_target(const unresolved_package_name &pkg, const build_settings &bs) {
-        auto &tv = targets.find(pkg);
         try {
-            return tv.load(*this, bs);
+            return targets.find_and_load(*this, pkg, bs);
         } catch (std::exception &e) {
             throw std::runtime_error{(string)pkg + ": " + e.what()};
         }

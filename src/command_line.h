@@ -7,6 +7,16 @@
 namespace sw {
 
 struct command_line_parser {
+    struct options {
+        struct comma_separated_value {};
+        template <auto AliasName1, auto ... Aliases>
+        struct aliases {
+        };
+        template <auto From, auto To>
+        struct nargs {
+        };
+    };
+
     struct arg {
         string_view value;
         mutable bool consumed{};
@@ -18,19 +28,29 @@ struct command_line_parser {
         std::vector<arg> value;
 
         auto active() const { return value | std::views::filter([](auto &&v){return !v.consumed;}); }
+        auto active(auto &from) const {
+            return std::ranges::subrange{value.begin() + (&from - &value[0]), value.end()}
+            | std::views::filter([](auto &&v){return !v.consumed;});
+        }
+        auto &get_next(auto &from) const {
+            if (empty()) {
+                throw std::runtime_error{"missing argument on the command line"};
+            }
+            auto a = active(from);
+            return *std::begin(a);
+        }
         auto &get_next() const {
             if (empty()) {
                 throw std::runtime_error{"missing argument on the command line"};
             }
-            auto a = active();
-            return *std::begin(a);
+            return get_next(*value.begin());
         }
         bool empty() const { return size() == 0; }
         size_t size() const { return std::ranges::count_if(value, [](auto &&v){return !v.consumed;}); }
         const arg &operator[](int i) const { return value[i]; }
     };
 
-    template <auto OptionName, typename T, auto nargs = 1>
+    template <auto OptionName, typename T, auto ... Options>
     struct argument {
         std::optional<T> value;
 
@@ -44,32 +64,32 @@ struct command_line_parser {
         operator auto() const {
             return *value;
         }
-        void parse(auto &&args) {
-            if (args.size() < nargs) {
+        void parse(auto &&args, auto &&cur) {
+            /*if (args.size() < nargs) {
                 throw std::runtime_error{format("no value for argument {}", option_name())};
-            }
+            }*/
             if constexpr (std::same_as<T, bool>) {
                 value = true;
                 return;
             }
-            auto &a = args.get_next();
+            auto &a = args.get_next(cur);
             if constexpr (std::same_as<T, int>) {
                 value = std::stoi(a.c_str());
             } else {
                 value = a.c_str();
-                SW_UNIMPLEMENTED;
+                //SW_UNIMPLEMENTED;
                 //args = args.subspan(nargs);
             }
             a.consumed = true;
         }
     };
-    template <auto OptionName, auto ... Aliases> struct flag {
+    template <auto OptionName, auto ... Options> struct flag {
         bool value;
 
         flag() : value{false} {}
 
         static bool is_option_flag(auto &&arg) {
-            return option_name() == arg || (((string_view)Aliases == arg) || ... || false);
+            return option_name() == arg;// || (((string_view)Aliases == arg) || ... || false);
         }
         static constexpr string_view option_name() {
             return OptionName;
@@ -77,7 +97,7 @@ struct command_line_parser {
         explicit operator bool() const {
             return value;
         }
-        void parse(auto &&args) {
+        void parse(auto &&args, auto &&) {
             value = true;
         }
     };
@@ -92,7 +112,10 @@ struct command_line_parser {
         flag<"-shared"_s> shared;
         flag<"-c_static_runtime"_s> c_static_runtime;
         flag<"-cpp_static_runtime"_s> cpp_static_runtime;
-        flag<"-mt"_s> c_and_cpp_static_runtime; // windows compat
+        flag<"-mt"_s, options::aliases<"-c_and_cpp_static_runtime"_s>{}> c_and_cpp_static_runtime; // windows compat
+        flag<"-md"_s, options::aliases<"-c_and_cpp_dynamic_runtime"_s>{}> c_and_cpp_dynamic_runtime; // windows compat
+        argument<"-arch"_s, string, options::comma_separated_value{}> arch;
+        argument<"-config"_s, string, options::comma_separated_value{}> config;
 
         auto options() {
             return std::tie(
@@ -100,7 +123,10 @@ struct command_line_parser {
                 shared,
                 c_static_runtime,
                 cpp_static_runtime,
-                c_and_cpp_static_runtime
+                c_and_cpp_static_runtime,
+                c_and_cpp_dynamic_runtime,
+                arch,
+                config
             );
         }
 
@@ -140,11 +166,15 @@ struct command_line_parser {
     flag<"-sw1"_s> sw1; // not a driver, but a real invocation
     flag<"-sfc"_s> save_failed_commands;
     flag<"-sec"_s> save_executed_commands;
+    // some debug
     argument<"-sleep"_s, int> sleep;
+    flag<"-int3"_s> int3;
 
     auto options() {
         return std::tie(
             sleep,
+            int3,
+
             working_directory,
             sw1,
             save_failed_commands,
@@ -194,7 +224,7 @@ struct command_line_parser {
                 [&](auto &&...opts) {
                     auto f = [&](auto &&opt) {
                         if (is_option_flag(opt, a)) {
-                            opt.parse(args);
+                            opt.parse(args, a);
                             parsed = true;
                         }
                     };
@@ -219,7 +249,7 @@ struct command_line_parser {
                     auto f = [&](auto &&opt) {
                         if (is_option_flag(opt, a)) {
                             a.consumed = true;
-                            opt.parse(args);
+                            opt.parse(args, a);
                             parsed = true;
                         }
                     };
@@ -227,7 +257,7 @@ struct command_line_parser {
                 },
                 obj.options());
             if (!parsed) {
-                std::cerr << "unknown option: " << a.value << "\n";
+                throw std::runtime_error{format("unknown option: {}", a.value)};
             }
         }
     }

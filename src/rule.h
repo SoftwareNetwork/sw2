@@ -48,6 +48,9 @@ struct native_sources_rule {
 string format_log_record(auto &&tgt, auto &&second_part) {
     string s = format("[{}]", (string)tgt.name);
     string cfg = "/[";
+    tgt.bs.os.visit([&](auto &&a) {
+        cfg += format("{},", std::decay_t<decltype(a)>::name);
+    });
     tgt.bs.arch.visit([&](auto &&a) {
         cfg += format("{},", std::decay_t<decltype(a)>::name);
     });
@@ -147,7 +150,7 @@ struct cl_exe_rule {
     }
 };
 struct lib_exe_rule {
-    using target_type = binary_target;
+    using target_type = binary_target_msvc;
 
     target_type &librarian;
 
@@ -174,7 +177,7 @@ struct lib_exe_rule {
     }
 };
 struct link_exe_rule {
-    using target_type = binary_target;
+    using target_type = binary_target_msvc;
 
     target_type &linker;
 

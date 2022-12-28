@@ -12,12 +12,11 @@ struct entry_point {
 
     void operator()(auto &sln, const auto &bs) {
         sln.bs = &bs;
-        auto oldsdir = sln.source_dir;
+        swap_and_restore sr{sln.source_dir};
         if (!source_dir.empty()) {
             sln.source_dir = source_dir;
         }
         f(sln);
-        sln.source_dir = oldsdir;
     }
 };
 
