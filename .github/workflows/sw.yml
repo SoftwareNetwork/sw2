@@ -28,6 +28,7 @@ jobs:
     - uses: msys2/setup-msys2@v2
       with:
         msystem: MINGW64
+    - run: g++ --version
     - run: g++ -std=c++2b src/*.cpp -o sw
     - run: ./sw build
     - uses: actions/upload-artifact@v3
