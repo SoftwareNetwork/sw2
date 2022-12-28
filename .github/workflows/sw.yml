@@ -59,13 +59,10 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - run: brew install fmt
-    - run: ls /usr/local/Cellar/fmt/9.1.0/
-    - run: ls /usr/local/Cellar/
-    - run: ls /usr/local/Cellar/include/
     - name: build
       run: |
         export PATH="/usr/local/opt/gcc/bin:$PATH"
-        g++-12 -std=c++2b src/*.cpp -fpermissive -I/opt/homebrew/include - -o sw
+        g++-12 -std=c++2b src/*.cpp -fpermissive -I/opt/homebrew/include -I/usr/local/Cellar/fmt/9.1.0/include -o sw
     - run: ./sw build
     - uses: actions/upload-artifact@v3
       with:
