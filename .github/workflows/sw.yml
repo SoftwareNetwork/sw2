@@ -19,9 +19,15 @@ jobs:
     runs-on: windows-2022
     steps:
     - uses: actions/checkout@v3
+    - uses: msys2/setup-msys2@v2
+      with:
+        msystem: MSYS
     - shell: msys2 {0}
       run: |
         pacman --noconfirm -S mingw-w64-x86_64-fmt
+    - uses: msys2/setup-msys2@v2
+      with:
+        msystem: MINGW64
     - run: g++ -std=c++2b src/*.cpp -o sw
     - run: ./sw build
     - uses: actions/upload-artifact@v3
