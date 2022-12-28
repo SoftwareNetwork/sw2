@@ -142,8 +142,9 @@ int main1(int argc, char *argv[]) {
         s.binary_dir = cfg_dir;
         auto fn = cfg_dir / "src" / "main.cpp";
         fs::create_directories(fn.parent_path());
+        auto swdir = fs::absolute(path{std::source_location::current().file_name()}.parent_path());
         cpp_emitter e;
-        e.include(fs::absolute(path{std::source_location::current().file_name()}.parent_path()) / "sw.h");
+        e.include(swdir / "sw.h");
         e += "";
         struct spec_data {
             path fn;
@@ -164,7 +165,7 @@ int main1(int argc, char *argv[]) {
         e += "#define SW1_BUILD";
         e += "void sw1_load_inputs(auto &&f);";
         e += "";
-        e.include(path{std::source_location::current().file_name()}.parent_path() / "main.cpp");
+        e.include(swdir / "main.cpp");
         e += "";
         e += "void sw1_load_inputs(auto &&f) {";
         for (auto &&ns : nses) {
