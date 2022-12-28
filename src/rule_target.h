@@ -175,8 +175,10 @@ struct native_target : rule_target, target_data_storage {
         auto load = [&] {
             std::once_flag once;
             auto load = [&] {
+#ifdef _WIN32
                 detect_winsdk(s);
                 get_msvc_detector().add(s);
+#endif
             };
             visit_any(bs.c.compiler, [&](c_compiler::msvc &c) {
                 std::call_once(once, load);

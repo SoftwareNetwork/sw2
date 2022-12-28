@@ -15,9 +15,11 @@
 #include <format>
 using std::format;
 #elif __has_include(<format.h>)
+#define FMT_HEADER_ONLY
 #include <format.h>
 using fmt::format;
 #else
+#define FMT_HEADER_ONLY
 #include <fmt/format.h>
 using fmt::format;
 #endif

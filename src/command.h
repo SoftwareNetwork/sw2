@@ -429,7 +429,7 @@ struct command_storage {
 #else
                     //mtime = lwt;
                     //mtime = std::chrono::clock_cast<std::chrono::system_clock>(lwt);
-#ifdef __MINGW32__
+#if defined(__MINGW32__) || defined(__APPLE__)
                     mtime = decltype(lwt)::clock::to_sys(lwt);
 #else
                     mtime = lwt;

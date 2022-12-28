@@ -14,7 +14,11 @@ struct istring : string {
     istring(const string &s) : string{s} {}
 
     std::strong_ordering operator<=>(const istring &rhs) const {
+#ifdef _WIN32
         auto r = stricmp(data(), rhs.data());
+#else
+        auto r = strcasecmp(data(), rhs.data());
+#endif
         if (r == 0) {
             return std::strong_ordering::equal;
         }
