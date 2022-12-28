@@ -28,7 +28,7 @@ jobs:
         pacman --noconfirm -S mingw-w64-x86_64-gcc mingw-w64-x86_64-fmt
     - shell: msys2 {0}
       run: |
-        g++ -std=c++2b src/*.cpp -mbig-obj -Wa,-mbig-obj -o sw
+        g++ -std=c++2b src/*.cpp -Wa,-mbig-obj -o sw
     - shell: msys2 {0}
       run: |
         ./sw build
