@@ -23,17 +23,6 @@ jobs:
           - { icon: '🟦', sys: mingw64 }
     name: 🚧${{ matrix.icon }} ${{ matrix.sys }}
     steps:
-    - name: '${{ matrix.icon }} Setup MSYS2'
-      with:
-        msystem: ${{matrix.sys}}
-        update: true
-        install: >-
-          git
-          make
-        pacboy: >-
-          toolchain:p
-          cmake:p
-          ninja:p
     - run: g++ -std=c++2b src/*.cpp -o sw
     - run: ./sw build
     - uses: actions/upload-artifact@v3
