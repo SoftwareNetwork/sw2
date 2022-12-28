@@ -245,11 +245,11 @@ struct solution {
             });
         }
     }
-    void build() {
+    void build(auto &&cl) {
         executor ex;
-        build(ex);
+        build(ex, cl);
     }
-    void build(auto &&ex) {
+    void build(auto &&ex, auto &&cl) {
         for (auto &&i : inputs) {
             i(*this);
         }
@@ -265,7 +265,7 @@ struct solution {
                 }
             });
         }
-        ce.run();
+        ce.run(cl, *this);
     }
 };
 

@@ -54,7 +54,7 @@ struct cpp_emitter {
 void sw1(auto &cl) {
     visit(
         cl.c,
-        [](command_line_parser::build &b) {
+        [&](command_line_parser::build &b) {
             solution s;
             auto f = [&](auto &&add_input) {
 #ifdef SW1_BUILD
@@ -115,15 +115,15 @@ void sw1(auto &cl) {
                 s.add_input(is);
             };
             f(add_input);
-            s.build();
+            s.build(cl);
         },
         [](auto &&) {
             SW_UNIMPLEMENTED;
         });
 }
 
-int main1(std::span<string_view> args) {
-    command_line_parser cl{args};
+int main1(int argc, char *argv[]) {
+    command_line_parser cl{argc, argv};
 
     auto this_path = fs::current_path();
     if (cl.working_directory) {
@@ -180,13 +180,16 @@ int main1(std::span<string_view> args) {
         //dbs.build_type = build_type::debug{};
         is.settings.insert(dbs);
         s.add_input(is);
-        s.build();
+        s.build(cl);
 
         auto &&t = s.targets.find_first<executable>("sw");
 
         raw_command c;
         c.working_directory = this_path;
-        c += t.executable, "-sw1", args.subspan(1);
+        c += t.executable, "-sw1";
+        for (int i = 1; i < argc; ++i) {
+            c += (const char *)argv[i];
+        }
         c.run();
     });
     return 0;

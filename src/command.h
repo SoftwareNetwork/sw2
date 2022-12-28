@@ -385,6 +385,7 @@ struct command_hash {
         }
     }
     explicit operator bool() const { return h; }
+    operator auto() const { return h; }
     auto operator<=>(const command_hash &) const = default;
 };
 
@@ -605,6 +606,47 @@ struct io_command : raw_command {
     using base = raw_command;
     using clock = command_storage::clock;
 
+    struct shell {
+        struct cmd {
+            static inline constexpr auto extension = ".bat";
+            static inline constexpr auto prolog = R"(@echo off
+
+setlocal
+
+)";
+            static inline constexpr auto epilog =
+                R"(if %ERRORLEVEL% NEQ 0 echo Error code: %ERRORLEVEL% && exit /b %ERRORLEVEL%
+)";
+            static inline constexpr auto arg_delim = "^";
+            static inline constexpr auto any_arg = "%*";
+        };
+        struct powershell {
+            static inline constexpr auto extension = ".ps1";
+            static inline constexpr auto prolog = R"()";
+            static inline constexpr auto epilog = R"()";
+            static inline constexpr auto arg_delim = "";
+            static inline constexpr auto any_arg = "%*";
+        };
+        struct sh_base {
+            static inline constexpr auto extension = ".sh";
+            static inline constexpr auto prolog = R"(#!/bin/sh
+
+)";
+            static inline constexpr auto epilog = R"(E=$?
+if [ $E -ne 0 ]; then echo \"Error code: $E\"; fi
+)";
+            static inline constexpr auto arg_delim = "\\";
+            static inline constexpr auto any_arg = "$*";
+        };
+        struct mingw : sh_base {
+        };
+        struct cygwin : sh_base {
+        };
+        struct sh : sh_base {
+        };
+    };
+    using shell_type = variant<shell::cmd>;
+
     bool always{false};
     std::set<path> inputs;
     std::set<path> outputs;
@@ -676,6 +718,49 @@ struct io_command : raw_command {
             return {};
         }
         return "command failed: " + name() + ":\n" + raw_command::get_error_message(exit_code);
+    }
+
+    void save(const path &dir, shell_type t = detect_shell()) {
+        auto fn = dir / std::to_string(hash()) += visit(t,[](auto &&v){return v.extension;});
+        string s;
+        s += visit(t,[](auto &&v){return v.prolog;});
+        s += "echo " + name() + "\n\n";
+        // env
+        if (!working_directory.empty()) {
+            s += "cd \"" + working_directory.string() + "\"\n\n";
+        }
+        for (int i = 0; auto &&a : arguments) {
+            if (i++) {
+                s += "    ";
+            }
+            auto quote = [&](const std::string &as) {
+                s += "\"" + as + "\" " + visit(t,[](auto &&v){return v.arg_delim;}) + "\n";
+                /*if (as.contains(" ")) {
+                    s += "\"" + as + "\" ";
+                } else {
+                    s += as + " ";
+                }*/
+            };
+            visit(a, overload{[&](const string &s) {
+                                  quote(s);
+                              },
+                              [&](const string_view &s) {
+                                  quote(string{s.data(), s.size()});
+                              },
+                              [&](const path &p) {
+                                  quote(p.string());
+                              }});
+        }
+        if (!arguments.empty()) {
+            s.resize(s.size() - 2 - string{visit(t,[](auto &&v){return v.arg_delim;})}.size());
+            s += " "s + visit(t,[](auto &&v){return v.any_arg;});
+            s += "\n\n";
+        }
+        s += visit(t,[](auto &&v){return v.epilog;});
+        write_file(fn, s);
+    }
+    static shell_type detect_shell() {
+        return io_command::shell::cmd{};
     }
 };
 
@@ -908,7 +993,7 @@ struct command_executor {
     bool is_stopped() const {
         return ignore_errors < errors.size();
     }
-    void run_next() {
+    void run_next(auto &&cl, auto &&sln) {
         while (running_commands < maximum_running_commands && !pending_commands.empty() && !is_stopped()) {
             auto cmd = pending_commands.front();
             pending_commands.pop_front();
@@ -938,7 +1023,10 @@ struct command_executor {
                     } else {
                         run_dependents();
                     }
-                    run_next();
+                    if (cl.save_executed_commands || cl.save_failed_commands && exit_code) {
+                        c.save(get_saved_commands_dir(sln));
+                    }
+                    run_next(cl, sln);
                 });
             });
         }
@@ -952,10 +1040,11 @@ struct command_executor {
         *this += tgt.commands;
         run();
     }
-    void run() {
+    void run(auto &&cl, auto &&sln) {
         create_output_dirs(external_commands);
         make_dependencies(external_commands);
         check_dag(external_commands);
+        prepare(cl, sln);
 
         // initial set of commands
         for (auto &&c : external_commands) {
@@ -965,7 +1054,7 @@ struct command_executor {
                 }
             });
         }
-        run_next();
+        run_next(cl, sln);
         get_executor().run();
 
         if (!errors.empty()) {
@@ -978,6 +1067,16 @@ struct command_executor {
             t += "Total errors: " + std::to_string(errors.size());
             throw std::runtime_error{t};
         }
+    }
+    void prepare(auto &&cl, auto &&sln) {
+        // some preps
+        if (cl.save_executed_commands || cl.save_failed_commands) {
+            fs::create_directories(get_saved_commands_dir(sln));
+        }
+    }
+    path get_saved_commands_dir(auto &&sln) {
+        return fs::current_path() / ".sw" / "rsp";
+        //return sln.binary_dir / "rsp";
     }
 
     void operator+=(std::vector<command> &commands) {

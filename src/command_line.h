@@ -7,7 +7,20 @@
 namespace sw {
 
 struct command_line_parser {
-    using args = std::span<string_view>;
+    struct arg {
+        string_view value;
+        mutable bool consumed{};
+        operator auto() const { return value; }
+        //operator const char *() const { return value.data(); }
+        auto c_str() const { return value.data(); }
+    };
+    struct args {
+        std::vector<arg> value;
+        auto active() const { return value | std::views::filter([](auto &&v){return !v.consumed;}); }
+        bool empty() const { return size() == 0; }
+        size_t size() const { return std::ranges::count_if(value, [](auto &&v){return !v.consumed;}); }
+        const arg &operator[](int i) const { return value[i]; }
+    };
 
     template <auto OptionName, typename T, auto nargs = 1>
     struct argument {
@@ -30,8 +43,10 @@ struct command_line_parser {
             if constexpr (std::same_as<T, bool>) {
                 value = true;
             } else {
-                value = args[0];
-                args = args.subspan(nargs);
+                value = args[0].c_str();
+                //args[0].consumed = true;
+                SW_UNIMPLEMENTED;
+                //args = args.subspan(nargs);
             }
         }
     };
@@ -74,7 +89,7 @@ struct command_line_parser {
             );
         }
 
-        void parse(auto &&args) {
+        void parse(const args &args) {
             auto check_spec = [&](auto &&fn) {
                 if (fs::exists(fn)) {
                     i = specification_file_input{fn};
@@ -107,27 +122,29 @@ struct command_line_parser {
     command c;
     argument<"-d"_s, path> working_directory;
     flag<"-sw1"_s> sw1; // not a driver, but a real invocation
-    flag<"-sfc"_s> sfc;
-    flag<"-sec"_s> sec;
+    flag<"-sfc"_s> save_failed_commands;
+    flag<"-sec"_s> save_executed_commands;
 
     auto options() {
         return std::tie(
             working_directory,
             sw1,
-            sfc,
-            sec
+            save_failed_commands,
+            save_executed_commands
         );
     }
 
-    command_line_parser(std::span<string_view> args) {
-        parse(args);
+    command_line_parser(int argc, char *argv[]) {
+        args a{.value{(const char **)argv, (const char **)argv + argc}};
+        parse(a);
         // run()?
     }
-    void parse(args args) {
+    void parse(const args &args) {
         if (args.size() <= 1) {
             throw std::runtime_error{"no command was issued"};
         }
-        parse1(*this, args.subspan(1));
+        args[0].consumed = true;
+        parse1(*this, args, false);
     }
     static bool is_option_flag(auto &&opt, auto &&arg) {
         if constexpr (requires {opt.is_option_flag(arg);}) {
@@ -135,46 +152,64 @@ struct command_line_parser {
         }
         return arg == opt.option_name();
     }
-    static void parse1(auto &&obj, auto &&args) {
+    static void parse1(auto &&obj, auto &&args, bool command = true) {
         using type = std::decay_t<decltype(obj)>;
-        while (!args.empty()) {
+        // pre command
+        for (auto &&a : args.active()) {
+            a.consumed = true;
             bool iscmd{};
-            if constexpr (requires {obj.c;}) {
-                iscmd = type::command_types::for_each([&]<typename T>(T **) {
-                    if (args.empty()) {
-                        return false;
-                    }
-                    if (T::name == args[0]) {
+            if constexpr (requires { obj.c; }) {
+                iscmd = command || type::command_types::for_each([&]<typename T>(T **) {
+                    if (T::name == a) {
                         obj.c = T{};
-                        std::get<T>(obj.c).parse(args = args.subspan(1));
+                        std::get<T>(obj.c).parse(args);
                         return true;
                     }
                     return false;
                 });
             }
-            if (!iscmd) {
-                bool parsed{};
-                std::apply(
-                    [&](auto &&...opts) {
-                        auto f = [&](auto &&opt) {
-                            if (args.empty()) {
-                                return;
-                            }
-                            if (is_option_flag(opt, args[0])) {
-                                opt.parse(args = args.subspan(1));
-                                parsed = true;
-                            }
-                        };
-                        (f(FWD(opts)), ...);
-                    },
-                    obj.options());
-                if (!parsed) {
-                    if (args.empty()) {
-                        continue;
-                    }
-                    std::cerr << "unknown option: " << args[0] << "\n";
-                    args = args.subspan(1);
+            if (iscmd) {
+                break;
+            }
+            bool parsed{};
+            std::apply(
+                [&](auto &&...opts) {
+                    auto f = [&](auto &&opt) {
+                        if (is_option_flag(opt, a)) {
+                            opt.parse(args);
+                            parsed = true;
+                        }
+                    };
+                    (f(FWD(opts)), ...);
+                },
+                obj.options());
+            if (!parsed) {
+                if (command) {
+                    a.consumed = false;
                 }
+            }
+        }
+        if (command) {
+            return;
+        }
+        // post command
+        for (auto &&a : args.active()) {
+            // no command here
+            bool parsed{};
+            std::apply(
+                [&](auto &&...opts) {
+                    auto f = [&](auto &&opt) {
+                        if (is_option_flag(opt, a)) {
+                            a.consumed = true;
+                            opt.parse(args);
+                            parsed = true;
+                        }
+                    };
+                    (f(FWD(opts)), ...);
+                },
+                obj.options());
+            if (!parsed) {
+                std::cerr << "unknown option: " << a.value << "\n";
             }
         }
     }
