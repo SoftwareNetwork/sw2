@@ -194,19 +194,11 @@ int main1(int argc, char *argv[]) {
     });
     return 0;
 
-    solution s;
-    auto add = [&](auto f) {
-        input_with_settings is{entry_point{f}};
-        auto dbs = default_build_settings();
-        auto set1 = [&]() {
-            dbs.arch = arch::x64{};
-            dbs.arch = arch::x86{};
-            dbs.arch = arch::arm64{};
-            dbs.arch = arch::arm{};
-        };
-        auto set3 = [&] {
-            dbs.build_type = build_type::debug{};
-            dbs.build_type = build_type::release{};
-        };
-    };
+    /*dbs.arch = arch::x64{};
+    dbs.arch = arch::x86{};
+    dbs.arch = arch::arm64{};
+    dbs.arch = arch::arm{};
+
+    dbs.build_type = build_type::debug{};
+    dbs.build_type = build_type::release{};*/
 }
