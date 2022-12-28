@@ -27,9 +27,10 @@ jobs:
         pacman --noconfirm -S mingw-w64-x86_64-gcc mingw-w64-x86_64-fmt
     - shell: msys2 {0}
       run: |
-        g++ --version
-    - run: g++ -std=c++2b src/*.cpp -o sw
-    - run: ./sw build
+        g++ -std=c++2b src/*.cpp -o sw
+    - shell: msys2 {0}
+      run: |
+        ./sw build
     - uses: actions/upload-artifact@v3
       with:
         name: sw
