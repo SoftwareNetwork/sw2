@@ -143,7 +143,7 @@ int main1(int argc, char *argv[]) {
         auto fn = cfg_dir / "src" / "main.cpp";
         fs::create_directories(fn.parent_path());
         cpp_emitter e;
-        e.include(path{std::source_location::current().file_name()}.parent_path() / "sw.h");
+        e.include(fs::absolute(path{std::source_location::current().file_name()}.parent_path()) / "sw.h");
         e += "";
         struct spec_data {
             path fn;
