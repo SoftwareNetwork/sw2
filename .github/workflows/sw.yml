@@ -17,12 +17,8 @@ jobs:
         
   mingw:
     runs-on: windows-2022
-    strategy:
-      matrix:
-        include:
-          - { icon: '🟦', sys: mingw64 }
-    name: 🚧${{ matrix.icon }} ${{ matrix.sys }}
     steps:
+    - uses: actions/checkout@v3
     - run: g++ -std=c++2b src/*.cpp -o sw
     - run: ./sw build
     - uses: actions/upload-artifact@v3
