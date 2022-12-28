@@ -16,7 +16,15 @@ struct command_line_parser {
     };
     struct args {
         std::vector<arg> value;
+
         auto active() const { return value | std::views::filter([](auto &&v){return !v.consumed;}); }
+        auto &get_next() const {
+            if (empty()) {
+                throw std::runtime_error{"missing argument on the command line"};
+            }
+            auto a = active();
+            return *std::begin(a);
+        }
         bool empty() const { return size() == 0; }
         size_t size() const { return std::ranges::count_if(value, [](auto &&v){return !v.consumed;}); }
         const arg &operator[](int i) const { return value[i]; }
@@ -33,7 +41,7 @@ struct command_line_parser {
         explicit operator bool() const {
             return !!value;
         }
-        operator T() const {
+        operator auto() const {
             return *value;
         }
         void parse(auto &&args) {
@@ -42,12 +50,17 @@ struct command_line_parser {
             }
             if constexpr (std::same_as<T, bool>) {
                 value = true;
+                return;
+            }
+            auto &a = args.get_next();
+            if constexpr (std::same_as<T, int>) {
+                value = std::stoi(a.c_str());
             } else {
-                value = args[0].c_str();
-                //args[0].consumed = true;
+                value = a.c_str();
                 SW_UNIMPLEMENTED;
                 //args = args.subspan(nargs);
             }
+            a.consumed = true;
         }
     };
     template <auto OptionName, auto ... Aliases> struct flag {
@@ -127,9 +140,11 @@ struct command_line_parser {
     flag<"-sw1"_s> sw1; // not a driver, but a real invocation
     flag<"-sfc"_s> save_failed_commands;
     flag<"-sec"_s> save_executed_commands;
+    argument<"-sleep"_s, int> sleep;
 
     auto options() {
         return std::tie(
+            sleep,
             working_directory,
             sw1,
             save_failed_commands,

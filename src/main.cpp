@@ -10,6 +10,12 @@ void lower_drive_letter(string &s) {
         s[0] = tolower(s[0]);
     }
 }
+void mingw_drive_letter(string &s) {
+    if (s.size() > 1 && s[1] == ':') {
+        s[0] = tolower(s[0]);
+        s = "/"s + s[0] + s.substr(2);
+    }
+}
 auto normalize_path(const path &p) {
     auto fn = p.string();
     std::replace(fn.begin(), fn.end(), '\\', '/');
@@ -125,6 +131,10 @@ void sw1(auto &cl) {
 int main1(int argc, char *argv[]) {
     command_line_parser cl{argc, argv};
 
+    if (cl.sleep) {
+        std::this_thread::sleep_for(std::chrono::seconds(cl.sleep));
+    }
+
     auto this_path = fs::current_path();
     if (cl.working_directory) {
         fs::current_path(cl.working_directory);
@@ -185,9 +195,17 @@ int main1(int argc, char *argv[]) {
 
         auto &&t = s.targets.find_first<executable>("sw");
 
+        auto setup_path = [](auto &&in) {
+            //string s = in.string();
+            auto s = normalize_path_and_drive(in);
+            if (is_mingw_shell()) {
+               //mingw_drive_letter(s);
+            }
+            return path{s};
+        };
         raw_command c;
-        c.working_directory = this_path;
-        c += t.executable, "-sw1";
+        c.working_directory = setup_path(this_path);
+        c += setup_path(t.executable), "-sw1";
         for (int i = 1; i < argc; ++i) {
             c += (const char *)argv[i];
         }

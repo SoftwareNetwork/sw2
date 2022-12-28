@@ -90,7 +90,7 @@ struct raw_command {
         STARTUPINFOEXW si = {0};
         si.StartupInfo.cb = sizeof(si);
         PROCESS_INFORMATION pi = {0};
-        LPVOID env = 0;
+        LPVOID env = 0;// GetEnvironmentStringsW();
         int inherit_handles = 1; // must be 1, we pass handles in proc attributes
         std::vector<HANDLE> handles;
         handles.reserve(10);
@@ -122,8 +122,15 @@ struct raw_command {
         setup_stream(out, si.StartupInfo.hStdOutput, STD_OUTPUT_HANDLE, pout);
         setup_stream(err, si.StartupInfo.hStdError, STD_ERROR_HANDLE, perr);
 
+        auto mingw = is_mingw_shell();
         auto add_handle = [&](auto &&h) {
             if (h) {
+                 // mingw uses same stdout and stderr, so if we pass two same handles they are give an error 87
+                if (mingw) {
+                    if (std::ranges::find(handles, h) != std::end(handles)) {
+                        return;
+                    }
+                }
                 handles.push_back(h);
             }
         };
@@ -148,10 +155,29 @@ struct raw_command {
         WINAPI_CALL(UpdateProcThreadAttribute(si.lpAttributeList, 0, PROC_THREAD_ATTRIBUTE_HANDLE_LIST, handles.data(),
                                               handles.size() * sizeof(HANDLE), 0, 0));
 
-        WINAPI_CALL(CreateProcessW(0, printw().data(), 0, 0,
+        auto cmd = printw();
+        auto wdir = working_directory.wstring();
+        try {
+        WINAPI_CALL(CreateProcessW(0, cmd.data(), 0, 0,
             inherit_handles, flags, env,
-            working_directory.empty() ? 0 : working_directory.wstring().c_str(),
+            wdir.empty() ? 0 : wdir.c_str(),
             (LPSTARTUPINFOW)&si, &pi));
+        } catch (std::exception &) {
+            auto b = getenv("MSYSTEM");
+            if (b) {
+                int r{};
+                int flags = 0;
+                flags |= NORMAL_PRIORITY_CLASS;
+                STARTUPINFOW si{};
+                si.cb = sizeof(si);
+                r = CreateProcessW(0, cmd.data(), 0, 0,
+            inherit_handles, flags, env,
+            wdir.empty() ? 0 : wdir.c_str(),
+            (LPSTARTUPINFOW)&si, &pi);
+                std::cerr << r << " " << GetLastError() << "\n";
+            }
+            throw;
+        }
         CloseHandle(pi.hThread);
 
         auto post_setup_stream = [&](auto &&s, auto &&h, auto &&pipe) {
@@ -347,15 +373,19 @@ struct raw_command {
 #endif
     }
     void run(auto &&ex, auto &&cb) {
+        try {
 #ifdef _WIN32
-        run_win32(ex, cb);
+            run_win32(ex, cb);
 #elif defined(__linux__)
-        run_linux(ex, cb);
+            run_linux(ex, cb);
 #elif defined(__APPLE__)
-        run_macos(ex, cb);
+            run_macos(ex, cb);
 #else
 #error "unknown platform"
 #endif
+        } catch (std::exception &e) {
+            throw std::runtime_error{"error during command start:\n"s + print() + "\n" + e.what()};
+        }
     }
     void run(auto &&ex) {
         run(ex, [&](auto exit_code) {
@@ -683,6 +713,21 @@ setlocal
             static inline constexpr auto epilog = R"()";
             static inline constexpr auto arg_delim = "";
             static inline constexpr auto any_arg = "%*";
+        };
+        // needs special handling of slashes in started program names
+        struct _4nt : cmd {
+            static bool is_4nt() {
+                auto has_str = [](auto &&env) {
+                    if (auto v = getenv(env)) {
+                        string s = v;
+                        // this wont handle utf? but we do not have wgetenv()
+                        std::transform(s.begin(), s.end(), s.begin(), tolower);
+                        return s.contains("4nt.exe");
+                    }
+                    return false;
+                };
+                return has_str("SHELL") || has_str("ComSpec");
+            }
         };
         struct sh_base {
             static inline constexpr auto extension = ".sh";

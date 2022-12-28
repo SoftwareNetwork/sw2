@@ -214,6 +214,11 @@ struct static_string {
 template<static_string s>
 constexpr auto operator""_s() { return s; }
 
+static bool is_mingw_shell() {
+    static auto b = getenv("MSYSTEM");
+    return b;
+}
+
 auto read_file(const path &fn) {
     auto sz = fs::file_size(fn);
     string s(sz, 0);
