@@ -50,7 +50,7 @@ jobs:
     - name: build
       run: |
         g++ -std=c++2b src/*.cpp -o sw
-    #- run: ./sw build
+    - run: ./sw build
     - uses: actions/upload-artifact@v3
       with:
         name: sw
@@ -66,7 +66,7 @@ jobs:
       run: |
         export PATH="/usr/local/opt/gcc/bin:$PATH"
         g++-12 -std=c++2b src/*.cpp -I/usr/local/opt/fmt/include -o sw
-    #- run: ./sw build
+    - run: ./sw build
     - uses: actions/upload-artifact@v3
       with:
         name: sw
