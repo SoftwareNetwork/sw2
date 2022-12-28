@@ -58,6 +58,7 @@ jobs:
     runs-on: macos-12
     steps:
     - uses: actions/checkout@v3
+      run: brew install fmt
     - name: build
       run: |
         export PATH="/usr/local/opt/gcc/bin:$PATH"
