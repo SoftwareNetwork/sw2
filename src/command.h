@@ -432,7 +432,7 @@ struct command_storage {
 #if defined(__MINGW32__) || defined(__APPLE__)
                     mtime = decltype(lwt)::clock::to_sys(lwt);
 #else
-                    mtime = lwt;
+                    mtime = decltype(lwt)::clock::to_sys(lwt);
 #endif
 #endif
                 }
