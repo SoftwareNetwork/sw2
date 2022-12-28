@@ -24,6 +24,7 @@ jobs:
         msystem: MSYS
     - shell: msys2 {0}
       run: |
+        g++ --version
         pacman --noconfirm -S mingw-w64-x86_64-fmt
     - uses: msys2/setup-msys2@v2
       with:
