@@ -228,7 +228,11 @@ struct solution {
 
     auto &load_target(const unresolved_package_name &pkg, const build_settings &bs) {
         auto &tv = targets.find(pkg);
-        return tv.load(*this, bs);
+        try {
+            return tv.load(*this, bs);
+        } catch (std::exception &e) {
+            throw std::runtime_error{(string)pkg + ": " + e.what()};
+        }
     }
     auto &host_settings() const {
         static const auto hs = default_build_settings();
