@@ -47,7 +47,7 @@ jobs:
     - name: prepare
       run: |
         sudo dnf -y install gcc g++ fmt-devel
-    - run: g++ -std=c++2b src/*.cpp -o sw
+    - run: g++ -std=c++2b src/*.cpp -fpermissive -o sw
     - run: ./sw build
     - uses: actions/upload-artifact@v3
       with:
