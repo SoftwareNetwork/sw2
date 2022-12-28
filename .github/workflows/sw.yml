@@ -22,10 +22,12 @@ jobs:
     - uses: msys2/setup-msys2@v2
       with:
         update: true
-    - shell: mingw64 {0}
+    - shell: msys2 {0}
       run: |
         pacman --noconfirm -S mingw-w64-x86_64-gcc mingw-w64-x86_64-fmt
-    - run: g++ --version
+    - shell: msys2 {0}
+      run: |
+        g++ --version
     - run: g++ -std=c++2b src/*.cpp -o sw
     - run: ./sw build
     - uses: actions/upload-artifact@v3
