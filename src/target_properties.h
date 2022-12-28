@@ -26,6 +26,8 @@ auto operator""_def(const char *s, size_t len) {
 
 struct include_directory {
     path dir;
+    include_directory() = default;
+    include_directory(const path &p) : dir{p} {}
     operator auto() const { return dir; }
 };
 auto operator""_idir(const char *s, size_t len) {
