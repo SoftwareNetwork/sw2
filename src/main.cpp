@@ -219,33 +219,27 @@ int main1(int argc, char *argv[]) {
         fs::create_directories(fn.parent_path());
         auto swdir = fs::absolute(path{std::source_location::current().file_name()}.parent_path());
         cpp_emitter e;
-        e.include(swdir / "sw.h");
+        e += "#define SW1_BUILD";
+        e += "void sw1_load_inputs(auto &&f);";
+        e.include(swdir / "main.cpp");
         e += "";
-        struct spec_data {
-            path fn;
-            string ns;
-        };
-        std::vector<spec_data> nses;
+        string load_inputs;
         visit_any(b.i, [&](specification_file_input &i) {
             auto fn = fs::absolute(i.fn);
             auto fns = normalize_path_and_drive(fn);
             auto fnh = std::hash<string>{}(fns);
             auto nsname = "sw_ns_" + std::to_string(fnh);
-            nses.push_back({fns,nsname});
             auto ns = e.namespace_(nsname);
             // add inline ns?
             e.include(fn);
+            load_inputs += "    f(&" + nsname + "::build, \"" + normalize_path_and_drive(fn.parent_path()) + "\");\n";
         });
-        e += "";
-        e += "#define SW1_BUILD";
-        e += "void sw1_load_inputs(auto &&f);";
-        e += "";
-        e.include(swdir / "main.cpp");
+        if (!load_inputs.empty()) {
+            load_inputs.resize(load_inputs.size() - 1);
+        }
         e += "";
         e += "void sw1_load_inputs(auto &&f) {";
-        for (auto &&ns : nses) {
-            e += "    f(&" + ns.ns + "::build, \"" + ns.fn.parent_path().string() + "\");";
-        }
+        e += load_inputs;
         e += "}";
         write_file_if_different(fn, e.s);
 
