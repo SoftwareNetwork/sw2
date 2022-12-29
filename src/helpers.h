@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <bit>
 #include <cassert>
 #include <charconv>
 #include <cmath>
@@ -269,6 +270,28 @@ void write_file_if_different(const path &fn, const string &s) {
     FILE *f = fopen(fn.string().c_str(), "wb");
     fwrite(s.data(), s.size(), 1, f);
     fclose(f);
+}
+
+size_t fnv1a(auto &&in) {
+    auto hash = 0xcbf29ce484222325ULL;
+    for (auto &&byte : in) {
+        hash = hash ^ byte;
+        hash = hash * 0x100000001b3ULL;
+    }
+    return hash;
+}
+
+template <class T>
+inline size_t hash_combine(size_t &seed, const T &v) {
+    auto distribute = [](size_t n) {
+        auto xorshift = [](size_t n, int i) {
+            return n ^ (n >> i);
+        };
+        uint64_t p = 0x5555555555555555ull;
+        uint64_t c = 17316035218449499591ull; // use fnv1a prime?
+        return c * xorshift(p * xorshift(n, 32), 32);
+    };
+    return std::rotl(seed, std::numeric_limits<size_t>::digits / 3) ^ distribute(std::hash<T>{}(v));
 }
 
 } // namespace sw

@@ -95,6 +95,7 @@ namespace arch {
 
 struct x86 {
     static constexpr auto name = "x86"sv;
+    static constexpr auto clang_target_name = "i586"sv; // but also 386, 586, 686
 
     static bool is(string_view sv) {
         return name == sv;
@@ -102,16 +103,24 @@ struct x86 {
 };
 struct x64 {
     static constexpr auto name = "x64"sv;
+    static constexpr auto name1 = "x86_64"sv;
+    static constexpr auto name2 = "amd64"sv;
+    static constexpr auto clang_target_name = name1;
 
     static bool is(string_view sv) {
-        return name == sv;
+        return 0
+            || sv == name
+            || sv == name1
+            || sv == name2
+            ;
     }
 };
-using amd64 = x64; // give alternative names
-using x86_64 = x64; // give alternative names
+using amd64 = x64;
+using x86_64 = x64;
 
 struct arm {
     static constexpr auto name = "arm"sv;
+    static constexpr auto clang_target_name = name;
 
     static bool is(string_view sv) {
         return name == sv;
@@ -119,6 +128,7 @@ struct arm {
 };
 struct arm64 {
     static constexpr auto name = "arm64"sv;
+    static constexpr auto clang_target_name = name;
 
     static bool is(string_view sv) {
         return name == sv;

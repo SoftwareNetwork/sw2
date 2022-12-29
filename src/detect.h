@@ -95,22 +95,22 @@ struct msvc_instance {
                 add_if_exists("LEGACY_STDIO_DEFINITIONS.LIB");
                 add_if_exists("LEGACY_STDIO_WIDE_SPECIFIERS.LIB");
                 if (t.bs.c.runtime.template is<library_type::static_>()) {
-                    t.bs.build_type.visit_any(
+                    t.bs.build_type.visit(
                         [&](build_type::debug) {
                             t.link_libraries.push_back("LIBCMTD.LIB");
                             t.link_libraries.push_back("LIBVCRUNTIMED.LIB");
                         },
-                        [&](build_type::release) {
+                        [&](auto) {
                             t.link_libraries.push_back("LIBCMT.LIB");
                             t.link_libraries.push_back("LIBVCRUNTIME.LIB");
                         });
                 } else {
-                    t.bs.build_type.visit_any(
+                    t.bs.build_type.visit(
                         [&](build_type::debug) {
                             t.link_libraries.push_back("MSVCRTD.LIB");
                             t.link_libraries.push_back("VCRUNTIMED.LIB");
                         },
-                        [&](build_type::release) {
+                        [&](auto) {
                             t.link_libraries.push_back("MSVCRT.LIB");
                             t.link_libraries.push_back("VCRUNTIME.LIB");
                         });
@@ -134,22 +134,22 @@ struct msvc_instance {
             //add_if_exists("LEGACY_STDIO_DEFINITIONS.LIB");
             //add_if_exists("LEGACY_STDIO_WIDE_SPECIFIERS.LIB");
             if (t.bs.cpp.runtime.template is<library_type::static_>()) {
-                t.bs.build_type.visit_any(
+                t.bs.build_type.visit(
                     [&](build_type::debug) {
                         t.link_libraries.push_back("LIBCONCRTD.LIB");
                         t.link_libraries.push_back("LIBCPMTD.LIB");
                     },
-                    [&](build_type::release) {
+                    [&](auto) {
                         t.link_libraries.push_back("LIBCONCRT.LIB");
                         t.link_libraries.push_back("LIBCPMT.LIB");
                     });
             } else {
-                t.bs.build_type.visit_any(
+                t.bs.build_type.visit(
                     [&](build_type::debug) {
                         t.link_libraries.push_back("CONCRTD.LIB");
                         t.link_libraries.push_back("MSVCPRTD.LIB");
                     },
-                    [&](build_type::release) {
+                    [&](auto) {
                         t.link_libraries.push_back("CONCRT.LIB");
                         t.link_libraries.push_back("MSVCPRT.LIB");
                     });
@@ -246,19 +246,19 @@ struct win_kit {
                                   t.link_directories.push_back(libdir);
                                   if (name == "ucrt") {
                                       if (t.bs.c.runtime.template is<library_type::static_>()) {
-                                          t.bs.build_type.visit_any(
+                                          t.bs.build_type.visit(
                                               [&](build_type::debug) {
                                                   t.link_libraries.push_back("LIBUCRTD.LIB");
                                               },
-                                              [&](build_type::release) {
+                                              [&](auto) {
                                                   t.link_libraries.push_back("LIBUCRT.LIB");
                                               });
                                       } else {
-                                          t.bs.build_type.visit_any(
+                                          t.bs.build_type.visit(
                                               [&](build_type::debug) {
                                                   t.link_libraries.push_back("UCRTD.LIB");
                                               },
-                                              [&](build_type::release) {
+                                              [&](auto) {
                                                   t.link_libraries.push_back("UCRT.LIB");
                                               });
                                       }

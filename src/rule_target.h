@@ -237,7 +237,7 @@ struct native_target : rule_target, target_data_storage {
             },
             [&](c_compiler::clang &c) {
                 auto &t = s.load_target(c.package, bs);
-                add(c_compiler::clang::rule_type{t});
+                add(c_compiler::clang::rule_type{t,true});
             },
             [](auto &) {
                 SW_UNIMPLEMENTED;
@@ -250,11 +250,11 @@ struct native_target : rule_target, target_data_storage {
             },
             [&](cpp_compiler::gcc &c) {
                 auto &t = s.load_target(c.package, bs);
-                add(cpp_compiler::gcc::rule_type{t,true});
+                add(cpp_compiler::gcc::rule_type{t,false,true});
             },
             [&](cpp_compiler::clang &c) {
                 auto &t = s.load_target(c.package, bs);
-                add(cpp_compiler::clang::rule_type{t,true});
+                add(cpp_compiler::clang::rule_type{t,true,true});
             },
             [](auto &) {
                 SW_UNIMPLEMENTED;

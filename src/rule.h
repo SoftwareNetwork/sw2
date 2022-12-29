@@ -101,27 +101,27 @@ struct cl_exe_rule {
             c.inputs.insert(compiler.executable);
             c += "-FS"; // ForceSynchronousPDBWrites
             c += "-Zi"; // DebugInformationFormatType::ProgramDatabase
-            tgt.bs.build_type.visit_any(
+            tgt.bs.build_type.visit(
                 [&](build_type::debug) {
                     c += "-Od";
-                }, [&](build_type::release) {
+                }, [&](auto) {
                     c += "-O2";
                 });
             auto mt_md = [&](auto &&obj) {
                 if (obj.template is<library_type::static_>()) {
-                    tgt.bs.build_type.visit_any(
+                    tgt.bs.build_type.visit(
                         [&](build_type::debug) {
                             c += "-MTd";
                         },
-                        [&](build_type::release) {
+                        [&](auto) {
                             c += "-MT";
                         });
                 } else {
-                    tgt.bs.build_type.visit_any(
+                    tgt.bs.build_type.visit(
                         [&](build_type::debug) {
                             c += "-MDd";
                         },
-                        [&](build_type::release) {
+                        [&](auto) {
                             c += "-MD";
                         });
                 }
@@ -266,9 +266,11 @@ struct gcc_compile_rule {
     using target_type = binary_target;
 
     target_type &compiler;
+    bool clang{};
     bool cpp{};
 
-    gcc_compile_rule(target_uptr &t, bool cpp = false) : compiler{*std::get<uptr<target_type>>(t)}, cpp{cpp} {}
+    gcc_compile_rule(target_uptr &t, bool clang = false, bool cpp = false)
+        : compiler{*std::get<uptr<target_type>>(t)}, clang{clang}, cpp{cpp} {}
 
     void operator()(auto &tgt) requires requires { tgt.compile_options; } {
         auto objext = tgt.bs.os.visit(
@@ -296,6 +298,18 @@ struct gcc_compile_rule {
                 c += "-std=c17";
             } else if (is_cpp_file(f)) {
                 c += "-std=c++2b";
+            }
+            if (clang) {
+                string t = "--target=";
+                tgt.bs.arch.visit_no_special(
+                    [&](auto &&v) {
+                        t += v.clang_target_name;
+                    });
+                t += "-unknown-";
+                tgt.bs.os.visit_no_special([&](auto &&v) {
+                    t += v.name;
+                });
+                c += t;
             }
             c += f, "-o", out;
             auto add = [&](auto &&tgt) {

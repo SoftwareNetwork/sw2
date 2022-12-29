@@ -121,24 +121,14 @@ struct build_settings {
         return (is1<T>() && ... && is1<Types>());
     }
 
-    // faster?
-    size_t hash_old() const {
+    size_t hash() const {
         size_t h = 0;
         for_each([&](auto &&a) {
             ::sw::visit(a, [&](auto &&v) {
-                h ^= std::hash<string_view>()(v.name);
+                h = hash_combine(h, v.name);
             });
         });
         return h;
-    }
-    size_t hash() const {
-        string s;
-        for_each([&](auto &&a) {
-            ::sw::visit(a, [&](auto &&v) {
-                s += v.name;
-            });
-        });
-        return std::hash<string>()(s);
     }
 
     auto operator<(const build_settings &rhs) const {
