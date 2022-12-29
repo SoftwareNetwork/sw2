@@ -709,8 +709,8 @@ void detect_gcc_clang(auto &s) {
     std::chrono::year_month_day y{std::chrono::sys_days{std::chrono::floor<std::chrono::days>(t)}};
     auto ybase = (int)y.year() - 2022;
 #else
-    auto t2 = time(0);
-    auto ybase2 = localtime(&t2)->tm_year + 1900 - 2022;
+    auto t = time(0);
+    auto ybase = localtime(&t2)->tm_year + 1900 - 2022;
 #endif
 
     auto gccbase = ybase + 11;
