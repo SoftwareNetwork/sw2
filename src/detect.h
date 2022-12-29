@@ -666,7 +666,7 @@ path resolve_executable(auto &&exe) {
 #else
     auto p = getenv("PATH");
     auto delim = ':';
-    auto exts = {};
+    auto exts = {""};
 #endif
     if (!p) {
         return {};
