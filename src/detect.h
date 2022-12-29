@@ -710,7 +710,7 @@ void detect_gcc_clang(auto &s) {
     auto ybase = (int)y.year() - 2022;
 #else
     auto t = time(0);
-    auto ybase = localtime(&t2)->tm_year + 1900 - 2022;
+    auto ybase = localtime(&t)->tm_year + 1900 - 2022;
 #endif
 
     auto gccbase = ybase + 11;
