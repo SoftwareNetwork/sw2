@@ -683,6 +683,7 @@ path resolve_executable(auto &&exe) {
     return {};
 }
 
+// maybe cache detected packages for subsequent calls? -sw1/-sw2
 void detect_gcc_clang(auto &s) {
     auto detect = [&](auto &&prog, auto &&pkg) {
         if (auto p = resolve_executable(prog); !p.empty()) {
@@ -703,9 +704,15 @@ void detect_gcc_clang(auto &s) {
     clangvers = std::views::iota(13, 16);
 
     // actual subset based on current year
+#ifdef _MSC_VER
     auto t = std::chrono::system_clock::now();
     std::chrono::year_month_day y{std::chrono::sys_days{std::chrono::floor<std::chrono::days>(t)}};
     auto ybase = (int)y.year() - 2022;
+#else
+    auto t2 = time(0);
+    auto ybase2 = localtime(&t2)->tm_year + 1900 - 2022;
+#endif
+
     auto gccbase = ybase + 11;
     gccvers = std::views::iota(gccbase, gccbase + 3); // 1 release/year
     auto clangbase = ybase + 12;
