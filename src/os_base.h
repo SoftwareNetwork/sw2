@@ -24,12 +24,20 @@ struct windows {
     static constexpr auto static_library_extension = ".lib";
     static constexpr auto shared_library_extension = ".dll";
 
+    static bool is(string_view sv) {
+        return name == sv;
+    }
+
     // deps:
     // kernel32 dependency (winsdk.um)
 };
 
 struct mingw : windows {
     static constexpr auto name = "mingw"sv;
+
+    static bool is(string_view sv) {
+        return name == sv;
+    }
 };
 
 struct cygwin : windows {
@@ -37,6 +45,10 @@ struct cygwin : windows {
 
     static constexpr auto static_library_extension = ".a";
     static constexpr auto object_file_extension = ".o";
+
+    static bool is(string_view sv) {
+        return name == sv;
+    }
 };
 
 struct unix {
@@ -48,6 +60,10 @@ struct linux : unix {
     static constexpr auto name = "linux"sv;
 
     static constexpr auto shared_library_extension = ".so";
+
+    static bool is(string_view sv) {
+        return name == sv;
+    }
 };
 
 struct darwin : unix {
@@ -56,6 +72,10 @@ struct darwin : unix {
 
 struct macos : darwin {
     static constexpr auto name = "macos"sv;
+
+    static bool is(string_view sv) {
+        return name == sv;
+    }
 };
 // ios etc
 
@@ -63,6 +83,10 @@ struct wasm : unix {
     static constexpr auto name = "wasm"sv;
 
     static constexpr auto executable_extension = ".html";
+
+    static bool is(string_view sv) {
+        return name == sv;
+    }
 };
 
 } // namespace os
@@ -165,7 +189,8 @@ struct clang_base : compiler_base {
     clang_base(const unresolved_package_name &name) : compiler_base{name} {
     }
 
-    void detect(auto &sln) {
+    static bool is(string_view sv) {
+        return name == sv;
     }
 };
 struct gcc_base : compiler_base {
@@ -174,7 +199,8 @@ struct gcc_base : compiler_base {
     gcc_base(const unresolved_package_name &name) : compiler_base{name} {
     }
 
-    void detect(auto &sln) {
+    static bool is(string_view sv) {
+        return name == sv;
     }
 };
 struct msvc_base : compiler_base {
@@ -183,7 +209,8 @@ struct msvc_base : compiler_base {
     msvc_base() : compiler_base{unresolved_package_name{"com.Microsoft.VisualStudio.VC.cl", "*"}} {
     }
 
-    void detect(auto &sln) {
+    static bool is(string_view sv) {
+        return name == sv;
     }
 };
 

@@ -662,9 +662,11 @@ path resolve_executable(auto &&exe) {
 #ifdef _WIN32
     auto p = getenv("Path");
     auto delim = ';';
+    auto exts = {".exe",".bat",".cmd",".com"};
 #else
     auto p = getenv("PATH");
     auto delim = ':';
+    auto exts = {};
 #endif
     if (!p) {
         return {};
@@ -672,8 +674,10 @@ path resolve_executable(auto &&exe) {
     string p2 = p;
     for (const auto word : std::views::split(p2, delim) | std::views::transform([](auto &&word){return std::string_view{word.begin(), word.end()};})) {
          auto p = path{word} / exe;
-         if (fs::exists(p)) {
-             return p;
+         for (auto &e : exts) {
+             if (fs::exists(path{p} += e)) {
+                 return path{p} += e;
+             }
          }
     }
     return {};
@@ -682,8 +686,8 @@ path resolve_executable(auto &&exe) {
 void detect_gcc_clang(auto &s) {
     auto detect = [&](auto &&prog, auto &&pkg) {
         if (auto p = resolve_executable(prog); !p.empty()) {
-            s.add_entry_point(pkg, entry_point{[=](decltype(s) &s) {
-                auto &t = s.template add<binary_target>(pkg);
+            s.add_entry_point(pkg, entry_point{[prog,pkg,p](decltype(s) &s2) {
+                auto &t = s2.template add<binary_target>(pkg);
                 t.executable = p;
             }});
         }
@@ -701,7 +705,7 @@ void detect_gcc_clang(auto &s) {
     detect("clang", c_compiler::clang::package_name);
     detect("clang++", cpp_compiler::clang::package_name);
     for (int i = 2; i < 25; ++i) {
-        detect("clangcc-" + std::to_string(i), package_name{c_compiler::clang::package_name, package_version{i}});
+        detect("clang-" + std::to_string(i), package_name{c_compiler::clang::package_name, package_version{i}});
         detect("clang++-" + std::to_string(i), package_name{cpp_compiler::clang::package_name, package_version{i}});
     }
 }

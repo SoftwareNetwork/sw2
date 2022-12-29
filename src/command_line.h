@@ -116,8 +116,10 @@ struct command_line_parser {
         flag<"-md"_s, options::aliases<"-c_and_cpp_dynamic_runtime"_s>{}> c_and_cpp_dynamic_runtime; // windows compat
         argument<"-arch"_s, string, options::comma_separated_value{}> arch;
         argument<"-config"_s, string, options::comma_separated_value{}> config;
+        argument<"-compiler"_s, string, options::comma_separated_value{}> compiler;
+        argument<"-os"_s, string, options::comma_separated_value{}> os;
 
-        auto options() {
+        auto option_list() {
             return std::tie(
                 static_,
                 shared,
@@ -126,7 +128,9 @@ struct command_line_parser {
                 c_and_cpp_static_runtime,
                 c_and_cpp_dynamic_runtime,
                 arch,
-                config
+                config,
+                compiler,
+                os
             );
         }
 
@@ -170,7 +174,7 @@ struct command_line_parser {
     argument<"-sleep"_s, int> sleep;
     flag<"-int3"_s> int3;
 
-    auto options() {
+    auto option_list() {
         return std::tie(
             sleep,
             int3,
@@ -230,7 +234,7 @@ struct command_line_parser {
                     };
                     (f(FWD(opts)), ...);
                 },
-                obj.options());
+                obj.option_list());
             if (!parsed) {
                 if (command) {
                     a.consumed = false;
@@ -255,7 +259,7 @@ struct command_line_parser {
                     };
                     (f(FWD(opts)), ...);
                 },
-                obj.options());
+                obj.option_list());
             if (!parsed) {
                 throw std::runtime_error{format("unknown option: {}", a.value)};
             }

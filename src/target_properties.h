@@ -34,6 +34,14 @@ auto operator""_idir(const char *s, size_t len) {
     return include_directory{std::string{s,len}};
 }
 
+struct compile_option {
+    string value;
+    operator auto() const { return value; }
+};
+auto operator""_copt(const char *s, size_t len) {
+    return compile_option{std::string{s, len}};
+}
+
 struct system_link_library {
     path p;
     operator const auto &() const {
@@ -47,6 +55,7 @@ auto operator""_slib(const char *s, size_t len) {
 struct compile_options_t {
     std::vector<definition> definitions;
     std::vector<include_directory> include_directories;
+    std::vector<compile_option> compile_options;
 };
 struct link_options_t {
     std::vector<path> link_directories;

@@ -80,13 +80,21 @@ struct cl_exe_rule {
     cl_exe_rule(target_uptr &t) : compiler{*std::get<uptr<target_type>>(t)} {}
 
     void operator()(auto &tgt) requires requires { tgt.compile_options; } {
+        auto objext = tgt.bs.os.visit([](auto &&v) -> string_view {
+            if constexpr (requires { v.object_file_extension; }) {
+                return v.object_file_extension;
+            } else {
+                throw std::runtime_error{"no object extension"};
+            }
+        });
+
         for (auto &&[f, rules] : tgt.processed_files) {
             if (rules.contains(this) || !(is_c_file(f) || is_cpp_file(f))) {
                 continue;
             }
             cl_exe_command c;
             c.working_directory = tgt.binary_dir / "obj";
-            auto out = tgt.binary_dir / "obj" / f.filename() += ".obj";
+            auto out = tgt.binary_dir / "obj" / f.filename() += objext;
             c.name_ = format_log_record(tgt, "/"s + normalize_path(f.lexically_relative(tgt.source_dir).string()));
             c.old_includes = compiler.msvc.vs_version < package_version{16,7};
             c += compiler.executable, "-nologo", "-c";
@@ -127,6 +135,9 @@ struct cl_exe_rule {
             }
             c += f, "-Fo" + out.string();
             auto add = [&](auto &&tgt) {
+                for (auto &&o : tgt.compile_options) {
+                    c += o;
+                }
                 for (auto &&d : tgt.definitions) {
                     c += (string)d;
                 }
@@ -184,6 +195,14 @@ struct link_exe_rule {
     link_exe_rule(target_uptr &t) : linker{*std::get<uptr<target_type>>(t)} {}
 
     void operator()(auto &tgt) requires requires { tgt.link_options; } {
+        auto objext = tgt.bs.os.visit([](auto &&v) -> string_view {
+            if constexpr (requires { v.object_file_extension; }) {
+                return v.object_file_extension;
+            } else {
+                throw std::runtime_error{"no object extension"};
+            }
+        });
+
         io_command c;
         c.err = ""s;
         c.out = ""s;
@@ -206,7 +225,7 @@ struct link_exe_rule {
             SW_UNIMPLEMENTED;
         }
         for (auto &&[f, rules] : tgt.processed_files) {
-            if (f.extension() == ".obj") {
+            if (f.extension() == objext) {
                 c += f;
                 c.inputs.insert(f);
                 rules.insert(this);
@@ -247,30 +266,54 @@ struct gcc_compile_rule {
     using target_type = binary_target;
 
     target_type &compiler;
+    bool cpp{};
 
-    gcc_compile_rule(target_uptr &t) : compiler{*std::get<uptr<target_type>>(t)} {}
+    gcc_compile_rule(target_uptr &t, bool cpp = false) : compiler{*std::get<uptr<target_type>>(t)}, cpp{cpp} {}
 
     void operator()(auto &tgt) requires requires { tgt.compile_options; } {
-        for (auto &&[f, rules] : tgt.processed_files) {
-            if (is_cpp_file(f) && !rules.contains(this)) {
-                auto out = tgt.binary_dir / "obj" / f.filename() += ".o";
-                gcc_command c;
-                c.name_ = format_log_record(tgt, "/"s + normalize_path(f.lexically_relative(tgt.source_dir).string()));
-                c += compiler.executable, "-c", "-std=c++2b", f, "-o", out;
-                auto add = [&](auto &&tgt) {
-                    for (auto &&d : tgt.definitions) {
-                        c += (string)d;
-                    }
-                    for (auto &&i : tgt.include_directories) {
-                        c += "-I", i;
-                    }
-                };
-                add(tgt.compile_options);
-                c.inputs.insert(f);
-                c.outputs.insert(out);
-                tgt.commands.emplace_back(std::move(c));
-                rules.insert(this);
+        auto objext = tgt.bs.os.visit(
+            [](auto &&v) -> string_view {
+                if constexpr (requires {v.object_file_extension;}) {
+                    return v.object_file_extension;
+                } else {
+                    throw std::runtime_error{"no object extension"};
+                }
             }
+        );
+
+        for (auto &&[f, rules] : tgt.processed_files) {
+            if (rules.contains(this) || !(is_c_file(f) || is_cpp_file(f))) {
+                continue;
+            }
+            if (cpp != is_cpp_file(f)) {
+                continue;
+            }
+            auto out = tgt.binary_dir / "obj" / f.filename() += objext;
+            gcc_command c;
+            c.name_ = format_log_record(tgt, "/"s + normalize_path(f.lexically_relative(tgt.source_dir).string()));
+            c += compiler.executable, "-c";
+            if (is_c_file(f)) {
+                c += "-std=c17";
+            } else if (is_cpp_file(f)) {
+                c += "-std=c++2b";
+            }
+            c += f, "-o", out;
+            auto add = [&](auto &&tgt) {
+                for (auto &&o : tgt.compile_options) {
+                    c += o;
+                }
+                for (auto &&d : tgt.definitions) {
+                    c += (string)d;
+                }
+                for (auto &&i : tgt.include_directories) {
+                    c += "-I", i;
+                }
+            };
+            add(tgt.compile_options);
+            c.inputs.insert(f);
+            c.outputs.insert(out);
+            tgt.commands.emplace_back(std::move(c));
+            rules.insert(this);
         }
     }
 };

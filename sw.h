@@ -10,6 +10,10 @@ void build(solution &s) {
         // for now
         tgt += "/usr/local/opt/fmt/include"_idir;
     }
+    if (tgt.is<cpp_compiler::msvc>()) {
+        // for now
+        tgt += "/bigobj"_copt;
+    }
     {
         //s.add<test>();
         //s.add<test_command>();

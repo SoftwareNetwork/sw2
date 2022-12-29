@@ -1102,8 +1102,10 @@ struct command_executor {
                     return run_dependents();
                 }
                 ++running_commands;
-                auto pos = ceil(log10(external_commands.size()));
-                std::cout << "[" << std::setw(pos) << command_id << format("/{}] {}\n", external_commands.size(), c.name());
+                //auto pos = ceil(log10(external_commands.size()));
+                std::cout << "["
+                    //<< std::setw(pos)
+                    << command_id << format("/{}] {}\n", external_commands.size(), c.name());
                 //std::cout.flush(); // for now
                 try {
                     c.run(get_executor(), [&, run_dependents, cmd](int exit_code) {

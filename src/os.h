@@ -84,7 +84,10 @@ struct build_settings {
     auto for_each() const {
         // same types wont work and will give wrong results
         // i.e. library_type and runtimes
-        return std::tie(os, arch, build_type, library_type, c.runtime, cpp.runtime);
+        return std::tie(os, arch, build_type, library_type,
+            c.compiler, c.runtime,
+            cpp.compiler, cpp.runtime
+        );
     }
     auto for_each(auto &&f) const {
         std::apply(

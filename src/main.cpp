@@ -120,7 +120,8 @@ void sw1(auto &cl) {
                 s.cpp.runtime = v;
             });*/
 
-            auto cfg_product = [&](auto &&v1, auto &&f2) {
+            //
+            auto cfg_product = [&](auto &&v1, auto &&f) {
                 if (!v1) {
                     return;
                 }
@@ -130,32 +131,51 @@ void sw1(auto &cl) {
                          });
                 auto s2 = settings;
                 for (int i = 0; auto &&value : r) {
+                    bool set{};
                     if (i++) {
                         for (auto &&s : s2) {
-                            auto &v2 = s.*f2;
-                            v2.for_each([&](auto &&a) {
-                                using T = std::decay_t<decltype(a)>;
-                                if (T::is(value)) {
-                                    v2 = T{};
-                                }
-                            });
+                            set |= f(s, value);
                             settings.push_back(s);
                         }
                     } else {
                         for (auto &&s : settings) {
-                            auto &v2 = s.*f2;
-                            v2.for_each([&](auto &&a) {
-                                using T = std::decay_t<decltype(a)>;
-                                if (T::is(value)) {
-                                    v2 = T{};
-                                }
-                            });
+                            set |= f(s, value);
                         }
+                    }
+                    if (!set) {
+                        string s(value.begin(), value.end());
+                        throw std::runtime_error{"unknown value: "s + s};
                     }
                 }
             };
-            cfg_product(b.arch, &build_settings::arch);
-            cfg_product(b.config, &build_settings::build_type);
+            auto check_and_set = [](auto &&s, auto &&v) {
+                bool set{};
+                s.for_each([&](auto &&a) {
+                    using T = std::decay_t<decltype(a)>;
+                    if (T::is(v)) {
+                        s = T{};
+                        set = true;
+                    }
+                });
+                return set;
+            };
+            cfg_product(b.arch, [&](auto &&s, auto &&v) {
+                return check_and_set(s.arch, v);
+            });
+            cfg_product(b.config, [&](auto &&s, auto &&v) {
+                return check_and_set(s.build_type, v);
+            });
+            cfg_product(b.compiler, [&](auto &&s, auto &&v) {
+                return 1
+                && check_and_set(s.c.compiler, v)
+                && check_and_set(s.cpp.compiler, v)
+                //&& check_and_set(s.linker, v)?
+                ;
+            });
+            cfg_product(b.os, [&](auto &&s, auto &&v) {
+                return check_and_set(s.os, v);
+            });
+            //
 
             auto add_input = [&](auto &&f, auto &&dir) {
                 input_with_settings is;
