@@ -8,8 +8,12 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - uses: ilammy/msvc-dev-cmd@v1
-    - run: cl -nologo -std:c++latest -EHsc src/*.cpp -link -OUT:sw.exe
-    - run: .\sw.exe build
+    - name: stage1
+      run: |
+        cl -nologo -std:c++latest -EHsc src/*.cpp -link -OUT:sw.exe
+    - name: stage2
+      run: |
+        .\sw.exe build
     - uses: actions/upload-artifact@v3
       with:
         name: sw
@@ -25,10 +29,12 @@ jobs:
     - name: prepare
       run: |
         sudo dnf -y install gcc g++ fmt-devel
-    - name: build
+    - name: stage1
       run: |
         g++ -std=c++2b src/*.cpp -o sw
-    - run: ./sw build
+    - name: stage2
+      run: |
+        ./sw build
     - uses: actions/upload-artifact@v3
       with:
         name: sw
@@ -40,11 +46,12 @@ jobs:
     - uses: actions/checkout@v3
     - run: sudo xcode-select --switch /Library/Developer/CommandLineTools
     - run: brew install fmt
-    - name: build
+    - name: stage1
       run: |
         export PATH="/usr/local/opt/gcc/bin:$PATH"
         g++-12 -std=c++2b src/*.cpp -I/usr/local/opt/fmt/include -o sw
-    - run: |
+    - name: stage2
+      run: |
         export PATH="/usr/local/opt/gcc/bin:$PATH"
         ./sw build
     - uses: actions/upload-artifact@v3
