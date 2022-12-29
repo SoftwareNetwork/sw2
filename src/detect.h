@@ -690,24 +690,37 @@ void detect_gcc_clang(auto &s) {
                 auto &t = s2.template add<binary_target>(pkg);
                 t.executable = p;
             }});
+            return true;
         }
+        return false;
     };
 
     detect("ar", "org.gnu.binutils.ar");
 
-    detect("gcc", c_compiler::gcc::package_name);
-    detect("g++", cpp_compiler::gcc::package_name);
-    for (int i = 3; i < 15; ++i) {
-        detect("gcc-" + std::to_string(i), package_name{c_compiler::gcc::package_name,package_version{i}});
-        detect("g++-" + std::to_string(i), package_name{cpp_compiler::gcc::package_name,package_version{i}});
-    }
+    auto gccvers = std::views::iota(3,15); // many versions
+    auto clangvers = std::views::iota(2,25);
+    gccvers = std::views::iota(11, 14); // actual subset
+    clangvers = std::views::iota(13, 16);
 
-    detect("clang", c_compiler::clang::package_name);
-    detect("clang++", cpp_compiler::clang::package_name);
-    for (int i = 2; i < 25; ++i) {
-        detect("clang-" + std::to_string(i), package_name{c_compiler::clang::package_name, package_version{i}});
-        detect("clang++-" + std::to_string(i), package_name{cpp_compiler::clang::package_name, package_version{i}});
-    }
+    // actual subset based on current year
+    auto t = std::chrono::system_clock::now();
+    std::chrono::year_month_day y{std::chrono::sys_days{std::chrono::floor<std::chrono::days>(t)}};
+    auto ybase = (int)y.year() - 2022;
+    auto gccbase = ybase + 11;
+    gccvers = std::views::iota(gccbase, gccbase + 3); // 1 release/year
+    auto clangbase = ybase + 12;
+    clangvers = std::views::iota(clangbase, clangbase + 5); // 2 releases/year
+
+    auto f = [&](auto &&cname, auto &&cppname, auto &cpkg, auto &cpppkg, auto &&vers) {
+        auto has_default = detect(cname, cpkg);
+        has_default |= detect(cppname, cpppkg);
+        for (int i : gccvers) {
+            detect(cname + "-"s + std::to_string(i), package_name{cpkg, package_version{i}});
+            detect(cppname + "-"s + std::to_string(i), package_name{cpppkg, package_version{i}});
+        }
+    };
+    f("gcc", "g++", c_compiler::gcc::package_name, cpp_compiler::gcc::package_name, gccvers);
+    f("clang", "clang++", c_compiler::clang::package_name, cpp_compiler::clang::package_name, clangvers);
 }
 
 } // namespace sw
