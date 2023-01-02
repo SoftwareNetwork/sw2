@@ -17,9 +17,6 @@ struct target_base {
 
     target_base(const package_name &n) : name{n} {
     }
-
-    auto &get_package() const { return name; }
-    auto &getPackage() const { return get_package(); } // v1 compat
 };
 
 // binary_target_package?

@@ -36,7 +36,9 @@ auto is_cpp_file(const path &fn) {
 }
 
 struct native_sources_rule {
-    void operator()(auto &tgt) const {
+    void operator()(auto &) const {
+    }
+    void operator()(auto &tgt) const requires requires {tgt.begin();} {
         for (auto &&f : tgt) {
             if (is_cpp_file(f) || is_c_file(f)) {
                 tgt.processed_files[f].insert(this);

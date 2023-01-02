@@ -14,18 +14,11 @@ struct dependency {
 };
 
 // basic target: throw files, rules etc.
-struct rule_target : files_target {
-    using base = files_target;
-
-#ifdef _MSC_VER
-    using base::operator+=;
-    using base::operator-=;
-#endif
-    using base::add;
-    using base::remove;
-
+struct rule_target {
+    package_name name;
     const build_settings solution_bs;
     build_settings bs;
+    path source_dir;
     path binary_dir;
     command_storage cs;
     std::vector<rule> rules;
@@ -39,7 +32,7 @@ struct rule_target : files_target {
     bool &DryRun{dry_run};
 
     rule_target(auto &&solution, auto &&id)
-        : files_target{id}
+        : name{id}
         , solution_bs{*solution.bs}
         , bs{*solution.bs}
    {
@@ -53,16 +46,8 @@ struct rule_target : files_target {
         return parent / "t" / std::to_string(config) / std::to_string(name.hash());
     }
 
-#ifndef _MSC_VER
-    auto operator+=(auto &&v) {
-        add(v);
-        return appender{[&](auto &&v) { add(v); }};
-    }
-    auto operator-=(auto &&v) {
-        remove(v);
-        return appender{[&](auto &&v) { remove(v); }};
-    }
-#endif
+    auto &get_package() const { return name; }
+    auto &getPackage() const { return get_package(); } // v1 compat
 
     /*auto &build_settings() {
         return bs;
@@ -104,8 +89,8 @@ struct rule_target : files_target {
         }
     }
 
-    void prepare() {
-        init_rules(*this);
+    void prepare(/*this */auto &&self) {
+        self.init_rules(self);
     }
     void build(/*this */auto &&self) {
         self.prepare(self);
@@ -117,12 +102,101 @@ struct rule_target : files_target {
     //auto visit()
 };
 
+template <typename T>
 struct target_data {
+    using files_t = std::set<path>; // unordered?
+
+    files_t files;
     compile_options_t compile_options;
     link_options_t link_options;
     std::vector<dependency> dependencies;
+
+    T &target() { return static_cast<T&>(*this); }
+    const T &target() const { return static_cast<const T&>(*this); }
+
+#ifdef _MSC_VER
+    auto operator+=(this auto &&self, auto &&v) {
+        self.add(v);
+        return appender{[&](auto &&v) {
+            self.add(v);
+        }};
+    }
+    auto operator-=(this auto &&self, auto &&v) {
+        self.remove(v);
+        return appender{[&](auto &&v) {
+            self.remove(v);
+        }};
+    }
+#else
+    auto operator+=(auto &&v) {
+        add(v);
+        return appender{[&](auto &&v) {
+            add(v);
+        }};
+    }
+    auto operator-=(auto &&v) {
+        remove(v);
+        return appender{[&](auto &&v) {
+            remove(v);
+        }};
+    }
+#endif
+
+    void add(const file_regex &r) {
+        r(target().source_dir, [&](auto &&iter) {
+            for (auto &&e : iter) {
+                if (fs::is_regular_file(e)) {
+                    add(e);
+                }
+            }
+        });
+    }
+    void add(const path &p) {
+        files.insert(p.is_absolute() ? p : target().source_dir / p);
+    }
+    void remove(const file_regex &r) {
+        r(target().source_dir, [&](auto &&iter) {
+            for (auto &&e : iter) {
+                if (fs::is_regular_file(e)) {
+                    remove(e);
+                }
+            }
+        });
+    }
+    void remove(const path &p) {
+        files.erase(p.is_absolute() ? p : target().source_dir / p);
+    }
+
+    void add(target_uptr &ptr) {
+        dependencies.push_back({&ptr});
+    }
+    void add(const definition &d) {
+        compile_options.definitions.push_back(d);
+    }
+    void add(const include_directory &d) {
+        compile_options.include_directories.push_back(d);
+    }
+    void add(const compile_option &d) {
+        compile_options.compile_options.push_back(d);
+    }
+    void add(const system_link_library &l) {
+        link_options.system_link_libraries.push_back(l);
+    }
+
+    auto range() const {
+        return files | std::views::transform([&](auto &&p) {
+            return target().source_dir / p;
+        });
+    }
+    auto begin() const {
+        return iter_with_range{range()};
+    }
+    auto end() const {
+        return files.end();
+    }
 };
-struct target_data_storage : target_data {
+template <typename T>
+struct target_data_storage : target_data<T> {
     struct groups {
         enum {
             self    = 0b001,
@@ -137,35 +211,38 @@ struct target_data_storage : target_data {
     //
     // inherited = 0
     // array[0] = merge_object
-    std::array<std::unique_ptr<target_data>, 8> data;
+    std::array<std::unique_ptr<target_data<T>>, 8> data;
 
-    target_data &private_{*this};
-    target_data &protected_{get(groups::self | groups::project)};
-    target_data &public_{get(groups::self | groups::project | groups::others)};
+    target_data<T> &private_{*this};
+    target_data<T> &protected_{get(groups::self | groups::project)};
+    target_data<T> &public_{get(groups::self | groups::project | groups::others)};
 #undef interface // some win32 stuff
-    target_data &interface{get(groups::project | groups::others)};
-    target_data &interface_{get(groups::project | groups::others)}; // for similarity
+    target_data<T> &interface{get(groups::project | groups::others)};
+    target_data<T> &interface_{get(groups::project | groups::others)}; // for similarity? remove?
 
 protected:
-    target_data &merge_object{get(0)};
+    target_data<T> &merge_object{get(0)};
 private:
-    target_data &get(int i) {
+    target_data<T> &get(int i) {
         if (!data[i]) {
-            data[i] = std::make_unique<target_data>();
+            data[i] = std::make_unique<target_data<T>>();
         }
         return *data[i];
     }
 };
 
-struct native_target : rule_target, target_data_storage {
+struct native_target : rule_target, target_data_storage<native_target> {
     using base = rule_target;
 
 #ifdef _MSC_VER
-    using base::operator+=;
-    using base::operator-=;
+    using target_data_storage::operator+=;
+    using target_data_storage::operator-=;
 #endif
-    using base::add;
-    using base::remove;
+    using target_data_storage::add;
+    using target_data_storage::remove;
+    using target_data_storage::begin;
+    using target_data_storage::end;
+    using rule_target::add;
 
     string api_name;
     string &ApiName{api_name}; // v1 compat
@@ -284,31 +361,15 @@ struct native_target : rule_target, target_data_storage {
     }
 #endif
 
-    void add(target_uptr &ptr) {
-        dependencies.push_back({&ptr});
-    }
-    void add(const system_link_library &l) {
-        link_options.system_link_libraries.push_back(l);
-    }
-    void add(const definition &d) {
-        compile_options.definitions.push_back(d);
-    }
-    void add(const include_directory &d) {
-        compile_options.include_directories.push_back(d);
-    }
-    void add(const compile_option &d) {
-        compile_options.compile_options.push_back(d);
-    }
-
     //void build() { operator()(); }
     // void run(){}
 
-    void prepare() {
+    void prepare(/*this */auto &&self) {
         if (!api_name.empty()) {
             *this += definition{api_name, "SW_EXPORT"};
             public_ += definition{api_name, "SW_IMPORT"};
         }
-        rule_target::prepare();
+        rule_target::prepare(self);
     }
 
     bool has_file(const path &fn) {
@@ -348,14 +409,10 @@ struct native_target : rule_target, target_data_storage {
             else if (fs::exists(BinaryDir / from))
                 from = BinaryDir / from;
             else
-                throw std::runtime_error("Package: " + getPackage().toString() + ", file not found: " + from.string());
+                throw std::runtime_error{"Package: "s + getPackage().toString() + ", file not found: " + from.string()};
         }
 
-        // we really need ExecuteCommand here!!! or not?
-        // auto c = std::make_shared<DummyCommand>();// ([this, from, to, flags]()
-        { configureFile1(from, to, flags); } //);
-        // c->addInput(from);
-        // c->addOutput(to);
+        { configureFile1(from, to, flags); }
 
         //if ((int)flags & (int)ConfigureFlags::AddToBuild)
             //operator+=(to);
