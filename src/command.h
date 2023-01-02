@@ -1126,7 +1126,7 @@ struct command_executor {
                     c.out_text = e.what();
                     errors.push_back(cmd);
                     if (cl.save_executed_commands || cl.save_failed_commands) {
-                        //c.save(get_saved_commands_dir(sln));
+                        //c.save(get_saved_commands_dir(sln));//save not started commands?
                     }
                     run_next(cl, sln);
                 }
@@ -1178,8 +1178,7 @@ struct command_executor {
         }
     }
     path get_saved_commands_dir(auto &&sln) {
-        return fs::current_path() / SW_BINARY_DIR / "rsp";
-        //return sln.binary_dir / "rsp";
+        return sln.binary_dir / "rsp";
     }
 
     void operator+=(std::vector<command> &commands) {

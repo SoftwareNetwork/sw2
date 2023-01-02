@@ -6,6 +6,15 @@
 #include "detect.h"
 #include "main.h"
 
+auto &get_msvc_detector1() {
+    static msvc_detector d;
+    return d;
+}
+void get_msvc_detector(auto &&s) {
+    get_msvc_detector1().add(s);
+    // return d;
+}
+
 auto default_host_settings() {
     build_settings bs;
     bs.build_type = build_type::release{};
@@ -64,7 +73,8 @@ auto default_build_settings() {
 }
 
 auto make_solution() {
-    solution s{default_host_settings()};
+    auto binary_dir = ".sw";
+    solution s{binary_dir, default_host_settings()};
     return s;
 }
 
@@ -295,23 +305,22 @@ int main1(int argc, char *argv[]) {
                 auto fnh = std::hash<string>{}(fns);
                 auto nsname = "sw_ns_" + std::to_string(fnh);
                 auto ns = e.namespace_(nsname);
+                e += "using this_namespace = ::" + nsname + ";";
                 // add inline ns?
                 e.include(fn);
                 load_inputs += "    f(&" + nsname + "::build, \"" + normalize_path_and_drive(fn.parent_path()) + "\");\n";
             });
+            e += "";
         }
         if (!load_inputs.empty()) {
             load_inputs.resize(load_inputs.size() - 1);
         }
-        e += "";
         e += "void sw1_load_inputs(auto &&f) {";
         e += load_inputs;
         e += "}";
         write_file_if_different(fn, e.s);
 
-        //fs::current_path(cfg_dir);
-        s.source_dir = cfg_dir;
-        input_with_settings is{entry_point{&self_build::build}};
+        input_with_settings is{entry_point{&self_build::build,cfg_dir}};
         auto dbs = default_build_settings();
         dbs.build_type = build_type::debug{};
         is.settings.insert(dbs);

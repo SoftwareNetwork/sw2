@@ -195,14 +195,6 @@ struct msvc_detector {
         }
     }
 };
-auto &get_msvc_detector1() {
-    static msvc_detector d;
-    return d;
-}
-void get_msvc_detector(auto &&s) {
-    get_msvc_detector1().add(s);
-    //return d;
-}
 
 // https://en.wikipedia.org/wiki/Microsoft_Windows_SDK
 static const char *known_kits[]{"8.1A", "8.1", "8.0", "7.1A", "7.1", "7.0A", "7.0", "6.0A"};

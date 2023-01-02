@@ -57,7 +57,7 @@ struct fmt::formatter<std::source_location> : fmt::formatter<std::string> {
 };
 #endif
 
-#define SW_BINARY_DIR ".sw"
+//#define SW_BINARY_DIR ".sw"
 
 namespace sw {
 

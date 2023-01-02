@@ -192,13 +192,11 @@ struct target_map {
 };
 
 struct solution {
-    abspath source_dir{"."};
-    abspath binary_dir{SW_BINARY_DIR};
-    // config
-
+    abspath binary_dir;
     const build_settings host_settings_;
-    const build_settings *bs{nullptr}; // current bs
-
+    // current, per loaded package data
+    abspath source_dir;
+    const build_settings *bs{nullptr};
     // internal data
     target_map targets;
     target_map predefined_targets; // or system targets
@@ -206,7 +204,7 @@ struct solution {
     std::vector<input_with_settings> inputs;
 
     //solution() {}
-    solution(const build_settings &host_settings) : host_settings_{host_settings} {
+    solution(const abspath &binary_dir, const build_settings &host_settings) : binary_dir{binary_dir}, host_settings_{host_settings} {
     }
 
     template <typename T, typename... Args>
@@ -223,9 +221,6 @@ struct solution {
             throw std::runtime_error{"cannot create target: "s + e.what()};
         }
         auto &t = *ptr;
-        //if constexpr (requires {t.source_dir = source_dir;}) {
-            //t.source_dir = source_dir;
-        //}
         targets.emplace(id, std::move(ptr));
         return t;
     }
