@@ -238,8 +238,8 @@ struct target_data : compile_options_t,link_options_t {
         files.merge(from.files);
         compile_options_t::merge(from);
         link_options_t::merge(from);
-        dependencies.append_range(from.dependencies);
-        rules.append_range(from.rules);
+        append_vector(dependencies, from.dependencies);
+        append_vector(rules, from.rules);
     }
 
     auto range() const {

@@ -369,6 +369,13 @@ path resolve_executable(auto &&exe) {
     return {};
 }
 
+void append_vector(auto &&to, auto &&from) {
+    to.reserve(to.size() + from.size());
+    for (auto &&v : from) {
+        to.push_back(v);
+    }
+}
+
 } // namespace sw
 
 template <>

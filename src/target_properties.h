@@ -89,9 +89,9 @@ struct compile_options_t {
     std::vector<compile_option> compile_options;
 
     void merge(auto &&from) {
-        definitions.append_range(from.definitions);
-        include_directories.append_range(from.include_directories);
-        compile_options.append_range(from.compile_options);
+        append_vector(definitions, from.definitions);
+        append_vector(include_directories, from.include_directories);
+        append_vector(compile_options, from.compile_options);
     }
 };
 struct link_options_t {
@@ -100,9 +100,9 @@ struct link_options_t {
     std::vector<system_link_library> system_link_libraries;
 
     void merge(auto &&from) {
-        link_directories.append_range(from.link_directories);
-        link_libraries.append_range(from.link_libraries);
-        system_link_libraries.append_range(from.system_link_libraries);
+        append_vector(link_directories, from.link_directories);
+        append_vector(link_libraries, from.link_libraries);
+        append_vector(system_link_libraries, from.system_link_libraries);
     }
 };
 
