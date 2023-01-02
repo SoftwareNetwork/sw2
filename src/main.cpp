@@ -202,16 +202,41 @@ int main1(int argc, char *argv[]) {
         e.include(swdir / "main.cpp");
         e += "";
         string load_inputs;
-        visit_any(b.i, [&](specification_file_input &i) {
-            auto fn = fs::absolute(i.fn);
-            auto fns = normalize_path_and_drive(fn);
-            auto fnh = std::hash<string>{}(fns);
-            auto nsname = "sw_ns_" + std::to_string(fnh);
-            auto ns = e.namespace_(nsname);
-            // add inline ns?
-            e.include(fn);
-            load_inputs += "    f(&" + nsname + "::build, \"" + normalize_path_and_drive(fn.parent_path()) + "\");\n";
-        });
+        std::vector<input> inputs;
+        if (!b.inputs) {
+            b.inputs.value = std::vector<string>{};
+            b.inputs.value->push_back(".sw");
+        }
+        for (auto &&bi : *b.inputs.value) {
+            input i;
+            auto check_spec = [&](auto &&fn) {
+                auto p = path{bi} / fn;
+                if (fs::exists(p)) {
+                    i = specification_file_input{p};
+                    return true;
+                }
+                return false;
+            };
+            0
+                || check_spec("sw.h")
+                || check_spec("sw.cpp") // old compat. After rewrite remove sw.h
+                //|| check_spec("sw2.cpp")
+                //|| (i = directory_input{"."}, true)
+                ;
+            inputs.push_back(i);
+        }
+        for (auto &&i : inputs) {
+            visit_any(i, [&](specification_file_input &i) {
+                auto fn = fs::absolute(i.fn);
+                auto fns = normalize_path_and_drive(fn);
+                auto fnh = std::hash<string>{}(fns);
+                auto nsname = "sw_ns_" + std::to_string(fnh);
+                auto ns = e.namespace_(nsname);
+                // add inline ns?
+                e.include(fn);
+                load_inputs += "    f(&" + nsname + "::build, \"" + normalize_path_and_drive(fn.parent_path()) + "\");\n";
+            });
+        }
         if (!load_inputs.empty()) {
             load_inputs.resize(load_inputs.size() - 1);
         }

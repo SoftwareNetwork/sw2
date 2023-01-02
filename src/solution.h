@@ -268,6 +268,14 @@ struct solution {
     }
 
     void prepare() {
+        for (auto &&[id, t] : targets) {
+            visit(t, [&](auto &&vp) {
+                auto &v = *vp;
+                if constexpr (requires { v.prepare_no_deps(v, *this); }) {
+                    v.prepare_no_deps(v, *this);
+                }
+            });
+        }
         for (auto &&[id,t] : targets) {
             visit(t, [&](auto &&vp) {
                 auto &v = *vp;

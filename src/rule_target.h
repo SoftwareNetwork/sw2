@@ -10,8 +10,12 @@
 namespace sw {
 
 struct dependency {
-    target_uptr *target;
+    unresolved_package_name name;
+    target_uptr *target = nullptr;
 };
+auto operator""_dep(const char *s, size_t len) {
+    return dependency{std::string{s, len}};
+}
 
 // basic target: throw files, rules etc.
 struct rule_target {
@@ -169,9 +173,6 @@ struct target_data {
         files.erase(p.is_absolute() ? p : target().source_dir / p);
     }
 
-    void add(target_uptr &ptr) {
-        dependencies.push_back({&ptr});
-    }
     void add(const definition &d) {
         compile_options.definitions.push_back(d);
     }
@@ -183,6 +184,21 @@ struct target_data {
     }
     void add(const system_link_library &l) {
         link_options.system_link_libraries.push_back(l);
+    }
+    void add(target_uptr &ptr) {
+        dependency d;
+        d.target = &ptr;
+        add(d);
+    }
+    void add(const dependency &d) {
+        dependencies.push_back(d);
+    }
+
+    void merge(auto &&from) {
+        files.merge(from.files);
+        compile_options.merge(from.compile_options);
+        link_options.merge(from.link_options);
+        dependencies.append_range(from.dependencies);
     }
 
     auto range() const {
@@ -199,11 +215,15 @@ struct target_data {
 };
 template <typename T>
 struct target_data_storage : target_data<T> {
+    using base = target_data<T>;
+
     struct groups {
         enum {
             self    = 0b001,
             project = 0b010,
             others  = 0b100,
+
+            max  = 8,
         };
     };
 
@@ -211,23 +231,45 @@ struct target_data_storage : target_data<T> {
     // minus 1 inherited
     // plus  1 merge_object value
     //
-    // inherited = 0
+    // inherited = 1
     // array[0] = merge_object
-    std::array<std::unique_ptr<target_data<T>>, 8> data;
+    std::array<std::unique_ptr<base>, groups::max> data;
 
-    target_data<T> &private_{*this};
-    target_data<T> &protected_{get(groups::self | groups::project)};
-    target_data<T> &public_{get(groups::self | groups::project | groups::others)};
+    base &private_{*this};
+    base &protected_{get(groups::self | groups::project)};
+    base &public_{get(groups::self | groups::project | groups::others)};
 #undef interface // some win32 stuff
-    target_data<T> &interface{get(groups::project | groups::others)};
-    target_data<T> &interface_{get(groups::project | groups::others)}; // for similarity? remove?
+    base &interface{get(groups::project | groups::others)};
+    base &interface_{get(groups::project | groups::others)}; // for similarity? remove?
+    // base &interface_no_project{get(groups::others)};
+
+    // v1 compat
+    base &Private{private_};
+    base &Protected{protected_};
+    base &Public{public_};
+    base &Interface{interface_};
+
+    base &merge_object() { return merge_object_; }
+
+    void merge_from_deps() {
+    }
+    void merge() {
+        // make merge object with pointers?
+
+        merge_object().merge(*this);
+        for (int i = 2; i < groups::max; ++i) {
+            if (data[i] && (i & groups::self)) {
+                merge_object().merge(*data[i]);
+            }
+        }
+    }
 
 protected:
-    target_data<T> &merge_object{get(0)};
+    base &merge_object_{get(0)};
 private:
-    target_data<T> &get(int i) {
+    base &get(int i) {
         if (!data[i]) {
-            data[i] = std::make_unique<target_data<T>>();
+            data[i] = std::make_unique<base>();
         }
         return *data[i];
     }
@@ -371,11 +413,15 @@ struct native_target : rule_target, target_data_storage<native_target> {
     //void build() { operator()(); }
     // void run(){}
 
-    void prepare(/*this */auto &&self) {
+    void prepare_no_deps(/*this */ auto &&self, auto &&sln) {
         if (!api_name.empty()) {
             *this += definition{api_name, "SW_EXPORT"};
             public_ += definition{api_name, "SW_IMPORT"};
         }
+        merge();
+        //sln.load_target(solution_bs);
+    }
+    void prepare(/*this */auto &&self) {
         rule_target::prepare(self);
     }
 

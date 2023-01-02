@@ -39,7 +39,7 @@ struct native_sources_rule {
     void operator()(auto &) const {
     }
     void operator()(auto &tgt) const requires requires {tgt.begin();} {
-        for (auto &&f : tgt) {
+        for (auto &&f : tgt.merge_object()) {
             if (is_cpp_file(f) || is_c_file(f)) {
                 tgt.processed_files[f].insert(this);
             }
@@ -72,6 +72,18 @@ string format_log_record(auto &&tgt, auto &&second_part) {
     cfg += "]";
     s += cfg + second_part;
     return s;
+}
+
+void add_compile_options(auto &&obj, auto &&c) {
+    for (auto &&o : obj.compile_options) {
+        c += o;
+    }
+    for (auto &&d : obj.definitions) {
+        c += (string)d;
+    }
+    for (auto &&i : obj.include_directories) {
+        c += "-I", i;
+    }
 }
 
 struct cl_exe_rule {
@@ -136,25 +148,14 @@ struct cl_exe_rule {
                 mt_md(tgt.bs.cpp.runtime);
             }
             c += f, "-Fo" + out.string();
-            auto add = [&](auto &&tgt) {
-                for (auto &&o : tgt.compile_options) {
-                    c += o;
-                }
-                for (auto &&d : tgt.definitions) {
-                    c += (string)d;
-                }
-                for (auto &&i : tgt.include_directories) {
-                    c += "-I", i;
-                }
-            };
-            add(tgt.compile_options);
-            for (auto &&d : tgt.dependencies) {
+            add_compile_options(tgt.merge_object().compile_options, c);
+            /*for (auto &&d : tgt.dependencies) {
                 visit(*d.target, [&](auto &&v) {
                     if constexpr (requires { v->definitions; }) {
                         add(*v);
                     }
                 });
-            }
+            }*/
             c.inputs.insert(f);
             c.outputs.insert(out);
             tgt.commands.emplace_back(std::move(c));
@@ -241,25 +242,25 @@ struct link_exe_rule {
             [&](build_type::release) {
                 c += "-DEBUG:NONE";
             });
-        auto add = [&](auto &&tgt) {
-            for (auto &&i : tgt.link_directories) {
+        auto add = [&](auto &&v) {
+            for (auto &&i : v.link_directories) {
                 c += "-LIBPATH:" + i.string();
             }
-            for (auto &&d : tgt.link_libraries) {
+            for (auto &&d : v.link_libraries) {
                 c += d;
             }
-            for (auto &&d : tgt.system_link_libraries) {
+            for (auto &&d : v.system_link_libraries) {
                 c += d;
             }
         };
-        add(tgt.link_options);
-        for (auto &&d : tgt.dependencies) {
+        add(tgt.merge_object().link_options);
+        /*for (auto &&d : tgt.dependencies) {
             visit(*d.target, [&](auto &&v) {
                 if constexpr (requires { v->link_directories; }) {
                     add(*v);
                 }
             });
-        }
+        }*/
         tgt.commands.emplace_back(std::move(c));
     }
 };
@@ -314,18 +315,7 @@ struct gcc_compile_rule {
                 c += t;
             }
             c += f, "-o", out;
-            auto add = [&](auto &&tgt) {
-                for (auto &&o : tgt.compile_options) {
-                    c += o;
-                }
-                for (auto &&d : tgt.definitions) {
-                    c += (string)d;
-                }
-                for (auto &&i : tgt.include_directories) {
-                    c += "-I", i;
-                }
-            };
-            add(tgt.compile_options);
+            add_compile_options(tgt.merge_object().compile_options, c);
             c.inputs.insert(f);
             c.outputs.insert(out);
             tgt.commands.emplace_back(std::move(c));
@@ -367,18 +357,18 @@ struct gcc_link_rule {
                 rules.insert(this);
             }
         }
-        auto add = [&](auto &&tgt) {
-            for (auto &&i : tgt.link_directories) {
+        auto add = [&](auto &&v) {
+            for (auto &&i : v.link_directories) {
                 c += "-L", i;
             }
-            for (auto &&d : tgt.link_libraries) {
+            for (auto &&d : v.link_libraries) {
                 c += d;
             }
-            for (auto &&d : tgt.system_link_libraries) {
+            for (auto &&d : v.system_link_libraries) {
                 c += d;
             }
         };
-        add(tgt.link_options);
+        add(tgt.merge_object().link_options);
         tgt.commands.emplace_back(std::move(c));
     }
 };
@@ -405,18 +395,18 @@ struct lib_ar_rule {
                 rules.insert(this);
             }
         }
-        auto add = [&](auto &&tgt) {
-            for (auto &&i : tgt.link_directories) {
+        auto add = [&](auto &&v) {
+            for (auto &&i : v.link_directories) {
                 c += "-L", i;
             }
-            for (auto &&d : tgt.link_libraries) {
+            for (auto &&d : v.link_libraries) {
                 c += d;
             }
-            for (auto &&d : tgt.system_link_libraries) {
+            for (auto &&d : v.system_link_libraries) {
                 c += d;
             }
         };
-        add(tgt.link_options);
+        add(tgt.merge_object().link_options);
         c.outputs.insert(out);
         tgt.commands.emplace_back(std::move(c));*/
     }

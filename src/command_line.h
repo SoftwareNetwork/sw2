@@ -143,8 +143,6 @@ struct command_line_parser {
     struct build {
         static constexpr inline auto name = "build"sv;
 
-        input i; // inputs
-
         argument<string, options::positional{}, options::zero_or_more{}> inputs;
         flag<options::flag<"-static"_s>{}> static_;
         flag<options::flag<"-shared"_s>{}> shared;
@@ -171,26 +169,6 @@ struct command_line_parser {
                 compiler,
                 os
             );
-        }
-
-        void parse(const args &args) {
-            auto check_spec = [&](auto &&fn) {
-                if (fs::exists(fn)) {
-                    i = specification_file_input{fn};
-                    return true;
-                }
-                return false;
-            };
-            0 || check_spec("sw.h")
-              || check_spec("sw.cpp") // old compat. After rewrite remove sw.h
-              //|| check_spec("sw2.cpp")
-              //|| (i = directory_input{"."}, true)
-                ;
-            parse1(*this, args);
-
-            if (inputs) {
-            } else {
-            }
         }
     };
     struct override {
@@ -278,7 +256,8 @@ struct command_line_parser {
                     if (T::name == a) {
                         a.consumed = true;
                         obj.c = T{};
-                        std::get<T>(obj.c).parse(args);
+                        //std::get<T>(obj.c).parse1(args);
+                        parse1(std::get<T>(obj.c), args);
                         return true;
                     }
                     return false;
