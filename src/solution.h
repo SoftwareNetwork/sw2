@@ -232,16 +232,6 @@ struct solution {
     void add_entry_point(const package_name &n, entry_point &&ep) {
         targets[n].ep = std::move(ep);
     }
-    /*void add_input(const entry_point &i) {
-        static const auto bs = default_build_settings();
-        input_with_settings is;
-        is.i = i;
-        is.settings.insert(bs);
-        inputs.emplace_back(is);
-    }
-    void add_input(input_with_settings &i) {
-        inputs.emplace_back(i);
-    }*/
     void add_input(const input_with_settings &i) {
         inputs.push_back(i);
     }

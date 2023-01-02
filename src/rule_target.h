@@ -374,48 +374,6 @@ struct native_target : rule_target, target_data_storage<native_target> {
     }
 
     void init_compilers(auto &&s) {
-        auto load = [&] {
-            std::once_flag once;
-            auto load = [&] {
-#ifdef _WIN32
-                //detect_winsdk(s);
-                //get_msvc_detector(s);
-                //detect_gcc_clang(s);
-#else
-                //detect_gcc_clang(s);
-#endif
-            };
-            visit_any(
-                bs.c.compiler,
-                [&](c_compiler::msvc &c) {
-                    std::call_once(once, load);
-                },
-                [&](c_compiler::gcc &c) {
-                    std::call_once(once, load);
-                },
-                [&](c_compiler::clang &c) {
-                    std::call_once(once, load);
-                });
-            visit_any(
-                bs.cpp.compiler,
-                [&](cpp_compiler::msvc &c) {
-                    std::call_once(once, load);
-                },
-                [&](cpp_compiler::gcc &c) {
-                    std::call_once(once, load);
-                },
-                [&](cpp_compiler::clang &c) {
-                    std::call_once(once, load);
-                });
-            visit_any(bs.linker, [&](librarian::msvc &c) {
-                std::call_once(once, load);
-            });
-            visit_any(bs.linker, [&](linker::msvc &c) {
-                std::call_once(once, load);
-            });
-        };
-        //std::call_once(s.system_targets_detected, load);
-
         // order
         for (auto &&l : bs.cpp.stdlib) {
             add(s.load_target(l, bs));

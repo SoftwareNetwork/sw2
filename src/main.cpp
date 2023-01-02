@@ -75,6 +75,17 @@ auto default_build_settings() {
 auto make_solution() {
     auto binary_dir = ".sw";
     solution s{binary_dir, default_host_settings()};
+    if (get_msvc_detector1().exists()) {
+        get_msvc_detector(s);
+        detect_winsdk(s);
+    }
+#ifdef _WIN32
+    // detect_winsdk(s);
+    // get_msvc_detector(s);
+    // detect_gcc_clang(s);
+#else
+    // detect_gcc_clang(s);
+#endif
     return s;
 }
 
