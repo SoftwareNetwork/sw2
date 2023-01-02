@@ -148,7 +148,7 @@ struct cl_exe_rule {
                 mt_md(tgt.bs.cpp.runtime);
             }
             c += f, "-Fo" + out.string();
-            add_compile_options(tgt.merge_object().compile_options, c);
+            add_compile_options(tgt.merge_object(), c);
             /*for (auto &&d : tgt.dependencies) {
                 visit(*d.target, [&](auto &&v) {
                     if constexpr (requires { v->definitions; }) {
@@ -253,7 +253,7 @@ struct link_exe_rule {
                 c += d;
             }
         };
-        add(tgt.merge_object().link_options);
+        add(tgt.merge_object());
         /*for (auto &&d : tgt.dependencies) {
             visit(*d.target, [&](auto &&v) {
                 if constexpr (requires { v->link_directories; }) {
@@ -315,7 +315,7 @@ struct gcc_compile_rule {
                 c += t;
             }
             c += f, "-o", out;
-            add_compile_options(tgt.merge_object().compile_options, c);
+            add_compile_options(tgt.merge_object(), c);
             c.inputs.insert(f);
             c.outputs.insert(out);
             tgt.commands.emplace_back(std::move(c));
@@ -368,7 +368,7 @@ struct gcc_link_rule {
                 c += d;
             }
         };
-        add(tgt.merge_object().link_options);
+        add(tgt.merge_object());
         tgt.commands.emplace_back(std::move(c));
     }
 };

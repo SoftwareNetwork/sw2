@@ -109,16 +109,25 @@ struct rule_target {
 };
 
 template <typename T>
-struct target_data {
+struct target_data : compile_options_t,link_options_t {
     using files_t = std::set<path>; // unordered?
 
+    T *target_{nullptr};
     files_t files;
-    compile_options_t compile_options;
-    link_options_t link_options;
+    //compile_options_t compile_options;
+    //link_options_t link_options;
     std::vector<dependency> dependencies;
 
-    T &target() { return static_cast<T&>(*this); }
-    const T &target() const { return static_cast<const T&>(*this); }
+    target_data() {}
+    target_data(T &t) : target_{&t} {
+    }
+
+    T &target() {
+        return *target_;
+    }
+    const T &target() const {
+        return *target_;
+    }
 
 #ifdef _MSC_VER
     auto operator+=(this auto &&self, auto &&v) {
@@ -174,16 +183,16 @@ struct target_data {
     }
 
     void add(const definition &d) {
-        compile_options.definitions.push_back(d);
+        definitions.push_back(d);
     }
     void add(const include_directory &d) {
-        compile_options.include_directories.push_back(d);
+        include_directories.push_back(d);
     }
     void add(const compile_option &d) {
-        compile_options.compile_options.push_back(d);
+        compile_options.push_back(d);
     }
     void add(const system_link_library &l) {
-        link_options.system_link_libraries.push_back(l);
+        system_link_libraries.push_back(l);
     }
     void add(target_uptr &ptr) {
         dependency d;
@@ -196,8 +205,8 @@ struct target_data {
 
     void merge(auto &&from) {
         files.merge(from.files);
-        compile_options.merge(from.compile_options);
-        link_options.merge(from.link_options);
+        compile_options_t::merge(from);
+        link_options_t::merge(from);
         dependencies.append_range(from.dependencies);
     }
 
@@ -249,6 +258,9 @@ struct target_data_storage : target_data<T> {
     base &Public{public_};
     base &Interface{interface_};
 
+    target_data_storage(T &t) : base{t} {
+    }
+
     base &merge_object() { return merge_object_; }
 
     void merge_from_deps() {
@@ -285,6 +297,7 @@ private:
     base &get(int i) {
         if (!data[i]) {
             data[i] = std::make_unique<base>();
+            data[i]->target_ = base::target_;
         }
         return *data[i];
     }
@@ -306,7 +319,7 @@ struct native_target : rule_target, target_data_storage<native_target> {
     string api_name;
     string &ApiName{api_name}; // v1 compat
 
-    native_target(auto &&s, auto &&id) : base{s, id} {
+    native_target(auto &&s, auto &&id) : base{s, id}, target_data_storage<native_target>{*this} {
         *this += native_sources_rule{};
         init_compilers(s);
 
