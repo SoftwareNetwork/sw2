@@ -20,6 +20,7 @@ struct rule_target {
     build_settings bs;
     path source_dir;
     path binary_dir;
+    //path solution_binary_dir;
     command_storage cs;
     std::vector<rule> rules;
     std::map<path, rule_flag> processed_files;
@@ -38,6 +39,7 @@ struct rule_target {
    {
         source_dir = solution.source_dir;
         binary_dir = make_binary_dir(solution.binary_dir);
+        //solution_binary_dir = solution.binary_dir;
     }
     path make_binary_dir(const path &parent) {
         return make_binary_dir(parent, bs.hash());
@@ -258,6 +260,11 @@ struct native_target : rule_target, target_data_storage<native_target> {
         if (!bs.build_type.is<build_type::debug>()) {
             *this += "NDEBUG"_def;
         }
+
+        // unexistent, cmake cannot idir such dirs, it requires to create them
+        // create during cmake project export?
+        *this += include_directory{local_binary_private_dir()};
+        public_ += include_directory{local_binary_dir()};
     }
 
     void init_compilers(auto &&s) {
@@ -372,6 +379,13 @@ struct native_target : rule_target, target_data_storage<native_target> {
         rule_target::prepare(self);
     }
 
+    path local_binary_dir() {
+        return binary_dir / "bd";
+    }
+    path local_binary_private_dir() {
+        return binary_dir / "bdp";
+    }
+
     bool has_file(const path &fn) {
         return false;
     }
@@ -392,12 +406,14 @@ struct native_target : rule_target, target_data_storage<native_target> {
                 operator-=(from);
         }
     }
-    void configure_file(path from, path to, int flags) {
+    void configure_file(path from, path to, int flags = 0) {
         add_file_silently(from);
+
+        auto bdir = local_binary_private_dir();
 
         // before resolving
         if (!to.is_absolute())
-            to = BinaryDir / to;
+            to = bdir / to;
         //File(to, getFs()).setGenerated();
 
         if (DryRun)
@@ -406,8 +422,8 @@ struct native_target : rule_target, target_data_storage<native_target> {
         if (!from.is_absolute()) {
             if (fs::exists(SourceDir / from))
                 from = SourceDir / from;
-            else if (fs::exists(BinaryDir / from))
-                from = BinaryDir / from;
+            else if (fs::exists(bdir / from))
+                from = bdir / from;
             else
                 throw std::runtime_error{"Package: "s + getPackage().toString() + ", file not found: " + from.string()};
         }
@@ -568,6 +584,8 @@ struct native_target : rule_target, target_data_storage<native_target> {
     void writeFileOnce(auto && ... args) { write_file_once(args...); }
 
     path get_patch_dir(bool binary_dir) const {
+        // for binary dir put into binary dir
+
         path base;
         //if (auto d = getPackage().getOverriddenDir(); d)
             //base = d.value() / SW_BINARY_DIR;
@@ -576,6 +594,8 @@ struct native_target : rule_target, target_data_storage<native_target> {
             base = source_dir;
         //else
             //base = getMainBuild().getBuildDirectory();
+
+        base = this->binary_dir;
         return base / "patch";
     }
 };

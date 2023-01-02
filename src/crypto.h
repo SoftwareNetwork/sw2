@@ -6,13 +6,22 @@
 
 namespace sw {
 
+auto bytes_to_string(auto &&bytes) {
+    std::string s;
+    s.reserve(bytes.size() * 2);
+    for (auto &&b : bytes) {
+        constexpr auto alph = "0123456789abcdef";
+        s += alph[b >> 4];
+        s += alph[b & 0xF];
+    }
+    return s;
+}
+
 template <typename T>
-std::string digest(auto &&data) {
+auto digest(auto &&data) {
     T t;
     t.update(data);
-    auto r = t.digest();
-    std::string s(r.begin(), r.end());
-    return s;
+    return bytes_to_string(t.digest());
 }
 
 }

@@ -281,6 +281,8 @@ auto read_file(const path &fn) {
 }
 
 void write_file(const path &fn, const string &s) {
+    fs::create_directories(fn.parent_path());
+
     FILE *f = fopen(fn.string().c_str(), "wb");
     fwrite(s.data(), s.size(), 1, f);
     fclose(f);
@@ -290,9 +292,7 @@ void write_file_if_different(const path &fn, const string &s) {
     if (fs::exists(fn) && read_file(fn) == s) {
         return;
     }
-    FILE *f = fopen(fn.string().c_str(), "wb");
-    fwrite(s.data(), s.size(), 1, f);
-    fclose(f);
+    write_file(fn, s);
 }
 
 size_t fnv1a(auto &&in) {
