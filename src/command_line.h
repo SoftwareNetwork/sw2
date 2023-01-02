@@ -8,13 +8,22 @@ namespace sw {
 
 struct command_line_parser {
     struct options {
+        template <auto Name, auto ... Aliases>
+        struct flag {
+            static bool is_option_flag(auto &&arg) {
+                return (string_view)Name == arg || (((string_view)Aliases == arg) || ... || false);
+            }
+        };
+        struct positional {};
         struct comma_separated_value {};
-        template <auto AliasName1, auto ... Aliases>
-        struct aliases {
-        };
-        template <auto From, auto To>
+        template <auto Min, auto Max>
         struct nargs {
+            static constexpr auto min() { return Min; }
+            static constexpr auto max() { return Max; }
+            static constexpr auto is_single() { return Min == 1 && Max == 1; }
         };
+        struct zero_or_more : nargs<0, -1> {};
+        struct one_or_more : nargs<1, -1> {};
     };
 
     struct arg {
@@ -23,6 +32,7 @@ struct command_line_parser {
         operator auto() const { return value; }
         //operator const char *() const { return value.data(); }
         auto c_str() const { return value.data(); }
+        auto str() const { return string(value.begin(), value.end()); }
     };
     struct args {
         std::vector<arg> value;
@@ -50,12 +60,30 @@ struct command_line_parser {
         const arg &operator[](int i) const { return value[i]; }
     };
 
-    template <auto OptionName, typename T, auto ... Options>
+    template <typename T, auto ... Options>
     struct argument {
-        std::optional<T> value;
+        static constexpr bool is_single_val1() {
+            auto is_multi = [&](auto &&v) {
+                if constexpr (requires { v.is_single(); }) {
+                    return !v.is_single();
+                }
+                return false;
+            };
+            return !(is_multi(Options) || ... || false);
+        }
+        static inline constexpr bool is_single_val = is_single_val1();
+        using value_type = std::conditional_t<is_single_val, T, std::vector<T>>;
 
-        static constexpr string_view option_name() {
-            return OptionName;
+        std::optional<value_type> value;
+
+        static bool is_option_flag(auto &&arg) {
+            auto f = [&](auto &&v) {
+                if constexpr (requires {v.is_option_flag(arg);}) {
+                    return v.is_option_flag(arg);
+                }
+                return false;
+            };
+            return (f(Options) || ... || false);
         }
 
         explicit operator bool() const {
@@ -64,10 +92,7 @@ struct command_line_parser {
         operator auto() const {
             return *value;
         }
-        void parse(auto &&args, auto &&cur) {
-            /*if (args.size() < nargs) {
-                throw std::runtime_error{format("no value for argument {}", option_name())};
-            }*/
+        void parse(auto &&args, auto &&cur) requires (is_single_val) {
             if constexpr (std::same_as<T, bool>) {
                 value = true;
                 return;
@@ -77,22 +102,33 @@ struct command_line_parser {
                 value = std::stoi(a.c_str());
             } else {
                 value = a.c_str();
-                //SW_UNIMPLEMENTED;
-                //args = args.subspan(nargs);
             }
             a.consumed = true;
         }
+        void parse(auto &&args, auto &&cur) requires (!is_single_val) {
+            for (auto &&a : args.active()) {
+                if (a.value[0] == '-') {
+                    break;
+                }
+                if (!value) {
+                    value = value_type{};
+                }
+                if constexpr (std::same_as<T, int>) {
+                    value->push_back(std::stoi(a.str()));
+                } else {
+                    value->push_back(a.str());
+                }
+                a.consumed = true;
+            }
+        }
     };
-    template <auto OptionName, auto ... Options> struct flag {
+    template <auto FlagName, auto ... Options> struct flag {
         bool value;
 
         flag() : value{false} {}
 
         static bool is_option_flag(auto &&arg) {
-            return option_name() == arg;// || (((string_view)Aliases == arg) || ... || false);
-        }
-        static constexpr string_view option_name() {
-            return OptionName;
+            return FlagName.is_option_flag(arg);
         }
         explicit operator bool() const {
             return value;
@@ -108,19 +144,22 @@ struct command_line_parser {
         static constexpr inline auto name = "build"sv;
 
         input i; // inputs
-        flag<"-static"_s> static_;
-        flag<"-shared"_s> shared;
-        flag<"-c_static_runtime"_s> c_static_runtime;
-        flag<"-cpp_static_runtime"_s> cpp_static_runtime;
-        flag<"-mt"_s, options::aliases<"-c_and_cpp_static_runtime"_s>{}> c_and_cpp_static_runtime; // windows compat
-        flag<"-md"_s, options::aliases<"-c_and_cpp_dynamic_runtime"_s>{}> c_and_cpp_dynamic_runtime; // windows compat
-        argument<"-arch"_s, string, options::comma_separated_value{}> arch;
-        argument<"-config"_s, string, options::comma_separated_value{}> config;
-        argument<"-compiler"_s, string, options::comma_separated_value{}> compiler;
-        argument<"-os"_s, string, options::comma_separated_value{}> os;
+
+        argument<string, options::positional{}, options::zero_or_more{}> inputs;
+        flag<options::flag<"-static"_s>{}> static_;
+        flag<options::flag<"-shared"_s>{}> shared;
+        flag<options::flag<"-c_static_runtime"_s>{}> c_static_runtime;
+        flag<options::flag<"-cpp_static_runtime"_s>{}> cpp_static_runtime;
+        flag<options::flag<"-mt"_s, "-c_and_cpp_static_runtime"_s>{}> c_and_cpp_static_runtime; // windows compat
+        flag<options::flag<"-md"_s, "-c_and_cpp_dynamic_runtime"_s>{}> c_and_cpp_dynamic_runtime; // windows compat
+        argument<string, options::flag<"-arch"_s>{}, options::comma_separated_value{}> arch;
+        argument<string, options::flag<"-config"_s>{}, options::comma_separated_value{}> config;
+        argument<string, options::flag<"-compiler"_s>{}, options::comma_separated_value{}> compiler;
+        argument<string, options::flag<"-os"_s>{}, options::comma_separated_value{}> os;
 
         auto option_list() {
             return std::tie(
+                inputs,
                 static_,
                 shared,
                 c_static_runtime,
@@ -148,6 +187,10 @@ struct command_line_parser {
               //|| (i = directory_input{"."}, true)
                 ;
             parse1(*this, args);
+
+            if (inputs) {
+            } else {
+            }
         }
     };
     struct override {
@@ -190,13 +233,13 @@ struct command_line_parser {
     using command = command_types::variant_type;
 
     command c;
-    argument<"-d"_s, path> working_directory;
-    flag<"-sw1"_s> sw1; // not a driver, but a real invocation
-    flag<"-sfc"_s> save_failed_commands;
-    flag<"-sec"_s> save_executed_commands;
+    argument<path, options::flag<"-d"_s>{}> working_directory;
+    flag<options::flag<"-sw1"_s>{}> sw1; // not a driver, but a real invocation
+    flag<options::flag<"-sfc"_s>{}> save_failed_commands;
+    flag<options::flag<"-sec"_s>{}> save_executed_commands;
     // some debug
-    argument<"-sleep"_s, int> sleep;
-    flag<"-int3"_s> int3;
+    argument<int, options::flag<"-sleep"_s>{}> sleep;
+    flag<options::flag<"-int3"_s>{}> int3;
 
     auto option_list() {
         return std::tie(
@@ -223,20 +266,17 @@ struct command_line_parser {
         parse1(*this, args, false);
     }
     static bool is_option_flag(auto &&opt, auto &&arg) {
-        if constexpr (requires {opt.is_option_flag(arg);}) {
-            return opt.is_option_flag(arg);
-        }
-        return arg == opt.option_name();
+        return opt.is_option_flag(arg);
     }
     static void parse1(auto &&obj, auto &&args, bool command = true) {
         using type = std::decay_t<decltype(obj)>;
         // pre command
         for (auto &&a : args.active()) {
-            a.consumed = true;
             bool iscmd{};
             if constexpr (requires { obj.c; }) {
                 iscmd = command || type::command_types::for_each([&]<typename T>(T **) {
                     if (T::name == a) {
+                        a.consumed = true;
                         obj.c = T{};
                         std::get<T>(obj.c).parse(args);
                         return true;
@@ -245,7 +285,7 @@ struct command_line_parser {
                 });
             }
             if (iscmd) {
-                break;
+                return;
             }
             bool parsed{};
             if constexpr (requires{obj.option_list();}) {
@@ -253,11 +293,16 @@ struct command_line_parser {
                     [&](auto &&...opts) {
                         auto f = [&](auto &&opt) {
                             if (is_option_flag(opt, a)) {
+                                a.consumed = true;
+                                opt.parse(args, a);
+                                parsed = true;
+                            } else if (a.value[0] != '-') {
                                 opt.parse(args, a);
                                 parsed = true;
                             }
+                            return parsed;
                         };
-                        (f(FWD(opts)), ...);
+                        (f(FWD(opts)) || ... || false);
                     },
                     obj.option_list());
             }
@@ -266,9 +311,6 @@ struct command_line_parser {
                     a.consumed = false;
                 }
             }
-        }
-        if (command) {
-            return;
         }
         // post command
         for (auto &&a : args.active()) {
@@ -282,15 +324,22 @@ struct command_line_parser {
                                 a.consumed = true;
                                 opt.parse(args, a);
                                 parsed = true;
+                            } else if (a.value[0] != '-') {
+                                opt.parse(args, a);
+                                parsed = true;
                             }
+                            return parsed;
                         };
-                        (f(FWD(opts)), ...);
+                        (f(FWD(opts)) || ... || false);
                     },
                     obj.option_list());
             }
             if (!parsed) {
-                throw std::runtime_error{format("unknown option: {}", a.value)};
             }
+        }
+        // now errors
+        for (auto &&a : args.active()) {
+            throw std::runtime_error{format("unknown option: {}", a.value)};
         }
     }
 };
