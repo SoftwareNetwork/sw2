@@ -253,14 +253,29 @@ struct target_data_storage : target_data<T> {
 
     void merge_from_deps() {
     }
+    void merge(auto &&from, int grps) {
+        for (int i = 2; i < groups::max; ++i) {
+            if (from.data[i] && (i & grps)) {
+                merge_object().merge(*from.data[i]);
+            }
+        }
+    }
     void merge() {
         // make merge object with pointers?
 
+        // merge self
         merge_object().merge(*this);
-        for (int i = 2; i < groups::max; ++i) {
-            if (data[i] && (i & groups::self)) {
-                merge_object().merge(*data[i]);
-            }
+        // merge others
+        merge(*this, groups::self);
+        // merge our deps
+        for (auto &&d : merge_object().dependencies) {
+            visit(*d.target, [&](auto &&v) {
+                if constexpr (requires { v->data; }) {
+                    // TODO: handle project correctly
+                    //merge(*v, groups::project);
+                    merge(*v, groups::others);
+                }
+            });
         }
     }
 

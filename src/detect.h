@@ -6,6 +6,7 @@
 #include "helpers.h"
 #include "vs_instance_helpers.h"
 #include "target.h"
+#include "target_list.h"
 #include "os_base.h"
 #include "input.h"
 
@@ -66,6 +67,7 @@ struct msvc_instance {
                     return;
                 }
                 auto &t = s.template add<binary_target_msvc>(package_name{name, version()}, *this);
+                //auto &t = s.template add<executable_target>(package_name{name, version()});
                 t.executable = prog;
             }});
         };
@@ -122,6 +124,7 @@ struct msvc_instance {
             }
             // com.Microsoft.VisualStudio.VC.STL?
             auto &t = s.template add<binary_library_target>(package_name{"com.Microsoft.VisualStudio.VC.libcpp"s, version()});
+            //auto &t = s.template add<native_library_target>(package_name{"com.Microsoft.VisualStudio.VC.libcpp"s, version()});
             t.include_directories.push_back(root / "include");
             auto libdir = root / "lib" / get_windows_arch(t);
             t.link_directories.push_back(libdir);
