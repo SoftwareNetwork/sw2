@@ -5,10 +5,9 @@
 
 #include "helpers.h"
 #include "vs_instance_helpers.h"
-#include "target.h"
-#include "target_list.h"
+#include "rule_target.h"
 #include "os_base.h"
-#include "input.h"
+#include "entry_point.h"
 
 namespace sw {
 
@@ -66,9 +65,11 @@ struct msvc_instance {
                 if (!fs::exists(prog)) {
                     return;
                 }
-                auto &t = s.template add<binary_target_msvc>(package_name{name, version()}, *this);
-                //auto &t = s.template add<executable_target>(package_name{name, version()});
+                //auto &t = s.template add<binary_target_msvc>(package_name{name, version()}, *this);
+                auto &t = s.template add<executable_target>(package_name{name, version()}, native_library_target::raw_target_tag());
                 t.executable = prog;
+                // public_
+                t.rules.push_back(cl_exe_rule{});
             }});
         };
         add_target("com.Microsoft.VisualStudio.VC.cl", "cl.exe");
@@ -84,13 +85,14 @@ struct msvc_instance {
                     return;
                 }
                 // com.Microsoft.VisualStudio.VC.STL?
-                auto &t = s.template add<binary_library_target>(package_name{"com.Microsoft.VisualStudio.VC.libc"s, version()});
-                t.include_directories.push_back(root / "include");
+                auto &t = s.template add<native_library_target>(package_name{"com.Microsoft.VisualStudio.VC.libc"s, version()},
+                    native_library_target::raw_target_tag());
+                t.public_.include_directories.push_back(root / "include");
                 auto libdir = root / "lib" / get_windows_arch(t);
-                t.link_directories.push_back(libdir);
+                t.public_.link_directories.push_back(libdir);
                 auto add_if_exists = [&](auto &&fn) {
                     if (fs::exists(libdir / fn)) {
-                        t.link_libraries.push_back(fn);
+                        t.public_.link_libraries.push_back(fn);
                     }
                 };
                 add_if_exists("OLDNAMES.LIB");
@@ -99,22 +101,22 @@ struct msvc_instance {
                 if (t.bs.c.runtime.template is<library_type::static_>()) {
                     t.bs.build_type.visit(
                         [&](build_type::debug) {
-                            t.link_libraries.push_back("LIBCMTD.LIB");
-                            t.link_libraries.push_back("LIBVCRUNTIMED.LIB");
+                            t.public_.link_libraries.push_back("LIBCMTD.LIB");
+                            t.public_.link_libraries.push_back("LIBVCRUNTIMED.LIB");
                         },
                         [&](auto) {
-                            t.link_libraries.push_back("LIBCMT.LIB");
-                            t.link_libraries.push_back("LIBVCRUNTIME.LIB");
+                            t.public_.link_libraries.push_back("LIBCMT.LIB");
+                            t.public_.link_libraries.push_back("LIBVCRUNTIME.LIB");
                         });
                 } else {
                     t.bs.build_type.visit(
                         [&](build_type::debug) {
-                            t.link_libraries.push_back("MSVCRTD.LIB");
-                            t.link_libraries.push_back("VCRUNTIMED.LIB");
+                            t.public_.link_libraries.push_back("MSVCRTD.LIB");
+                            t.public_.link_libraries.push_back("VCRUNTIMED.LIB");
                         },
                         [&](auto) {
-                            t.link_libraries.push_back("MSVCRT.LIB");
-                            t.link_libraries.push_back("VCRUNTIME.LIB");
+                            t.public_.link_libraries.push_back("MSVCRT.LIB");
+                            t.public_.link_libraries.push_back("VCRUNTIME.LIB");
                         });
                 }
             }});
@@ -123,14 +125,14 @@ struct msvc_instance {
                 return;
             }
             // com.Microsoft.VisualStudio.VC.STL?
-            auto &t = s.template add<binary_library_target>(package_name{"com.Microsoft.VisualStudio.VC.libcpp"s, version()});
-            //auto &t = s.template add<native_library_target>(package_name{"com.Microsoft.VisualStudio.VC.libcpp"s, version()});
-            t.include_directories.push_back(root / "include");
+            auto &t = s.template add<native_library_target>(package_name{"com.Microsoft.VisualStudio.VC.libcpp"s, version()},
+                native_library_target::raw_target_tag());
+            t.public_.include_directories.push_back(root / "include");
             auto libdir = root / "lib" / get_windows_arch(t);
-            t.link_directories.push_back(libdir);
+            t.public_.link_directories.push_back(libdir);
             auto add_if_exists = [&](auto &&fn) {
                 if (fs::exists(libdir / fn)) {
-                    t.link_libraries.push_back(fn);
+                    t.public_.link_libraries.push_back(fn);
                 }
             };
             //add_if_exists("OLDNAMES.LIB");
@@ -139,22 +141,22 @@ struct msvc_instance {
             if (t.bs.cpp.runtime.template is<library_type::static_>()) {
                 t.bs.build_type.visit(
                     [&](build_type::debug) {
-                        t.link_libraries.push_back("LIBCONCRTD.LIB");
-                        t.link_libraries.push_back("LIBCPMTD.LIB");
+                        t.public_.link_libraries.push_back("LIBCONCRTD.LIB");
+                        t.public_.link_libraries.push_back("LIBCPMTD.LIB");
                     },
                     [&](auto) {
-                        t.link_libraries.push_back("LIBCONCRT.LIB");
-                        t.link_libraries.push_back("LIBCPMT.LIB");
+                        t.public_.link_libraries.push_back("LIBCONCRT.LIB");
+                        t.public_.link_libraries.push_back("LIBCPMT.LIB");
                     });
             } else {
                 t.bs.build_type.visit(
                     [&](build_type::debug) {
-                        t.link_libraries.push_back("CONCRTD.LIB");
-                        t.link_libraries.push_back("MSVCPRTD.LIB");
+                        t.public_.link_libraries.push_back("CONCRTD.LIB");
+                        t.public_.link_libraries.push_back("MSVCPRTD.LIB");
                     },
                     [&](auto) {
-                        t.link_libraries.push_back("CONCRT.LIB");
-                        t.link_libraries.push_back("MSVCPRT.LIB");
+                        t.public_.link_libraries.push_back("CONCRT.LIB");
+                        t.public_.link_libraries.push_back("MSVCPRT.LIB");
                     });
             }
         }});
@@ -196,9 +198,13 @@ struct msvc_detector {
         }
     }
 };
-auto &get_msvc_detector() {
+auto &get_msvc_detector1() {
     static msvc_detector d;
     return d;
+}
+void get_msvc_detector(auto &&s) {
+    get_msvc_detector1().add(s);
+    //return d;
 }
 
 // https://en.wikipedia.org/wiki/Microsoft_Windows_SDK
@@ -238,40 +244,40 @@ struct win_kit {
 
         s.add_entry_point(package_name{"com.Microsoft.Windows.SDK."s + name, path{v}.string()},
                           entry_point{[=, *this](decltype(s) &s) {
-                              auto &t = s.template add<binary_library_target>(
-                                  package_name{"com.Microsoft.Windows.SDK."s + name, path{v}.string()});
+                              auto &t = s.template add<native_library_target>(
+                                  package_name{"com.Microsoft.Windows.SDK."s + name, path{v}.string()}, native_library_target::raw_target_tag());
                               auto libdir = kit_root / "Lib" / ldir_subversion / name / get_windows_arch(t);
                               if (fs::exists(libdir)) {
-                                  t.include_directories.push_back(idir / name);
+                                  t.public_.include_directories.push_back(idir / name);
                                   for (auto &i : idirs) {
-                                      t.include_directories.push_back(idir / i);
+                                      t.public_.include_directories.push_back(idir / i);
                                   }
-                                  t.link_directories.push_back(libdir);
+                                  t.public_.link_directories.push_back(libdir);
                                   if (name == "ucrt") {
                                       if (t.bs.c.runtime.template is<library_type::static_>()) {
                                           t.bs.build_type.visit(
                                               [&](build_type::debug) {
-                                                  t.link_libraries.push_back("LIBUCRTD.LIB");
+                                                  t.public_.link_libraries.push_back("LIBUCRTD.LIB");
                                               },
                                               [&](auto) {
-                                                  t.link_libraries.push_back("LIBUCRT.LIB");
+                                                  t.public_.link_libraries.push_back("LIBUCRT.LIB");
                                               });
                                       } else {
                                           t.bs.build_type.visit(
                                               [&](build_type::debug) {
-                                                  t.link_libraries.push_back("UCRTD.LIB");
+                                                  t.public_.link_libraries.push_back("UCRTD.LIB");
                                               },
                                               [&](auto) {
-                                                  t.link_libraries.push_back("UCRT.LIB");
+                                                  t.public_.link_libraries.push_back("UCRT.LIB");
                                               });
                                       }
                                   } else if (name == "um") {
-                                      t.link_libraries.push_back("KERNEL32.LIB");
+                                      t.public_.link_libraries.push_back("KERNEL32.LIB");
                                   }
                               } else if (without_ldir) {
-                                  t.include_directories.push_back(idir / name);
+                                  t.public_.include_directories.push_back(idir / name);
                                   for (auto &i : idirs) {
-                                      t.include_directories.push_back(idir / i);
+                                      t.public_.include_directories.push_back(idir / i);
                                   }
                               } else {
                                   throw std::runtime_error{"libdir not found"};
@@ -688,7 +694,7 @@ path resolve_executable(auto &&exe) {
 
 // maybe cache detected packages for subsequent calls? -sw1/-sw2
 void detect_gcc_clang(auto &s) {
-    auto detect = [&](auto &&prog, auto &&pkg) {
+    /*auto detect = [&](auto &&prog, auto &&pkg) {
         if (auto p = resolve_executable(prog); !p.empty()) {
             s.add_entry_point(pkg, entry_point{[prog,pkg,p](decltype(s) &s2) {
                 auto &t = s2.template add<binary_target>(pkg);
@@ -739,7 +745,7 @@ void detect_gcc_clang(auto &s) {
     if (search_gcc) {
         f("gcc", "g++", c_compiler::gcc::package_name, cpp_compiler::gcc::package_name, gccvers, gccversall);
     }
-    f("clang", "clang++", c_compiler::clang::package_name, cpp_compiler::clang::package_name, clangvers, clangversall);
+    f("clang", "clang++", c_compiler::clang::package_name, cpp_compiler::clang::package_name, clangvers, clangversall);*/
 }
 
 } // namespace sw

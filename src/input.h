@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include "helpers.h"
 #include "os.h"
 #include "entry_point.h"
 

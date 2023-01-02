@@ -5,7 +5,7 @@
 
 #include "helpers.h"
 #include "package.h"
-#include "rule_list.h"
+//#include "rule_list.h"
 
 namespace sw {
 
@@ -241,14 +241,14 @@ struct msvc {
 namespace c_compiler {
 
 struct clang : clang_base {
-    using rule_type = gcc_compile_rule;
+    //using rule_type = gcc_compile_rule;
     static inline constexpr auto package_name = "org.llvm.clang";
 
     clang() : clang_base{unresolved_package_name{package_name, "*"}} {
     }
 };
 struct gcc : gcc_base {
-    using rule_type = gcc_compile_rule;
+    //using rule_type = gcc_compile_rule;
     static inline constexpr auto package_name = "org.gnu.gcc";
 
     gcc() : gcc_base{unresolved_package_name{package_name, "*"}} {
@@ -256,7 +256,7 @@ struct gcc : gcc_base {
 };
 struct msvc : msvc_base {
     using msvc_base::msvc_base;
-    using rule_type = cl_exe_rule;
+    //using rule_type = cl_exe_rule;
 };
 
 } // namespace c_compiler
@@ -264,14 +264,14 @@ struct msvc : msvc_base {
 namespace cpp_compiler {
 
 struct clang : clang_base {
-    using rule_type = gcc_compile_rule;
+    //using rule_type = gcc_compile_rule;
     static inline constexpr auto package_name = "org.llvm.clang++";
 
     clang() : clang_base{unresolved_package_name{package_name, "*"}} {
     }
 };
 struct gcc : gcc_base {
-    using rule_type = gcc_compile_rule;
+    //using rule_type = gcc_compile_rule;
     static inline constexpr auto package_name = "org.gnu.g++";
 
     gcc() : gcc_base{unresolved_package_name{package_name, "*"}} {
@@ -279,7 +279,7 @@ struct gcc : gcc_base {
 };
 struct msvc : msvc_base {
     using msvc_base::msvc_base;
-    using rule_type = cl_exe_rule;
+    //using rule_type = cl_exe_rule;
 };
 
 } // namespace cpp_compiler
@@ -315,11 +315,11 @@ struct gcc {
 namespace librarian {
 
 struct msvc {
-    using rule_type = lib_exe_rule;
+    //using rule_type = lib_exe_rule;
     unresolved_package_name package{"com.Microsoft.VisualStudio.VC.lib"s};
 };
 struct ar {
-    using rule_type = lib_ar_rule;
+    //using rule_type = lib_ar_rule;
     unresolved_package_name package{"org.gnu.binutils.ar"s};
 };
 
@@ -328,15 +328,15 @@ struct ar {
 namespace linker {
 
 struct msvc {
-    using rule_type = link_exe_rule;
+    //using rule_type = link_exe_rule;
     unresolved_package_name package{"com.Microsoft.VisualStudio.VC.link"s};
 };
 struct gcc {
-    using rule_type = gcc_link_rule;
+    //using rule_type = gcc_link_rule;
     unresolved_package_name package{"org.gnu.gcc"s};
 };
 struct gpp {
-    using rule_type = gcc_link_rule;
+    //using rule_type = gcc_link_rule;
     unresolved_package_name package{"org.gnu.g++"s};
 };
 

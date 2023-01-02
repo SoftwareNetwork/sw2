@@ -3,7 +3,8 @@
 
 #pragma once
 
-#include "detect.h"
+//#include "detect.h"
+#include "os.h"
 
 namespace sw {
 
@@ -30,7 +31,7 @@ auto default_host_settings() {
 #if defined(_WIN32)
     bs.os = os::windows{};
     bs.kernel_lib = unresolved_package_name{"com.Microsoft.Windows.SDK.um"s};
-    if (get_msvc_detector().exists()) {
+    if (get_msvc_detector1().exists()) {
         bs.c.compiler = c_compiler::msvc{}; // switch to gcc-12+
         bs.c.stdlib.emplace_back("com.Microsoft.Windows.SDK.ucrt"s);
         bs.c.stdlib.emplace_back("com.Microsoft.VisualStudio.VC.libc"s);

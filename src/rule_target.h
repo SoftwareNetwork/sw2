@@ -4,8 +4,11 @@
 #pragma once
 
 #include "rule.h"
+#include "rule_list.h"
 #include "os.h"
 #include "target_list.h"
+#include "target_properties.h"
+#include "suffix.h"
 
 namespace sw {
 
@@ -17,6 +20,36 @@ auto operator""_dep(const char *s, size_t len) {
     return dependency{std::string{s, len}};
 }
 
+struct native_sources_rule {
+    void operator()(auto &) const {
+    }
+    void operator()(auto &tgt) const requires requires {tgt.begin();} {
+        for (auto &&f : tgt.merge_object()) {
+            if (is_cpp_file(f) || is_c_file(f)) {
+                tgt.processed_files[f].insert(this);
+            }
+        }
+    }
+};
+
+struct rule_flag {
+    std::set<void *> rules;
+
+    template <typename T>
+    auto get_rule_tag() {
+        static void *p;
+        return (void *)&p;
+    }
+    template <typename T>
+    bool contains(T &&) {
+        return rules.contains(get_rule_tag<std::remove_cvref_t<std::remove_pointer_t<T>>>());
+    }
+    template <typename T>
+    auto insert(T &&) {
+        return rules.insert(get_rule_tag<std::remove_cvref_t<std::remove_pointer_t<T>>>());
+    }
+};
+
 // basic target: throw files, rules etc.
 struct rule_target {
     package_name name;
@@ -26,7 +59,6 @@ struct rule_target {
     path binary_dir;
     //path solution_binary_dir;
     command_storage cs;
-    std::vector<rule> rules;
     std::map<path, rule_flag> processed_files;
     std::vector<command> commands;
     //
@@ -69,9 +101,6 @@ struct rule_target {
         bs.visit(FWD(f)...);
     }
 
-    void add(const rule &r) {
-        rules.push_back(r);
-    }
     void init_rules(/*this */auto &&self) {
         for (auto &&r : self.rules) {
             std::visit([&](auto &&v){
@@ -114,9 +143,8 @@ struct target_data : compile_options_t,link_options_t {
 
     T *target_{nullptr};
     files_t files;
-    //compile_options_t compile_options;
-    //link_options_t link_options;
     std::vector<dependency> dependencies;
+    std::vector<rule> rules;
 
     target_data() {}
     target_data(T &t) : target_{&t} {
@@ -194,6 +222,9 @@ struct target_data : compile_options_t,link_options_t {
     void add(const system_link_library &l) {
         system_link_libraries.push_back(l);
     }
+    void add(const rule &r) {
+        rules.push_back(r);
+    }
     void add(target_uptr &ptr) {
         dependency d;
         d.target = &ptr;
@@ -208,6 +239,7 @@ struct target_data : compile_options_t,link_options_t {
         compile_options_t::merge(from);
         link_options_t::merge(from);
         dependencies.append_range(from.dependencies);
+        rules.append_range(from.rules);
     }
 
     auto range() const {
@@ -306,6 +338,8 @@ private:
 struct native_target : rule_target, target_data_storage<native_target> {
     using base = rule_target;
 
+    struct raw_target_tag {};
+
 #ifdef _MSC_VER
     using target_data_storage::operator+=;
     using target_data_storage::operator-=;
@@ -314,7 +348,7 @@ struct native_target : rule_target, target_data_storage<native_target> {
     using target_data_storage::remove;
     using target_data_storage::begin;
     using target_data_storage::end;
-    using rule_target::add;
+    //using rule_target::add;
 
     string api_name;
     string &ApiName{api_name}; // v1 compat
@@ -336,6 +370,8 @@ struct native_target : rule_target, target_data_storage<native_target> {
         *this += include_directory{local_binary_private_dir()};
         public_ += include_directory{local_binary_dir()};
     }
+    native_target(auto &&s, auto &&id, raw_target_tag) : base{s, id}, target_data_storage<native_target>{*this} {
+    }
 
     void init_compilers(auto &&s) {
         auto load = [&] {
@@ -343,7 +379,7 @@ struct native_target : rule_target, target_data_storage<native_target> {
             auto load = [&] {
 #ifdef _WIN32
                 detect_winsdk(s);
-                get_msvc_detector().add(s);
+                get_msvc_detector(s);
                 detect_gcc_clang(s);
 #else
                 detect_gcc_clang(s);
@@ -391,40 +427,12 @@ struct native_target : rule_target, target_data_storage<native_target> {
         add(s.load_target(bs.kernel_lib, bs));
 #endif
 
-        ::sw::visit(
-            bs.c.compiler,
-            [&](c_compiler::msvc &c) {
-                auto &t = s.load_target(c.package, bs);
-                add(c_compiler::msvc::rule_type{t});
-            },
-            [&](c_compiler::gcc &c) {
-                auto &t = s.load_target(c.package, bs);
-                add(c_compiler::gcc::rule_type{t});
-            },
-            [&](c_compiler::clang &c) {
-                auto &t = s.load_target(c.package, bs);
-                add(c_compiler::clang::rule_type{t,true});
-            },
-            [](auto &) {
-                SW_UNIMPLEMENTED;
-            });
-        ::sw::visit(
-            bs.cpp.compiler,
-            [&](cpp_compiler::msvc &c) {
-                auto &t = s.load_target(c.package, bs);
-                add(cpp_compiler::msvc::rule_type{t});
-            },
-            [&](cpp_compiler::gcc &c) {
-                auto &t = s.load_target(c.package, bs);
-                add(cpp_compiler::gcc::rule_type{t,false,true});
-            },
-            [&](cpp_compiler::clang &c) {
-                auto &t = s.load_target(c.package, bs);
-                add(cpp_compiler::clang::rule_type{t,true,true});
-            },
-            [](auto &) {
-                SW_UNIMPLEMENTED;
-            });
+        bs.c.compiler.visit_no_special([&](auto &c) {
+            add(s.load_target(c.package, bs));
+        });
+        bs.cpp.compiler.visit_no_special([&](auto &c) {
+            add(s.load_target(c.package, bs));
+        });
     }
 
 #ifndef _MSC_VER
@@ -704,7 +712,8 @@ struct native_library_target : native_target {
                 bs.linker,
                 [&](linker::msvc &c) {
                     auto &t = s.load_target(c.package, bs);
-                    add(linker::msvc::rule_type{t});
+                    add(t);
+                    //add(linker::msvc::rule_type{t});
                 },
                 [](auto &) {
                     SW_UNIMPLEMENTED;
@@ -728,7 +737,8 @@ struct native_library_target : native_target {
                 bs.librarian,
                 [&](librarian::msvc &c) {
                     auto &t = s.load_target(c.package, bs);
-                    add(librarian::msvc::rule_type{t});
+                    add(t);
+                    //add(librarian::msvc::rule_type{t});
                 },
                 [](auto &) {
                     SW_UNIMPLEMENTED;
@@ -741,6 +751,8 @@ struct native_library_target : native_target {
                 }
             });
         }
+    }
+    native_library_target(auto &&s, auto &&id, raw_target_tag t) : base{s, id, t} {
     }
 };
 using LibraryTarget = native_library_target; // v1 compat
@@ -758,6 +770,7 @@ struct native_static_library_target : native_library_target {
 
 struct executable_target : native_target {
     using base = native_target;
+
     path executable;
 
     executable_target(auto &&s, auto &&id) : base{s, id} {
@@ -771,19 +784,24 @@ struct executable_target : native_target {
             bs.linker,
             [&](linker::msvc &c) {
                 auto &t = s.load_target(c.package, bs);
-                add(linker::msvc::rule_type{t});
+                add(t);
+                //add(linker::msvc::rule_type{t});
             },
             [&](linker::gcc &c) {
                 auto &t = s.load_target(c.package, bs);
-                add(linker::gcc::rule_type{t});
+                add(t);
+                //add(linker::gcc::rule_type{t});
             },
             [&](linker::gpp &c) {
                 auto &t = s.load_target(c.package, bs);
-                add(linker::gpp::rule_type{t});
+                add(t);
+                //add(linker::gpp::rule_type{t});
             },
             [](auto &) {
                 SW_UNIMPLEMENTED;
             });
+    }
+    executable_target(auto &&s, auto &&id, raw_target_tag t) : base{s, id, t} {
     }
 
     void run(auto && ... args) {

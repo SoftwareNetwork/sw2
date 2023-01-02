@@ -3,10 +3,7 @@
 
 #pragma once
 
-#include "helpers.h"
-#include "package.h"
 #include "os_base.h"
-#include "detect.h"
 
 namespace sw {
 

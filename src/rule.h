@@ -3,49 +3,11 @@
 
 #pragma once
 
-#include "rule_list.h"
-#include "target_list.h"
+#include "os_base.h"
+//#include "rule_list.h"
+//#include "rule_target.h"
 
 namespace sw {
-
-struct rule_flag {
-    std::set<void *> rules;
-
-    template <typename T>
-    auto get_rule_tag() {
-        static void *p;
-        return (void *)&p;
-    }
-    template <typename T>
-    bool contains(T &&) {
-        return rules.contains(get_rule_tag<std::remove_cvref_t<std::remove_pointer_t<T>>>());
-    }
-    template <typename T>
-    auto insert(T &&) {
-        return rules.insert(get_rule_tag<std::remove_cvref_t<std::remove_pointer_t<T>>>());
-    }
-};
-
-auto is_c_file(const path &fn) {
-    static std::set<string> exts{".c", ".m"}; // with obj-c, separate call?
-    return exts.contains(fn.extension().string());
-}
-auto is_cpp_file(const path &fn) {
-    static std::set<string> exts{".cpp", ".cxx", ".mm"}; // with obj-c++, separate call?
-    return exts.contains(fn.extension().string());
-}
-
-struct native_sources_rule {
-    void operator()(auto &) const {
-    }
-    void operator()(auto &tgt) const requires requires {tgt.begin();} {
-        for (auto &&f : tgt.merge_object()) {
-            if (is_cpp_file(f) || is_c_file(f)) {
-                tgt.processed_files[f].insert(this);
-            }
-        }
-    }
-};
 
 string format_log_record(auto &&tgt, auto &&second_part) {
     string s = format("[{}]", (string)tgt.name);
@@ -87,13 +49,10 @@ void add_compile_options(auto &&obj, auto &&c) {
 }
 
 struct cl_exe_rule {
-    using target_type = binary_target_msvc;
+    //executable_target &compiler;
+    //cl_exe_rule(executable_target &t) : compiler{t} {}
 
-    target_type &compiler;
-
-    cl_exe_rule(target_uptr &t) : compiler{*std::get<uptr<target_type>>(t)} {}
-
-    void operator()(auto &tgt) requires requires { tgt.compile_options; } {
+    void operator()(auto &tgt, auto &compiler) requires requires { tgt.compile_options; } {
         auto objext = tgt.bs.os.visit([](auto &&v) -> string_view {
             if constexpr (requires { v.object_file_extension; }) {
                 return v.object_file_extension;
@@ -149,13 +108,6 @@ struct cl_exe_rule {
             }
             c += f, "-Fo" + out.string();
             add_compile_options(tgt.merge_object(), c);
-            /*for (auto &&d : tgt.dependencies) {
-                visit(*d.target, [&](auto &&v) {
-                    if constexpr (requires { v->definitions; }) {
-                        add(*v);
-                    }
-                });
-            }*/
             c.inputs.insert(f);
             c.outputs.insert(out);
             tgt.commands.emplace_back(std::move(c));
@@ -164,14 +116,13 @@ struct cl_exe_rule {
     }
 };
 struct lib_exe_rule {
-    using target_type = binary_target_msvc;
+    //using target_type = binary_target_msvc;
 
-    target_type &librarian;
+    //target_type &librarian;
 
-    lib_exe_rule(target_uptr &t) : librarian{*std::get<uptr<target_type>>(t)} {
-    }
+    //lib_exe_rule(target_uptr &t) : librarian{*std::get<uptr<target_type>>(t)} {}
 
-    void operator()(auto &tgt) requires requires { tgt.library; } {
+    void operator()(auto &tgt, auto &librarian) requires requires { tgt.library; } {
         io_command c;
         c.err = ""s;
         c.out = ""s;
@@ -191,13 +142,13 @@ struct lib_exe_rule {
     }
 };
 struct link_exe_rule {
-    using target_type = binary_target_msvc;
+    //using target_type = binary_target_msvc;
 
-    target_type &linker;
+    //target_type &linker;
 
-    link_exe_rule(target_uptr &t) : linker{*std::get<uptr<target_type>>(t)} {}
+    //link_exe_rule(target_uptr &t) : linker{*std::get<uptr<target_type>>(t)} {}
 
-    void operator()(auto &tgt) requires requires { tgt.link_options; } {
+    void operator()(auto &tgt, auto &linker) requires requires { tgt.link_options; } {
         auto objext = tgt.bs.os.visit([](auto &&v) -> string_view {
             if constexpr (requires { v.object_file_extension; }) {
                 return v.object_file_extension;
@@ -254,28 +205,21 @@ struct link_exe_rule {
             }
         };
         add(tgt.merge_object());
-        /*for (auto &&d : tgt.dependencies) {
-            visit(*d.target, [&](auto &&v) {
-                if constexpr (requires { v->link_directories; }) {
-                    add(*v);
-                }
-            });
-        }*/
         tgt.commands.emplace_back(std::move(c));
     }
 };
 
 struct gcc_compile_rule {
-    using target_type = binary_target;
+    //using target_type = binary_target;
 
-    target_type &compiler;
+    //target_type &compiler;
     bool clang{};
     bool cpp{};
 
-    gcc_compile_rule(target_uptr &t, bool clang = false, bool cpp = false)
-        : compiler{*std::get<uptr<target_type>>(t)}, clang{clang}, cpp{cpp} {}
+    //gcc_compile_rule(target_uptr &t, bool clang = false, bool cpp = false)
+        //: compiler{*std::get<uptr<target_type>>(t)}, clang{clang}, cpp{cpp} {}
 
-    void operator()(auto &tgt) requires requires { tgt.compile_options; } {
+    void operator()(auto &tgt, auto &compiler) requires requires { tgt.compile_options; } {
         auto objext = tgt.bs.os.visit(
             [](auto &&v) -> string_view {
                 if constexpr (requires {v.object_file_extension;}) {
@@ -324,13 +268,13 @@ struct gcc_compile_rule {
     }
 };
 struct gcc_link_rule {
-    using target_type = binary_target;
+    //using target_type = binary_target;
 
-    target_type &linker;
+    //target_type &linker;
 
-    gcc_link_rule(target_uptr &t) : linker{*std::get<uptr<target_type>>(t)} {}
+    //gcc_link_rule(target_uptr &t) : linker{*std::get<uptr<target_type>>(t)} {}
 
-    void operator()(auto &tgt) requires requires { tgt.link_options; } {
+    void operator()(auto &tgt, auto &linker) requires requires { tgt.link_options; } {
         io_command c;
         c += linker.executable;
         if constexpr (requires { tgt.executable; }) {
@@ -373,13 +317,13 @@ struct gcc_link_rule {
     }
 };
 struct lib_ar_rule {
-    using target_type = binary_target;
+    //using target_type = binary_target;
 
-    target_type &compiler;
+    //target_type &compiler;
 
-    lib_ar_rule(target_uptr &t) : compiler{*std::get<uptr<target_type>>(t)} {}
+    //lib_ar_rule(target_uptr &t) : compiler{*std::get<uptr<target_type>>(t)} {}
 
-    void operator()(auto &tgt) requires requires { tgt.link_options; } {
+    void operator()(auto &tgt, auto &ar) requires requires { tgt.link_options; } {
         int a = 5;
         a++;
         SW_UNIMPLEMENTED;
@@ -412,6 +356,6 @@ struct lib_ar_rule {
     }
 };
 
-using rule = rule_types::variant_type;
+//using rule = rule_types::variant_type;
 
 } // namespace sw
