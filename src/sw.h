@@ -4,12 +4,8 @@
 #pragma once
 
 #include "command.h"
-#include "storage.h"
-#include "vs_instance_helpers.h"
 #include "package.h"
-#include "detect.h"
 #include "rule_target.h"
-#include "os.h"
 #include "solution.h"
 
 namespace sw::self_build {

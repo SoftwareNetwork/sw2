@@ -5,7 +5,7 @@
 
 #include "rule.h"
 #include "rule_list.h"
-#include "os.h"
+#include "build_settings.h"
 #include "target_list.h"
 #include "target_properties.h"
 #include "suffix.h"
@@ -378,11 +378,11 @@ struct native_target : rule_target, target_data_storage<native_target> {
             std::once_flag once;
             auto load = [&] {
 #ifdef _WIN32
-                detect_winsdk(s);
-                get_msvc_detector(s);
-                detect_gcc_clang(s);
+                //detect_winsdk(s);
+                //get_msvc_detector(s);
+                //detect_gcc_clang(s);
 #else
-                detect_gcc_clang(s);
+                //detect_gcc_clang(s);
 #endif
             };
             visit_any(
@@ -414,7 +414,7 @@ struct native_target : rule_target, target_data_storage<native_target> {
                 std::call_once(once, load);
             });
         };
-        std::call_once(s.system_targets_detected, load);
+        //std::call_once(s.system_targets_detected, load);
 
         // order
         for (auto &&l : bs.cpp.stdlib) {

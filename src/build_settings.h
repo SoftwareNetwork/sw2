@@ -3,66 +3,167 @@
 
 #pragma once
 
-//#include "detect.h"
 #include "os.h"
 
 namespace sw {
 
-auto default_host_settings() {
-    build_settings bs;
-    bs.build_type = build_type::release{};
-    bs.library_type = library_type::shared{};
-    bs.c.runtime = library_type::shared{};
-    bs.cpp.runtime = library_type::shared{};
+struct build_settings {
+    template <typename... Types>
+    struct special_variant : variant<any_setting, Types...> {
+        using base = variant<any_setting, Types...>;
+        using base::base;
+        using base::operator=;
 
-#if defined(__x86_64__) || defined(_M_X64)
-    bs.arch = arch::x64{};
-#elif defined(__i386__) || defined(_M_IX86)
-    bs.arch = arch::x86{};
-#elif defined(__arm64__) || defined(__aarch64__) || defined(_M_ARM64)
-    bs.arch = arch::arm64{};
-#elif defined(__arm__) || defined(_M_ARM)
-    bs.arch = arch::arm{};
-#else
-#error "unknown arch"
-#endif
+        auto operator<(const special_variant &rhs) const {
+            return base::index() < rhs.base::index();
+        }
+        // auto operator==(const build_settings &) const = default;
 
-    // see more definitions at https://opensource.apple.com/source/WTF/WTF-7601.1.46.42/wtf/Platform.h.auto.html
-#if defined(_WIN32)
-    bs.os = os::windows{};
-    bs.kernel_lib = unresolved_package_name{"com.Microsoft.Windows.SDK.um"s};
-    if (get_msvc_detector1().exists()) {
-        bs.c.compiler = c_compiler::msvc{}; // switch to gcc-12+
-        bs.c.stdlib.emplace_back("com.Microsoft.Windows.SDK.ucrt"s);
-        bs.c.stdlib.emplace_back("com.Microsoft.VisualStudio.VC.libc"s);
-        bs.cpp.compiler = cpp_compiler::msvc{}; // switch to gcc-12+
-        bs.cpp.stdlib.emplace_back("com.Microsoft.VisualStudio.VC.libcpp"s);
-        bs.librarian = librarian::msvc{}; // switch to gcc-12+
-        bs.linker = linker::msvc{}; // switch to gcc-12+
-    } else {
-        SW_UNIMPLEMENTED;
+        template <typename T>
+        bool is() const {
+            constexpr auto c = contains<T, Types...>();
+            if constexpr (c) {
+                return std::holds_alternative<T>(*this);
+            }
+            return false;
+        }
+
+        auto for_each(auto &&f) {
+            (f(Types{}), ...);
+        }
+
+        decltype(auto) visit(auto &&...args) const {
+            return ::sw::visit(*this, FWD(args)...);
+        }
+        decltype(auto) visit_any(auto &&...args) const {
+            return ::sw::visit_any(*this, FWD(args)...);
+        }
+        // name visit special or?
+        decltype(auto) visit_no_special(auto &&...args) {
+            return ::sw::visit(*this, FWD(args)..., [](any_setting &) {
+            });
+        }
+        decltype(auto) visit_no_special(auto &&...args) const {
+            return ::sw::visit(*this, FWD(args)..., [](const any_setting &) {
+            });
+        }
+    };
+
+    using os_type = special_variant<os::linux, os::macos, os::windows, os::mingw, os::cygwin, os::wasm>;
+    using arch_type = special_variant<arch::x86, arch::x64, arch::arm, arch::arm64>;
+    using build_type_type = special_variant<build_type::debug, build_type::minimum_size_release,
+                                            build_type::release_with_debug_information, build_type::release>;
+    using library_type_type = special_variant<library_type::static_, library_type::shared>;
+    using c_compiler_type = special_variant<c_compiler::clang, c_compiler::gcc, c_compiler::msvc>;
+    using cpp_compiler_type = special_variant<cpp_compiler::clang, cpp_compiler::gcc, cpp_compiler::msvc>;
+    using librarian_type = special_variant<librarian::ar, librarian::msvc>;
+    using linker_type = special_variant<linker::gcc, linker::gpp, linker::msvc>;
+
+    template <typename CompilerType>
+    struct native_language {
+        CompilerType compiler;
+        // optional?
+        // vector is needed to provide winsdk.um, winsdk.ucrt
+        // c++ lib and c++ rt lib (exceptions)
+        std::vector<unresolved_package_name> stdlib; // can be mingw64 etc. can be libc++ etc.
+        library_type_type runtime;                   // move this flag into dependency settings
+    };
+
+    os_type os;
+    arch_type arch;
+    build_type_type build_type;
+    library_type_type library_type;
+    // optional?
+    unresolved_package_name kernel_lib; // can be winsdk.um, mingw64, linux kernel etc.
+    native_language<c_compiler_type> c;
+    native_language<cpp_compiler_type> cpp;
+    librarian_type librarian;
+    linker_type linker;
+
+    auto for_each() const {
+        // same types wont work and will give wrong results
+        // i.e. library_type and runtimes
+        return std::tie(os, arch, build_type, library_type, c.compiler, c.runtime, cpp.compiler, cpp.runtime);
     }
+    auto for_each(auto &&f) const {
+        std::apply(
+            [&](auto &&...args) {
+                (f(FWD(args)), ...);
+            },
+            for_each());
+    }
+
+    void visit(auto &&...f) {
+        for_each([&](auto &&a) {
+            visit_any(a, FWD(f)...);
+        });
+    }
+
+    template <typename T>
+    bool is1() const {
+        int cond = 0;
+        for_each([&](auto &&a) {
+            if (cond == 1) {
+                return;
+            }
+            if constexpr (contains<T>((std::decay_t<decltype(a)> **)nullptr)) {
+                cond += std::holds_alternative<T>(a);
+            }
+        });
+        return cond == 1;
+    }
+    template <typename T, typename... Types>
+    bool is() const {
+        return (is1<T>() && ... && is1<Types>());
+    }
+
+    size_t hash() const {
+        size_t h = 0;
+        for_each([&](auto &&a) {
+            ::sw::visit(a, [&](auto &&v) {
+                h = hash_combine(h, v.name);
+            });
+        });
+        return h;
+    }
+
+    auto operator<(const build_settings &rhs) const {
+        return for_each() < rhs.for_each();
+    }
+
+    static auto host_os() {
+        build_settings bs;
+        // these will be set for custom linux distribution
+        // bs.build_type = build_type::release{};
+        // bs.library_type = library_type::shared{};
+
+        // see more definitions at https://opensource.apple.com/source/WTF/WTF-7601.1.46.42/wtf/Platform.h.auto.html
+#if defined(__MINGW32__)
+        bs.os = os::mingw{};
+#elif defined(_WIN32)
+        bs.os = os::windows{};
 #elif defined(__APPLE__)
-    bs.os = os::macos{};
-    bs.c.compiler = c_compiler::gcc{};
-    bs.cpp.compiler = cpp_compiler::gcc{};
-    bs.librarian = librarian::ar{};
-    bs.linker = linker::gpp{};
+        bs.os = os::macos{};
 #elif defined(__linux__)
-    bs.os = os::linux{};
-    bs.c.compiler = c_compiler::gcc{};
-    bs.cpp.compiler = cpp_compiler::gcc{};
-    bs.librarian = librarian::ar{};
-    bs.linker = linker::gpp{};
+        bs.os = os::linux{};
 #else
 #error "unknown os"
 #endif
 
-    return bs;
-}
+#if defined(__x86_64__) || defined(_M_X64)
+        bs.arch = arch::x64{};
+#elif defined(__i386__) || defined(_M_IX86)
+        bs.arch = arch::x86{};
+#elif defined(__arm64__) || defined(__aarch64__) || defined(_M_ARM64)
+        bs.arch = arch::arm64{};
+#elif defined(__arm__) || defined(_M_ARM)
+        bs.arch = arch::arm{};
+#else
+#error "unknown arch"
+#endif
 
-auto default_build_settings() {
-    return default_host_settings();
-}
+        return bs;
+    }
+};
 
 } // namespace sw

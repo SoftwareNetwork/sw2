@@ -1,7 +1,6 @@
 #pragma once
 
 #include "rule_target.h"
-#include "os.h"
 #include "input.h"
 #include "package_id.h"
 #include "build_settings.h"
@@ -197,7 +196,8 @@ struct solution {
     abspath binary_dir{SW_BINARY_DIR};
     // config
 
-    const build_settings *bs{nullptr};
+    const build_settings host_settings_;
+    const build_settings *bs{nullptr}; // current bs
 
     // internal data
     target_map targets;
@@ -205,12 +205,8 @@ struct solution {
     //std::vector<rule> rules;
     std::vector<input_with_settings> inputs;
 
-    // some settings
-    std::once_flag system_targets_detected;
-
-    solution() {
-        //rules.push_back(cl_exe_rule{});
-        //rules.push_back(link_exe_rule{});
+    //solution() {}
+    solution(const build_settings &host_settings) : host_settings_{host_settings} {
     }
 
     template <typename T, typename... Args>
@@ -241,14 +237,14 @@ struct solution {
     void add_entry_point(const package_name &n, entry_point &&ep) {
         targets[n].ep = std::move(ep);
     }
-    void add_input(const entry_point &i) {
+    /*void add_input(const entry_point &i) {
         static const auto bs = default_build_settings();
         input_with_settings is;
         is.i = i;
         is.settings.insert(bs);
         inputs.emplace_back(is);
     }
-    /*void add_input(input_with_settings &i) {
+    void add_input(input_with_settings &i) {
         inputs.emplace_back(i);
     }*/
     void add_input(const input_with_settings &i) {
@@ -263,8 +259,7 @@ struct solution {
         }
     }
     auto &host_settings() const {
-        static const auto hs = default_build_settings();
-        return hs;
+        return host_settings_;
     }
 
     void prepare() {

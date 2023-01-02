@@ -3,11 +3,8 @@
 
 #pragma once
 
-#include "helpers.h"
+#include "sw.h"
 #include "vs_instance_helpers.h"
-#include "rule_target.h"
-#include "os_base.h"
-#include "entry_point.h"
 
 namespace sw {
 
@@ -665,31 +662,6 @@ struct win_sdk_info {
 void detect_winsdk(auto &&s) {
     static win_sdk_info sdk;
     sdk.add_kits(s);
-}
-
-path resolve_executable(auto &&exe) {
-#ifdef _WIN32
-    auto p = getenv("Path");
-    auto delim = ';';
-    auto exts = {".exe",".bat",".cmd",".com"};
-#else
-    auto p = getenv("PATH");
-    auto delim = ':';
-    auto exts = {""};
-#endif
-    if (!p) {
-        return {};
-    }
-    string p2 = p;
-    for (const auto word : std::views::split(p2, delim) | std::views::transform([](auto &&word){return std::string_view{word.begin(), word.end()};})) {
-         auto p = path{word} / exe;
-         for (auto &e : exts) {
-             if (fs::exists(path{p} += e)) {
-                 return path{p} += e;
-             }
-         }
-    }
-    return {};
 }
 
 // maybe cache detected packages for subsequent calls? -sw1/-sw2

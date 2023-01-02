@@ -3,168 +3,340 @@
 
 #pragma once
 
-#include "os_base.h"
+#include "helpers.h"
+#include "package.h"
+// #include "rule_list.h"
 
 namespace sw {
 
-struct build_settings {
-    template <typename ... Types>
-    struct special_variant : variant<any_setting, Types...> {
-        using base = variant<any_setting, Types...>;
-        using base::base;
-        using base::operator=;
+//
+struct any_setting {
+    static constexpr auto name = "any_setting"sv;
+};
 
-        auto operator<(const special_variant &rhs) const {
-            return base::index() < rhs.base::index();
-        }
-        //auto operator==(const build_settings &) const = default;
+namespace os {
 
-        template <typename T>
-        bool is() const {
-            constexpr auto c = contains<T, Types...>();
-            if constexpr (c) {
-                return std::holds_alternative<T>(*this);
-            }
-            return false;
-        }
+struct windows {
+    static constexpr auto name = "windows"sv;
 
-        auto for_each(auto &&f) {
-            (f(Types{}),...);
-        }
+    static constexpr auto executable_extension = ".exe";
+    static constexpr auto object_file_extension = ".obj";
+    static constexpr auto static_library_extension = ".lib";
+    static constexpr auto shared_library_extension = ".dll";
 
-        decltype(auto) visit(auto &&... args) const {
-            return ::sw::visit(*this, FWD(args)...);
-        }
-        decltype(auto) visit_any(auto &&...args) const {
-            return ::sw::visit_any(*this, FWD(args)...);
-        }
-        // name visit special or?
-        decltype(auto) visit_no_special(auto &&... args) {
-            return ::sw::visit(*this, FWD(args)..., [](any_setting &){});
-        }
-        decltype(auto) visit_no_special(auto &&... args) const {
-            return ::sw::visit(*this, FWD(args)..., [](const any_setting &){});
-        }
-    };
-
-    using os_type = special_variant<os::linux, os::macos, os::windows, os::mingw, os::cygwin, os::wasm>;
-    using arch_type = special_variant<arch::x86, arch::x64, arch::arm, arch::arm64>;
-    using build_type_type = special_variant<build_type::debug, build_type::minimum_size_release,
-        build_type::release_with_debug_information, build_type::release>;
-    using library_type_type = special_variant<library_type::static_, library_type::shared>;
-    using c_compiler_type = special_variant<c_compiler::clang, c_compiler::gcc, c_compiler::msvc>;
-    using cpp_compiler_type = special_variant<cpp_compiler::clang, cpp_compiler::gcc, cpp_compiler::msvc>;
-    using librarian_type = special_variant<librarian::ar,librarian::msvc>;
-    using linker_type = special_variant<linker::gcc, linker::gpp, linker::msvc>;
-
-    template <typename CompilerType>
-    struct native_language {
-        CompilerType compiler;
-        // optional?
-        // vector is needed to provide winsdk.um, winsdk.ucrt
-        // c++ lib and c++ rt lib (exceptions)
-        std::vector<unresolved_package_name> stdlib; // can be mingw64 etc. can be libc++ etc.
-        library_type_type runtime; // move this flag into dependency settings
-    };
-
-    os_type os;
-    arch_type arch;
-    build_type_type build_type;
-    library_type_type library_type;
-    // optional?
-    unresolved_package_name kernel_lib; // can be winsdk.um, mingw64, linux kernel etc.
-    native_language<c_compiler_type> c;
-    native_language<cpp_compiler_type> cpp;
-    librarian_type librarian;
-    linker_type linker;
-
-    auto for_each() const {
-        // same types wont work and will give wrong results
-        // i.e. library_type and runtimes
-        return std::tie(os, arch, build_type, library_type,
-            c.compiler, c.runtime,
-            cpp.compiler, cpp.runtime
-        );
-    }
-    auto for_each(auto &&f) const {
-        std::apply(
-            [&](auto &&...args) {
-                (f(FWD(args)), ...);
-            },
-            for_each());
+    static bool is(string_view sv) {
+        return name == sv;
     }
 
-    void visit(auto &&...f) {
-        for_each([&](auto && a) {
-            visit_any(a, FWD(f)...);
-        });
-    }
+    // deps:
+    // kernel32 dependency (winsdk.um)
+};
 
-    template <typename T>
-    bool is1() const {
-        int cond = 0;
-        for_each([&](auto &&a) {
-            if (cond == 1) {
-                return;
-            }
-            if constexpr (contains<T>((std::decay_t<decltype(a)> **)nullptr)) {
-                cond += std::holds_alternative<T>(a);
-            }
-        });
-        return cond == 1;
-    }
-    template <typename T, typename ... Types>
-    bool is() const {
-        return (is1<T>() && ... && is1<Types>());
-    }
+struct mingw : windows {
+    static constexpr auto name = "mingw"sv;
 
-    size_t hash() const {
-        size_t h = 0;
-        for_each([&](auto &&a) {
-            ::sw::visit(a, [&](auto &&v) {
-                h = hash_combine(h, v.name);
-            });
-        });
-        return h;
-    }
-
-    auto operator<(const build_settings &rhs) const {
-        return for_each() < rhs.for_each();
-    }
-
-    static auto host_os() {
-        build_settings bs;
-        // these will be set for custom linux distribution
-        //bs.build_type = build_type::release{};
-        //bs.library_type = library_type::shared{};
-
-        // see more definitions at https://opensource.apple.com/source/WTF/WTF-7601.1.46.42/wtf/Platform.h.auto.html
-#if defined(__MINGW32__)
-        bs.os = os::mingw{};
-#elif defined(_WIN32)
-        bs.os = os::windows{};
-#elif defined(__APPLE__)
-        bs.os = os::macos{};
-#elif defined(__linux__)
-        bs.os = os::linux{};
-#else
-#error "unknown os"
-#endif
-
-#if defined(__x86_64__) || defined(_M_X64)
-        bs.arch = arch::x64{};
-#elif defined(__i386__) || defined(_M_IX86)
-        bs.arch = arch::x86{};
-#elif defined(__arm64__) || defined(__aarch64__) || defined(_M_ARM64)
-        bs.arch = arch::arm64{};
-#elif defined(__arm__) || defined(_M_ARM)
-        bs.arch = arch::arm{};
-#else
-#error "unknown arch"
-#endif
-
-        return bs;
+    static bool is(string_view sv) {
+        return name == sv;
     }
 };
+
+struct cygwin : windows {
+    static constexpr auto name = "cygwin"sv;
+
+    static constexpr auto static_library_extension = ".a";
+    static constexpr auto object_file_extension = ".o";
+
+    static bool is(string_view sv) {
+        return name == sv;
+    }
+};
+
+struct unix {
+    static constexpr auto object_file_extension = ".o";
+    static constexpr auto static_library_extension = ".a";
+};
+
+struct linux : unix {
+    static constexpr auto name = "linux"sv;
+
+    static constexpr auto shared_library_extension = ".so";
+
+    static bool is(string_view sv) {
+        return name == sv;
+    }
+};
+
+struct darwin : unix {
+    static constexpr auto shared_library_extension = ".dylib";
+};
+
+struct macos : darwin {
+    static constexpr auto name = "macos"sv;
+
+    static bool is(string_view sv) {
+        return name == sv;
+    }
+};
+// ios etc
+
+struct wasm : unix {
+    static constexpr auto name = "wasm"sv;
+
+    static constexpr auto executable_extension = ".html";
+
+    static bool is(string_view sv) {
+        return name == sv;
+    }
+};
+
+} // namespace os
+
+namespace arch {
+
+struct x86 {
+    static constexpr auto name = "x86"sv;
+    static constexpr auto clang_target_name = "i586"sv; // but also 386, 586, 686
+
+    static bool is(string_view sv) {
+        return name == sv;
+    }
+};
+struct x64 {
+    static constexpr auto name = "x64"sv;
+    static constexpr auto name1 = "x86_64"sv;
+    static constexpr auto name2 = "amd64"sv;
+    static constexpr auto clang_target_name = name1;
+
+    static bool is(string_view sv) {
+        return 0 || sv == name || sv == name1 || sv == name2;
+    }
+};
+using amd64 = x64;
+using x86_64 = x64;
+
+struct arm {
+    static constexpr auto name = "arm"sv;
+    static constexpr auto clang_target_name = name;
+
+    static bool is(string_view sv) {
+        return name == sv;
+    }
+};
+struct arm64 {
+    static constexpr auto name = "arm64"sv;
+    static constexpr auto clang_target_name = name;
+
+    static bool is(string_view sv) {
+        return name == sv;
+    }
+};
+using aarch64 = arm64; // give alternative names
+
+} // namespace arch
+
+namespace build_type {
+
+struct debug {
+    static constexpr auto name = "debug"sv;
+    static constexpr auto short_name = "d"sv;
+
+    static bool is(string_view sv) {
+        return name == sv || short_name == sv;
+    }
+};
+struct minimum_size_release {
+    static constexpr auto name = "minimum_size_release"sv;
+    static constexpr auto short_name = "msr"sv;
+
+    static bool is(string_view sv) {
+        return name == sv || short_name == sv;
+    }
+};
+struct release_with_debug_information {
+    static constexpr auto name = "release_with_debug_information"sv;
+    static constexpr auto short_name = "rwdi"sv;
+
+    static bool is(string_view sv) {
+        return name == sv || short_name == sv;
+    }
+};
+struct release {
+    static constexpr auto name = "release"sv;
+    static constexpr auto short_name = "r"sv;
+
+    static bool is(string_view sv) {
+        return name == sv || short_name == sv;
+    }
+};
+
+} // namespace build_type
+
+namespace library_type {
+
+struct static_ {
+    static constexpr auto name = "static"sv;
+    static constexpr auto short_name = "st"sv;
+};
+struct shared {
+    static constexpr auto name = "shared"sv;
+    static constexpr auto short_name = "sh"sv;
+};
+
+} // namespace library_type
+
+struct compiler_base {
+    unresolved_package_name package;
+
+    compiler_base(const unresolved_package_name &name) : package{name} {
+    }
+};
+struct clang_base : compiler_base {
+    static constexpr auto name = "clang"sv;
+    using compiler_base::compiler_base;
+    clang_base(const unresolved_package_name &name) : compiler_base{name} {
+    }
+
+    static bool is(string_view sv) {
+        return name == sv;
+    }
+};
+struct gcc_base : compiler_base {
+    static constexpr auto name = "gcc"sv;
+    using compiler_base::compiler_base;
+    gcc_base(const unresolved_package_name &name) : compiler_base{name} {
+    }
+
+    static bool is(string_view sv) {
+        return name == sv;
+    }
+};
+struct msvc_base : compiler_base {
+    static constexpr auto name = "msvc"sv;
+    using compiler_base::compiler_base;
+    msvc_base() : compiler_base{unresolved_package_name{"com.Microsoft.VisualStudio.VC.cl", "*"}} {
+    }
+
+    static bool is(string_view sv) {
+        return name == sv;
+    }
+};
+
+namespace asm_compiler {
+
+struct clang {
+    static constexpr auto name = "clang"sv;
+};
+struct gcc {
+    static constexpr auto name = "gcc"sv;
+};
+struct msvc {
+    static constexpr auto name = "msvc"sv;
+};
+
+} // namespace asm_compiler
+
+namespace c_compiler {
+
+struct clang : clang_base {
+    // using rule_type = gcc_compile_rule;
+    static inline constexpr auto package_name = "org.llvm.clang";
+
+    clang() : clang_base{unresolved_package_name{package_name, "*"}} {
+    }
+};
+struct gcc : gcc_base {
+    // using rule_type = gcc_compile_rule;
+    static inline constexpr auto package_name = "org.gnu.gcc";
+
+    gcc() : gcc_base{unresolved_package_name{package_name, "*"}} {
+    }
+};
+struct msvc : msvc_base {
+    using msvc_base::msvc_base;
+    // using rule_type = cl_exe_rule;
+};
+
+} // namespace c_compiler
+
+namespace cpp_compiler {
+
+struct clang : clang_base {
+    // using rule_type = gcc_compile_rule;
+    static inline constexpr auto package_name = "org.llvm.clang++";
+
+    clang() : clang_base{unresolved_package_name{package_name, "*"}} {
+    }
+};
+struct gcc : gcc_base {
+    // using rule_type = gcc_compile_rule;
+    static inline constexpr auto package_name = "org.gnu.g++";
+
+    gcc() : gcc_base{unresolved_package_name{package_name, "*"}} {
+    }
+};
+struct msvc : msvc_base {
+    using msvc_base::msvc_base;
+    // using rule_type = cl_exe_rule;
+};
+
+} // namespace cpp_compiler
+
+namespace objc_compiler {
+
+struct apple_clang {
+    static constexpr auto name = "apple_clang"sv;
+};
+struct clang {
+    static constexpr auto name = "clang"sv;
+};
+struct gcc {
+    static constexpr auto name = "gcc"sv;
+};
+
+} // namespace objc_compiler
+
+namespace objcpp_compiler {
+
+struct apple_clang {
+    static constexpr auto name = "apple_clang"sv;
+};
+struct clang {
+    static constexpr auto name = "clang"sv;
+};
+struct gcc {
+    static constexpr auto name = "gcc"sv;
+};
+
+} // namespace objcpp_compiler
+
+namespace librarian {
+
+struct msvc {
+    // using rule_type = lib_exe_rule;
+    unresolved_package_name package{"com.Microsoft.VisualStudio.VC.lib"s};
+};
+struct ar {
+    // using rule_type = lib_ar_rule;
+    unresolved_package_name package{"org.gnu.binutils.ar"s};
+};
+
+} // namespace librarian
+
+namespace linker {
+
+struct msvc {
+    // using rule_type = link_exe_rule;
+    unresolved_package_name package{"com.Microsoft.VisualStudio.VC.link"s};
+};
+struct gcc {
+    // using rule_type = gcc_link_rule;
+    unresolved_package_name package{"org.gnu.gcc"s};
+};
+struct gpp {
+    // using rule_type = gcc_link_rule;
+    unresolved_package_name package{"org.gnu.g++"s};
+};
+
+} // namespace linker
 
 } // namespace sw

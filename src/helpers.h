@@ -57,6 +57,8 @@ struct fmt::formatter<std::source_location> : fmt::formatter<std::string> {
 };
 #endif
 
+#define SW_BINARY_DIR ".sw"
+
 namespace sw {
 
 namespace fs = std::filesystem;
@@ -340,7 +342,32 @@ void write_file_once(const path &fn, const string &content, const path &lock_dir
     }
 }
 
-#define SW_BINARY_DIR ".sw"
+path resolve_executable(auto &&exe) {
+#ifdef _WIN32
+    auto p = getenv("Path");
+    auto delim = ';';
+    auto exts = {".exe", ".bat", ".cmd", ".com"};
+#else
+    auto p = getenv("PATH");
+    auto delim = ':';
+    auto exts = {""};
+#endif
+    if (!p) {
+        return {};
+    }
+    string p2 = p;
+    for (const auto word : std::views::split(p2, delim) | std::views::transform([](auto &&word) {
+                               return std::string_view{word.begin(), word.end()};
+                           })) {
+        auto p = path{word} / exe;
+        for (auto &e : exts) {
+            if (fs::exists(path{p} += e)) {
+                return path{p} += e;
+            }
+        }
+    }
+    return {};
+}
 
 } // namespace sw
 
