@@ -3,6 +3,7 @@
 #include <array>
 #include <bit>
 #include <cstdint>
+#include <cstring>
 #include <type_traits>
 
 namespace crypto {
@@ -118,7 +119,7 @@ struct keccak : keccak_p<1600> {
             d[blockpos++] = q21 | q22;
         } else {
             d[blockpos++] = q21;
-            memset(d + blockpos, 0, q - 2);
+            std::memset(d + blockpos, 0, q - 2);
             blockpos += q - 2;
             d[blockpos++] = q22;
         }
