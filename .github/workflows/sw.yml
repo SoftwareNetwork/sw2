@@ -16,7 +16,7 @@ jobs:
         .\sw.exe build
     - uses: actions/upload-artifact@v3
       with:
-        name: sw-{{runner.os}}
+        name: sw-{{ runner.os }}
         path: "*.exe"
 
   linux:
@@ -37,7 +37,7 @@ jobs:
         ./sw build
     - uses: actions/upload-artifact@v3
       with:
-        name: sw-{{runner.os}}
+        name: sw-{{ runner.os }}
         path: sw
 
   macos:
@@ -56,5 +56,5 @@ jobs:
         ./sw build
     - uses: actions/upload-artifact@v3
       with:
-        name: sw-{{runner.os}}
+        name: sw-{{ runner.os }}
         path: sw
