@@ -17,6 +17,9 @@ struct target_base {
 
     target_base(const package_name &n) : name{n} {
     }
+
+    auto &get_package() const { return name; }
+    auto &getPackage() const { return get_package(); } // v1 compat
 };
 
 // binary_target_package?
@@ -60,6 +63,15 @@ struct files_target : target_base {
     }
     void add(const path &p) {
         files.insert(p.is_absolute() ? p : source_dir / p);
+    }
+    void remove(const file_regex &r) {
+        r(source_dir, [&](auto &&iter) {
+            for (auto &&e : iter) {
+                if (fs::is_regular_file(e)) {
+                    remove(e);
+                }
+            }
+        });
     }
     void remove(const path &p) {
         files.erase(p.is_absolute() ? p : source_dir / p);

@@ -9,19 +9,50 @@ namespace sw {
 
 struct definition {
     string key;
-    std::variant<string, bool> value; // value/undef
+    std::optional<string> value; // value/undef
 
     operator string() const {
-        return visit(value, overload{[&](const string &v) {
-                                         return "-D" + key + "=" + v;
-                                     },
-                                     [&](bool) {
-                                         return "-U" + key;
-                                     }});
+        // add undefs? "-U" + key
+
+        // we have following forms with different meaning
+        // -DKEY        means KEY=1
+        // -DKEY=       means KEY= (exact nothing, only a fact)
+        // -DKEY=VALUE  means KEY=VALUE - usual case
+
+        string s;
+        s += "-D" + key;
+        if (value) {
+            s += "=" + *value;
+            // handle spaces
+            /*auto v2 = v.toString();
+        auto has_spaces = true;
+        // new win sdk contains rc.exe that can work without quotes around def values
+        // we should check rc version here, if it > winsdk 10.19041, then run the following line
+        has_spaces = std::find(v2.begin(), v2.end(), ' ') != v2.end();
+        // some targets gives def values with spaces
+        // like pcre 'SW_PCRE_EXP_VAR=extern __declspec(dllimport)'
+        // in this case we protect the value with quotes
+        if (has_spaces && v2[0] != '\"')
+            s += "\"";
+        s += v2;
+        if (has_spaces && v2[0] != '\"')
+            s += "\"";*/
+        }
+        return s;
     }
 };
-auto operator""_def(const char *s, size_t len) {
-    return definition{std::string{s, len}};
+definition operator""_def(const char *in, size_t len) {
+    string d = in;
+    auto p = d.find('=');
+    if (p == d.npos)
+        return {d, {}}; // = 1
+    auto f = d.substr(0, p);
+    auto s = d.substr(p + 1);
+    if (s.empty()) {
+        return {f, string{}};
+    } else {
+        return {f, s};
+    }
 }
 
 struct include_directory {

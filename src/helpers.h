@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include "crypto.h"
+
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -202,6 +204,27 @@ string &&normalize_path(string &&s) {
     std::replace(s.begin(), s.end(), '\\', '/');
     return std::move(s);
 }
+void lower_drive_letter(string &s) {
+    if (!s.empty()) {
+        s[0] = tolower(s[0]);
+    }
+}
+void mingw_drive_letter(string &s) {
+    if (s.size() > 1 && s[1] == ':') {
+        s[0] = tolower(s[0]);
+        s = "/"s + s[0] + s.substr(2);
+    }
+}
+auto normalize_path(const path &p) {
+    auto fn = p.string();
+    std::replace(fn.begin(), fn.end(), '\\', '/');
+    return fn;
+}
+auto normalize_path_and_drive(const path &p) {
+    auto fn = normalize_path(p);
+    lower_drive_letter(fn);
+    return fn;
+}
 
 template<std::size_t N>
 struct static_string {
@@ -293,6 +316,31 @@ inline size_t hash_combine(size_t &seed, const T &v) {
     };
     return std::rotl(seed, std::numeric_limits<size_t>::digits / 3) ^ distribute(std::hash<T>{}(v));
 }
+
+string to_upper_copy(string in) {
+    std::transform(in.begin(), in.end(), in.begin(), toupper);
+    return std::move(in);
+}
+
+void write_file_once(const path &fn, const string &content, const path &lock_dir) {
+    auto sha3 = [](auto &&d) {
+        return digest<crypto::sha3<256>>(d);
+    };
+
+    auto h = sha3(content);
+
+    auto hf = sha3(normalize_path(fn));
+    const auto once = lock_dir / (hf + ".once");
+    const auto lock = lock_dir / hf;
+
+    if (!fs::exists(once) || h != read_file(once) || !fs::exists(fn)) {
+        //ScopedFileLock fl(lock);
+        write_file_if_different(fn, content);
+        write_file_if_different(once, h);
+    }
+}
+
+#define SW_BINARY_DIR ".sw"
 
 } // namespace sw
 

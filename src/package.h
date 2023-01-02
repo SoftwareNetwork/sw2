@@ -137,6 +137,8 @@ struct package_version {
     }
     package_version(const std::initializer_list<number_version::numbers::number_type> &s) : version{number_version{s}} {
     }
+    package_version(const char *s) : package_version{string{s}} {
+    }
     package_version(const string &s) {
         if (s.empty()) {
             throw std::runtime_error{"empty version"};
@@ -284,6 +286,8 @@ struct package_name {
     bool operator<(const package_name &rhs) const {
         return std::tie(path, version) < std::tie(rhs.path, rhs.version);
     }
+    auto to_string() const { return (string)*this; }
+    auto toString() const { return to_string(); } // v1 compat
 };
 
 struct unresolved_package_name {

@@ -698,11 +698,6 @@ void detect_gcc_clang(auto &s) {
 
     detect("ar", "org.gnu.binutils.ar");
 
-    auto gccvers = std::views::iota(3,15); // many versions
-    auto clangvers = std::views::iota(2,25);
-    gccvers = std::views::iota(11, 14); // actual subset
-    clangvers = std::views::iota(13, 16);
-
     // actual subset based on current year
 #ifdef _MSC_VER
     auto t = std::chrono::system_clock::now();
@@ -714,20 +709,34 @@ void detect_gcc_clang(auto &s) {
 #endif
 
     auto gccbase = ybase + 11;
-    gccvers = std::views::iota(gccbase, gccbase + 3); // 1 release/year
+    auto gccvers = std::views::iota(gccbase, gccbase + 3); // 1 release/year
     auto clangbase = ybase + 12;
-    clangvers = std::views::iota(clangbase, clangbase + 5); // 2 releases/year
+    auto clangvers = std::views::iota(clangbase, clangbase + 5); // 2 releases/year
 
-    auto f = [&](auto &&cname, auto &&cppname, auto &cpkg, auto &cpppkg, auto &&vers) {
-        auto has_default = detect(cname, cpkg);
-        has_default |= detect(cppname, cpppkg);
-        for (int i : gccvers) {
-            detect(cname + "-"s + std::to_string(i), package_name{cpkg, package_version{i}});
-            detect(cppname + "-"s + std::to_string(i), package_name{cpppkg, package_version{i}});
-        }
+    auto gccversall = std::views::iota(3, 15); // many versions
+    auto clangversall = std::views::iota(2, 25);
+
+    auto f = [&](auto &&cname, auto &&cppname, auto &cpkg, auto &cpppkg, auto &&vers, auto &&versall) {
+        auto found = detect(cname, cpkg);
+        found |= detect(cppname, cpppkg);
+        auto f = [&](auto &&v) {
+            for (int i : v) {
+                found |= detect(cname + "-"s + std::to_string(i), package_name{cpkg, package_version{i}});
+                found |= detect(cppname + "-"s + std::to_string(i), package_name{cpppkg, package_version{i}});
+            }
+            return found;
+        };
+        f(vers) || f(versall);
     };
-    f("gcc", "g++", c_compiler::gcc::package_name, cpp_compiler::gcc::package_name, gccvers);
-    f("clang", "clang++", c_compiler::clang::package_name, cpp_compiler::clang::package_name, clangvers);
+
+    auto search_gcc = is_mingw_shell();
+#ifndef _WIN32
+    search_gcc = true;
+#endif
+    if (search_gcc) {
+        f("gcc", "g++", c_compiler::gcc::package_name, cpp_compiler::gcc::package_name, gccvers, gccversall);
+    }
+    f("clang", "clang++", c_compiler::clang::package_name, cpp_compiler::clang::package_name, clangvers, clangversall);
 }
 
 } // namespace sw

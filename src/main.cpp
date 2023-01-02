@@ -5,28 +5,6 @@
 #include "command_line.h"
 #include "main.h"
 
-void lower_drive_letter(string &s) {
-    if (!s.empty()) {
-        s[0] = tolower(s[0]);
-    }
-}
-void mingw_drive_letter(string &s) {
-    if (s.size() > 1 && s[1] == ':') {
-        s[0] = tolower(s[0]);
-        s = "/"s + s[0] + s.substr(2);
-    }
-}
-auto normalize_path(const path &p) {
-    auto fn = p.string();
-    std::replace(fn.begin(), fn.end(), '\\', '/');
-    return fn;
-}
-auto normalize_path_and_drive(const path &p) {
-    auto fn = normalize_path(p);
-    lower_drive_letter(fn);
-    return fn;
-}
-
 struct cpp_emitter {
     struct ns {
         cpp_emitter &e;

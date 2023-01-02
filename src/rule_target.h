@@ -19,6 +19,7 @@ struct rule_target : files_target {
 
 #ifdef _MSC_VER
     using base::operator+=;
+    using base::operator-=;
 #endif
     using base::add;
     using base::remove;
@@ -30,6 +31,12 @@ struct rule_target : files_target {
     std::vector<rule> rules;
     std::map<path, rule_flag> processed_files;
     std::vector<command> commands;
+    //
+    bool dry_run{};
+    // v1 compat
+    path &SourceDir{source_dir};
+    path &BinaryDir{binary_dir};
+    bool &DryRun{dry_run};
 
     rule_target(auto &&solution, auto &&id)
         : files_target{id}
@@ -63,6 +70,7 @@ struct rule_target : files_target {
     auto &build_settings() const {
         return bs;
     }*/
+    //auto &getBuildSettings() const { return bs; } // v1 compat
 
     template <typename T, typename ... Types>
     bool is() { return bs.is<T, Types...>(); }
@@ -83,7 +91,7 @@ struct rule_target : files_target {
             for (auto &&c : self.commands) {
                 ::sw::visit(c, [&](auto &&c) {
                     for (auto &&o : c.outputs) {
-                        self.processed_files[o];
+                        self.processed_files[o]; // better return a list of new files from rule and add them
                     }
                 });
             }
@@ -96,8 +104,8 @@ struct rule_target : files_target {
         }
     }
 
-    void prepare(/*this */auto &&self) {
-        self.init_rules(self);
+    void prepare() {
+        init_rules(*this);
     }
     void build(/*this */auto &&self) {
         self.prepare(self);
@@ -154,9 +162,13 @@ struct native_target : rule_target, target_data_storage {
 
 #ifdef _MSC_VER
     using base::operator+=;
+    using base::operator-=;
 #endif
     using base::add;
     using base::remove;
+
+    string api_name;
+    string &ApiName{api_name}; // v1 compat
 
     native_target(auto &&s, auto &&id) : base{s, id} {
         *this += native_sources_rule{};
@@ -289,7 +301,226 @@ struct native_target : rule_target, target_data_storage {
     }
 
     //void build() { operator()(); }
-    //void run(){}
+    // void run(){}
+
+    void prepare() {
+        if (!api_name.empty()) {
+            *this += definition{api_name, "SW_EXPORT"};
+            public_ += definition{api_name, "SW_IMPORT"};
+        }
+        rule_target::prepare();
+    }
+
+    bool has_file(const path &fn) {
+        return false;
+    }
+    void check_absolute(path &fn, bool = false, bool *source_dir = nullptr) {
+        if (!fn.is_absolute()) {
+            fn = fs::absolute(fn);
+        }
+        //return true;
+    }
+    void add_file_silently(const path &from) {
+        // add to target if not already added
+        if (DryRun) {
+            operator-=(from);
+        } else {
+            auto fr = from;
+            check_absolute(fr);
+            if (!has_file(fr))
+                operator-=(from);
+        }
+    }
+    void configure_file(path from, path to, int flags) {
+        add_file_silently(from);
+
+        // before resolving
+        if (!to.is_absolute())
+            to = BinaryDir / to;
+        //File(to, getFs()).setGenerated();
+
+        if (DryRun)
+            return;
+
+        if (!from.is_absolute()) {
+            if (fs::exists(SourceDir / from))
+                from = SourceDir / from;
+            else if (fs::exists(BinaryDir / from))
+                from = BinaryDir / from;
+            else
+                throw std::runtime_error("Package: " + getPackage().toString() + ", file not found: " + from.string());
+        }
+
+        // we really need ExecuteCommand here!!! or not?
+        // auto c = std::make_shared<DummyCommand>();// ([this, from, to, flags]()
+        { configureFile1(from, to, flags); } //);
+        // c->addInput(from);
+        // c->addOutput(to);
+
+        //if ((int)flags & (int)ConfigureFlags::AddToBuild)
+            //operator+=(to);
+    }
+    void configureFile(auto && ... args) {return configure_file(args...);} // v1 compat
+    void configureFile1(const path &from, const path &to, int flags)
+    {
+        static const std::regex cmDefineRegex(R"xxx(#\s*cmakedefine[ \t]+([A-Za-z_0-9]*)([^\r\n]*?)[\r\n])xxx");
+        static const std::regex cmDefine01Regex(R"xxx(#\s*cmakedefine01[ \t]+([A-Za-z_0-9]*)[^\r\n]*?[\r\n])xxx");
+        static const std::regex mesonDefine(R"xxx(#\s*mesondefine[ \t]+([A-Za-z_0-9]*)[^\r\n]*?[\r\n])xxx");
+        static const std::regex undefDefine(R"xxx(#undef[ \t]+([A-Za-z_0-9]*)[^\r\n]*?[\r\n])xxx");
+        static const std::regex cmAtVarRegex("@([A-Za-z_0-9/.+-]+)@");
+        static const std::regex cmNamedCurly("\\$\\{([A-Za-z0-9/_.+-]+)\\}");
+
+        static const std::set<string> offValues{
+            "", "0", //"OFF", "NO", "FALSE", "N", "IGNORE",
+        };
+
+        // ide files
+        //configure_files.insert(from);
+
+        auto s = read_file(from);
+
+        /*if ((int)flags & (int)ConfigureFlags::CopyOnly) {
+            writeFileOnce(to, s);
+            return;
+        }*/
+
+        auto find_repl = [this, &from, flags](const auto &key) -> std::optional<std::string>
+        {
+            //auto v = Variables.find(key);
+            //if (v != Variables.end())
+                //return v->second.toString();
+
+            //if ((int)flags & (int)ConfigureFlags::ReplaceUndefinedVariablesWithZeros)
+                //return "0";
+
+            return {};
+        };
+
+        std::smatch m;
+
+        // @vars@
+        while (std::regex_search(s, m, cmAtVarRegex) ||
+            std::regex_search(s, m, cmNamedCurly))
+        {
+            auto repl = find_repl(m[1].str());
+            if (!repl)
+            {
+                s = m.prefix().str() + m.suffix().str();
+                // make additional log level for this
+                //LOG_TRACE(logger, "configure @@ or ${} " << m[1].str() << ": replacement not found");
+                continue;
+            }
+            s = m.prefix().str() + *repl + m.suffix().str();
+        }
+
+        // #mesondefine
+        while (std::regex_search(s, m, mesonDefine))
+        {
+            auto repl = find_repl(m[1].str());
+            if (!repl)
+            {
+                s = m.prefix().str() + "/* #undef " + m[1].str() + " */\n" + m.suffix().str();
+                // make additional log level for this
+                //LOG_TRACE(logger, "configure #mesondefine " << m[1].str() << ": replacement not found");
+                continue;
+            }
+            s = m.prefix().str() + "#define " + m[1].str() + " " + *repl + "\n" + m.suffix().str();
+        }
+
+        // #undef
+        if (0)//(int)flags & (int)ConfigureFlags::EnableUndefReplacements)
+        {
+            while (std::regex_search(s, m, undefDefine))
+            {
+                auto repl = find_repl(m[1].str());
+                if (!repl)
+                {
+                    // space to prevent loops
+                    s = m.prefix().str() + "/* # undef " + m[1].str() + " */\n" + m.suffix().str();
+                    // make additional log level for this
+                    //LOG_TRACE(logger, "configure #undef " << m[1].str() << ": replacement not found");
+                    continue;
+                }
+                if (offValues.find(to_upper_copy(*repl)) != offValues.end())
+                    // space to prevent loops
+                    s = m.prefix().str() + "/* # undef " + m[1].str() + " */\n" + m.suffix().str();
+                else
+                    s = m.prefix().str() + "#define " + m[1].str() + " " + *repl + "\n" + m.suffix().str();
+            }
+        }
+
+        // #cmakedefine
+        while (std::regex_search(s, m, cmDefineRegex))
+        {
+            auto repl = find_repl(m[1].str());
+            if (!repl)
+            {
+                // make additional log level for this
+                //LOG_TRACE(logger, "configure #cmakedefine " << m[1].str() << ": replacement not found");
+                repl = ""s;
+            }
+            if (offValues.find(to_upper_copy(*repl)) != offValues.end())
+                s = m.prefix().str() + "/* #undef " + m[1].str() + m[2].str() + " */\n" + m.suffix().str();
+            else
+                s = m.prefix().str() + "#define " + m[1].str() + m[2].str() + "\n" + m.suffix().str();
+        }
+
+        // #cmakedefine01
+        while (std::regex_search(s, m, cmDefine01Regex))
+        {
+            auto repl = find_repl(m[1].str());
+            if (!repl)
+            {
+                // make additional log level for this
+                //LOG_TRACE(logger, "configure #cmakedefine01 " << m[1].str() << ": replacement not found");
+                repl = ""s;
+            }
+            if (offValues.find(to_upper_copy(*repl)) != offValues.end())
+                s = m.prefix().str() + "#define " + m[1].str() + " 0" + "\n" + m.suffix().str();
+            else
+                s = m.prefix().str() + "#define " + m[1].str() + " 1" + "\n" + m.suffix().str();
+        }
+
+        write_file_once(to, s);
+    }
+    void write_file_once(const path &fn, const string &content) {
+        bool source_dir = false;
+        path p = fn;
+        check_absolute(p, true, &source_dir);
+        if (!fs::exists(p)) {
+            if (!p.is_absolute()) {
+                p = BinaryDir / p;
+                source_dir = false;
+            }
+        }
+
+        // before resolving, we must set file as generated, to skip it on server
+        // only in bdir case
+        if (!source_dir) {
+            //File f(p, getFs());
+            //f.setGenerated();
+        }
+
+        if (DryRun)
+            return;
+
+        ::sw::write_file_once(p, content, get_patch_dir(!source_dir));
+
+        add_file_silently(p);
+    }
+    void writeFileOnce(auto && ... args) { write_file_once(args...); }
+
+    path get_patch_dir(bool binary_dir) const {
+        path base;
+        //if (auto d = getPackage().getOverriddenDir(); d)
+            //base = d.value() / SW_BINARY_DIR;
+        //else if (!isLocal())
+            //base = getPackage().getDirSrc();
+            base = source_dir;
+        //else
+            //base = getMainBuild().getBuildDirectory();
+        return base / "patch";
+    }
 };
 
 struct native_library_target : native_target {
@@ -361,6 +592,8 @@ struct native_library_target : native_target {
         }
     }
 };
+using LibraryTarget = native_library_target; // v1 compat
+
 struct native_shared_library_target : native_library_target {
     using base = native_library_target;
     native_shared_library_target(auto &&s, auto &&id) : base{s, id, true} {

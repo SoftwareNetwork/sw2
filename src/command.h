@@ -1178,7 +1178,7 @@ struct command_executor {
         }
     }
     path get_saved_commands_dir(auto &&sln) {
-        return fs::current_path() / ".sw" / "rsp";
+        return fs::current_path() / SW_BINARY_DIR / "rsp";
         //return sln.binary_dir / "rsp";
     }
 

@@ -194,7 +194,7 @@ struct target_map {
 
 struct solution {
     abspath source_dir{"."};
-    abspath binary_dir{".sw"};
+    abspath binary_dir{SW_BINARY_DIR};
     // config
 
     const build_settings *bs{nullptr};
@@ -232,6 +232,10 @@ struct solution {
         //}
         targets.emplace(id, std::move(ptr));
         return t;
+    }
+    template <typename T, typename... Args>
+    T &addTarget(const package_path &name, const package_version &v) {
+        return add<T>(package_name{name,v});
     }
 
     void add_entry_point(const package_name &n, entry_point &&ep) {
@@ -299,5 +303,6 @@ struct solution {
         ce.run(cl, *this);
     }
 };
+using Solution = solution; // v1 compat
 
 } // namespace sw

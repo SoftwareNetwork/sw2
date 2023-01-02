@@ -150,6 +150,30 @@ struct command_line_parser {
             parse1(*this, args);
         }
     };
+    struct override {
+        static constexpr inline auto name = "override"sv;
+
+        input i; // inputs
+
+        /*auto option_list() {
+            return std::tie();
+        }*/
+
+        void parse(const args &args) {
+            auto check_spec = [&](auto &&fn) {
+                if (fs::exists(fn)) {
+                    i = specification_file_input{fn};
+                    return true;
+                }
+                return false;
+            };
+            0 || check_spec("sw.h") || check_spec("sw.cpp") // old compat. After rewrite remove sw.h
+                                                            //|| check_spec("sw2.cpp")
+                                                            //|| (i = directory_input{"."}, true)
+                ;
+            parse1(*this, args);
+        }
+    };
     struct test {
         static constexpr inline auto name = "test"sv;
 
@@ -224,17 +248,19 @@ struct command_line_parser {
                 break;
             }
             bool parsed{};
-            std::apply(
-                [&](auto &&...opts) {
-                    auto f = [&](auto &&opt) {
-                        if (is_option_flag(opt, a)) {
-                            opt.parse(args, a);
-                            parsed = true;
-                        }
-                    };
-                    (f(FWD(opts)), ...);
-                },
-                obj.option_list());
+            if constexpr (requires{obj.option_list();}) {
+                std::apply(
+                    [&](auto &&...opts) {
+                        auto f = [&](auto &&opt) {
+                            if (is_option_flag(opt, a)) {
+                                opt.parse(args, a);
+                                parsed = true;
+                            }
+                        };
+                        (f(FWD(opts)), ...);
+                    },
+                    obj.option_list());
+            }
             if (!parsed) {
                 if (command) {
                     a.consumed = false;
@@ -248,18 +274,20 @@ struct command_line_parser {
         for (auto &&a : args.active()) {
             // no command here
             bool parsed{};
-            std::apply(
-                [&](auto &&...opts) {
-                    auto f = [&](auto &&opt) {
-                        if (is_option_flag(opt, a)) {
-                            a.consumed = true;
-                            opt.parse(args, a);
-                            parsed = true;
-                        }
-                    };
-                    (f(FWD(opts)), ...);
-                },
-                obj.option_list());
+            if constexpr (requires { obj.option_list(); }) {
+                std::apply(
+                    [&](auto &&...opts) {
+                        auto f = [&](auto &&opt) {
+                            if (is_option_flag(opt, a)) {
+                                a.consumed = true;
+                                opt.parse(args, a);
+                                parsed = true;
+                            }
+                        };
+                        (f(FWD(opts)), ...);
+                    },
+                    obj.option_list());
+            }
             if (!parsed) {
                 throw std::runtime_error{format("unknown option: {}", a.value)};
             }
