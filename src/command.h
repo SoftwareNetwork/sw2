@@ -35,15 +35,23 @@ struct raw_command {
     // sync()
     // async()
 
-    std::wstring printw() const {
+    auto printw() const {
+        std::wstring p;
         std::wstring s;
         for (auto &&a : arguments) {
             auto quote = [&](const std::wstring &as) {
-                if (as.contains(L" ")) {
-                    s += L"\"" + as + L"\" ";
-                } else {
-                    s += as + L" ";
+                std::wstring t;
+                if (p.empty()) {
+                    auto t = as;
+                    std::replace(t.begin(), t.end(), L'/', L'\\');
+                    p = t;
                 }
+                if (as.contains(L" ")) {
+                    t += L"\"" + as + L"\" ";
+                } else {
+                    t += as + L" ";
+                }
+                s += t;
             };
             visit(a, overload{[&](const string &s) {
                                   quote(path{s}.wstring());
@@ -55,7 +63,7 @@ struct raw_command {
                                   quote(p.wstring());
                               }});
         }
-        return s;
+        return std::tuple{p,s};
     }
     std::string print() const {
         std::string s;
@@ -156,9 +164,9 @@ struct raw_command {
         WINAPI_CALL(UpdateProcThreadAttribute(si.lpAttributeList, 0, PROC_THREAD_ATTRIBUTE_HANDLE_LIST, handles.data(),
                                               handles.size() * sizeof(HANDLE), 0, 0));
 
-        auto cmd = printw();
+        auto [prog,cmd] = printw();
         auto wdir = working_directory.wstring();
-        WINAPI_CALL(CreateProcessW(0, cmd.data(), 0, 0,
+        WINAPI_CALL(CreateProcessW(prog.data(), cmd.data(), 0, 0,
             inherit_handles, flags, env,
             wdir.empty() ? 0 : wdir.data(),
             (LPSTARTUPINFOW)&si, &pi));
