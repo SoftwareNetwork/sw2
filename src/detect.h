@@ -80,8 +80,10 @@ struct gcc_compile_rule {
             if (cpp != is_cpp_file(f)) {
                 continue;
             }
-            auto out = tgt.binary_dir / "obj" / f.filename() += objext;
+            auto base = tgt.binary_dir / "obj" / f.filename();
+            auto out = path{base} += objext;
             gcc_command c;
+            c.deps_file = path{base} += ".d";
             c.name_ = format_log_record(tgt, "/"s + normalize_path(f.lexically_relative(tgt.source_dir).string()));
             c += compiler.executable, "-c";
             if (is_c_file(f)) {
@@ -101,7 +103,7 @@ struct gcc_compile_rule {
                 });
                 c += t;
             }
-            c += f, "-o", out;
+            c += f, "-MD", "-o", out;
             add_compile_options(tgt.merge_object(), c);
             c.inputs.insert(f);
             c.outputs.insert(out);

@@ -979,11 +979,62 @@ struct cl_exe_command : io_command {
 };
 
 struct gcc_command : io_command {
+    path deps_file;
+
     void run(auto &&ex, auto &&cb) {
         err = ""s;
         out = ""s;
 
-        io_command::run(ex, cb);
+        io_command::run(ex, [&, cb](int exit_code) {
+            cb(exit_code); // before processing (start another process)
+
+            bool time_not_set = start == decltype(start){};
+            if (exit_code || time_not_set) {
+                return;
+            }
+
+            auto is_space = [](auto c) {
+                return c == ' ' || c == '\n' || c == '\r' || c == '\t';
+            };
+            auto add_file = [&](auto sv) {
+                string s;
+                s.reserve(sv.size());
+                for (auto c : sv) {
+                    if (c == '\\') {
+                        continue;
+                    }
+                    s += c;
+                }
+                // we may have 'src/../sw.h' or 'sw4/./sw.h' paths
+                // call absolute? or lexi normal?
+                implicit_inputs.insert(s);
+            };
+
+            mmap_file<char> f{deps_file};
+            string_view sv{f.p, f.sz};
+            auto p = sv.find(": ");
+            if (p == -1) {
+                SW_UNIMPLEMENTED;
+            }
+            //auto outputs = sv.substr(0, p);
+            auto inputs = sv.substr(p + 2);
+            while (!inputs.empty()) {
+                if (isspace(inputs[0]) || inputs[0] == '\\') {
+                    inputs = inputs.substr(1);
+                    continue;
+                }
+                for (int i = 0; auto &c : inputs) {
+                    if (is_space(c) && *(&c-1) != '\\') {
+                        add_file(inputs.substr(0, i));
+                        inputs = inputs.substr(i);
+                        goto next;
+                    }
+                    ++i;
+                }
+                add_file(inputs);
+                next:;
+            }
+        });
     }
 };
 
