@@ -16,10 +16,28 @@ jobs:
         .\sw.exe build
     - uses: actions/upload-artifact@v3
       with:
-        name: sw-${{runner.os}}
+        name: sw-${{github.job}}
         path: "*.exe"
 
-  linux:
+  ubuntu:
+    runs-on: ubuntu-22.04
+    steps:
+    - uses: actions/checkout@v3
+    - name: prepare
+      run: |
+        sudo apt -y install gcc g++ fmt-devel
+    - name: stage1
+      run: |
+        g++ -std=c++2b src/*.cpp -o sw
+    - name: stage2
+      run: |
+        ./sw build
+    - uses: actions/upload-artifact@v3
+      with:
+        name: sw-${{github.job}}
+        path: sw
+        
+  fedora:
     runs-on: ubuntu-22.04
     container:
       image: fedora:37
@@ -37,7 +55,7 @@ jobs:
         ./sw build
     - uses: actions/upload-artifact@v3
       with:
-        name: sw-${{runner.os}}
+        name: sw-${{github.job}}
         path: sw
 
   macos:
@@ -56,5 +74,5 @@ jobs:
         ./sw build
     - uses: actions/upload-artifact@v3
       with:
-        name: sw-${{runner.os}}
+        name: sw-${{github.job}}
         path: sw
