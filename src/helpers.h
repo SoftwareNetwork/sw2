@@ -376,6 +376,15 @@ void append_vector(auto &&to, auto &&from) {
     }
 }
 
+auto is_c_file(const path &fn) {
+    static std::set<string> exts{".c", ".m"}; // with obj-c, separate call?
+    return exts.contains(fn.extension().string());
+}
+auto is_cpp_file(const path &fn) {
+    static std::set<string> exts{".cpp", ".cxx", ".mm"}; // with obj-c++, separate call?
+    return exts.contains(fn.extension().string());
+}
+
 } // namespace sw
 
 template <>

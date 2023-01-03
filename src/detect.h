@@ -6,43 +6,201 @@
 #include "sw.h"
 #include "vs_instance_helpers.h"
 
-namespace sw {
-
-auto get_windows_arch(const build_settings &bs) {
-    auto arch = "x64";
-    if (bs.is<arch::x64>()) {
-        arch = "x64";
-    } else if (bs.is<arch::x86>()) {
-        arch = "x86";
-    } else if (bs.is<arch::arm64>()) {
-        arch = "arm64";
-    } else if (bs.is<arch::arm>()) {
-        arch = "arm";
-    } else {
-        throw std::runtime_error{"unknown arch"};
+string format_log_record(auto &&tgt, auto &&second_part) {
+    string s = format("[{}]", (string)tgt.name);
+    string cfg = "/[";
+    tgt.bs.os.visit([&](auto &&a) {
+        cfg += format("{},", std::decay_t<decltype(a)>::name);
+    });
+    tgt.bs.arch.visit([&](auto &&a) {
+        cfg += format("{},", std::decay_t<decltype(a)>::name);
+    });
+    tgt.bs.library_type.visit([&](auto &&a) {
+        cfg += format("{},", std::decay_t<decltype(a)>::name); // short?
+    });
+    tgt.bs.build_type.visit_no_special([&](auto &&a) {
+        cfg += format("{},", std::decay_t<decltype(a)>::short_name);
+    });
+    if (tgt.bs.cpp.runtime.template is<library_type::static_>()) {
+        cfg += "cppmt,";
     }
-    return arch;
-}
-auto get_windows_arch(build_settings &bs) {
-    auto arch = "x64";
-    if (bs.is<arch::x64>()) {
-        arch = "x64";
-    } else if (bs.is<arch::x86>()) {
-        arch = "x86";
-    } else if (bs.is<arch::arm64>()) {
-        arch = "arm64";
-    } else if (bs.is<arch::arm>()) {
-        arch = "arm";
-    } else {
-        throw std::runtime_error{"unknown arch"};
+    if (tgt.bs.c.runtime.template is<library_type::static_>()) {
+        cfg += "cmt,";
     }
-    return arch;
-}
-auto get_windows_arch(auto &&t) {
-    return get_windows_arch(t.bs);
+    cfg.resize(cfg.size() - 1);
+    cfg += "]";
+    s += cfg + second_part;
+    return s;
 }
 
-struct msvc_instance;
+auto make_rule(auto &&f) {
+    return [f](auto &&var) mutable {
+        std::visit(
+                [&](auto &&v) mutable {
+                    f(*v);
+                },
+                var);
+    };
+}
+
+void add_compile_options(auto &&obj, auto &&c) {
+    for (auto &&o : obj.compile_options) {
+        c += o;
+    }
+    for (auto &&d : obj.definitions) {
+        c += (string)d;
+    }
+    for (auto &&i : obj.include_directories) {
+        c += "-I", i;
+    }
+}
+
+struct gcc_compile_rule {
+    //using target_type = binary_target;
+
+    //target_type &compiler;
+    bool clang{};
+    bool cpp{};
+
+    //gcc_compile_rule(target_uptr &t, bool clang = false, bool cpp = false)
+    //: compiler{*std::get<uptr<target_type>>(t)}, clang{clang}, cpp{cpp} {}
+
+    void operator()(auto &&tgt, auto &&compiler) requires requires { tgt.compile_options; } {
+        auto objext = tgt.bs.os.visit(
+                [](auto &&v) -> string_view {
+                    if constexpr (requires {v.object_file_extension;}) {
+                        return v.object_file_extension;
+                    } else {
+                        throw std::runtime_error{"no object extension"};
+                    }
+                }
+        );
+
+        for (auto &&[f, rules] : tgt.processed_files) {
+            if (rules.contains(this) || !(is_c_file(f) || is_cpp_file(f))) {
+                continue;
+            }
+            if (cpp != is_cpp_file(f)) {
+                continue;
+            }
+            auto out = tgt.binary_dir / "obj" / f.filename() += objext;
+            gcc_command c;
+            c.name_ = format_log_record(tgt, "/"s + normalize_path(f.lexically_relative(tgt.source_dir).string()));
+            c += compiler.executable, "-c";
+            if (is_c_file(f)) {
+                c += "-std=c17";
+            } else if (is_cpp_file(f)) {
+                c += "-std=c++2b";
+            }
+            if (clang) {
+                string t = "--target=";
+                tgt.bs.arch.visit_no_special(
+                        [&](auto &&v) {
+                            t += v.clang_target_name;
+                        });
+                t += "-unknown-";
+                tgt.bs.os.visit_no_special([&](auto &&v) {
+                    t += v.name;
+                });
+                c += t;
+            }
+            c += f, "-o", out;
+            add_compile_options(tgt.merge_object(), c);
+            c.inputs.insert(f);
+            c.outputs.insert(out);
+            tgt.commands.emplace_back(std::move(c));
+            rules.insert(this);
+        }
+    }
+};
+struct gcc_link_rule {
+    //using target_type = binary_target;
+
+    //target_type &linker;
+
+    //gcc_link_rule(target_uptr &t) : linker{*std::get<uptr<target_type>>(t)} {}
+
+    void operator()(auto &&tgt, auto &&linker) requires requires { tgt.link_libraries; } {
+        io_command c;
+        c += linker.executable;
+        if constexpr (requires { tgt.executable; }) {
+            c.name_ = format_log_record(tgt, "");
+            c += "-o", tgt.executable.string();
+            c.outputs.insert(tgt.executable);
+        } else if constexpr (requires { tgt.library; }) {
+            c.name_ = format_log_record(tgt, tgt.library.extension().string());
+            if (!tgt.implib.empty()) {
+                //mingw?cygwin?
+                //c += "-DLL";
+                //c += "-IMPLIB:" + tgt.implib.string();
+                //c.outputs.insert(tgt.implib);
+            }
+            c += "-o", tgt.library.string();
+            c.outputs.insert(tgt.library);
+        } else {
+            SW_UNIMPLEMENTED;
+        }
+        for (auto &&[f, rules] : tgt.processed_files) {
+            if (f.extension() == ".o") {
+                c += f;
+                c.inputs.insert(f);
+                rules.insert(this);
+            }
+        }
+        auto add = [&](auto &&v) {
+            for (auto &&i : v.link_directories) {
+                c += "-L", i;
+            }
+            for (auto &&d : v.link_libraries) {
+                c += d;
+            }
+            for (auto &&d : v.system_link_libraries) {
+                c += d;
+            }
+        };
+        add(tgt.merge_object());
+        tgt.commands.emplace_back(std::move(c));
+    }
+};
+struct lib_ar_rule {
+    //using target_type = binary_target;
+
+    //target_type &compiler;
+
+    //lib_ar_rule(target_uptr &t) : compiler{*std::get<uptr<target_type>>(t)} {}
+
+    void operator()(auto &&tgt, auto &&ar) requires requires { tgt.library; } {
+        int a = 5;
+        a++;
+        SW_UNIMPLEMENTED;
+
+        /*path out = tgt.binary_dir / "bin" / (string)tgt.name;
+        auto linker = gcc.link_target();
+        io_command c;
+        c += linker.executable, "-o", out.string();
+        for (auto &&[f, rules] : tgt.processed_files) {
+            if (f.extension() == ".o") {
+                c += f;
+                c.inputs.insert(f);
+                rules.insert(this);
+            }
+        }
+        auto add = [&](auto &&v) {
+            for (auto &&i : v.link_directories) {
+                c += "-L", i;
+            }
+            for (auto &&d : v.link_libraries) {
+                c += d;
+            }
+            for (auto &&d : v.system_link_libraries) {
+                c += d;
+            }
+        };
+        add(tgt.merge_object().link_options);
+        c.outputs.insert(out);
+        tgt.commands.emplace_back(std::move(c));*/
+    }
+};
 
 struct cl_exe_rule {
     void operator()(auto &&tgt, auto &&compiler, auto &&msvc) requires requires { tgt.compile_options; }
@@ -196,6 +354,40 @@ struct link_exe_rule {
     }
 };
 
+auto get_windows_arch(const build_settings &bs) {
+    auto arch = "x64";
+    if (bs.is<arch::x64>()) {
+        arch = "x64";
+    } else if (bs.is<arch::x86>()) {
+        arch = "x86";
+    } else if (bs.is<arch::arm64>()) {
+        arch = "arm64";
+    } else if (bs.is<arch::arm>()) {
+        arch = "arm";
+    } else {
+        throw std::runtime_error{"unknown arch"};
+    }
+    return arch;
+}
+auto get_windows_arch(build_settings &bs) {
+    auto arch = "x64";
+    if (bs.is<arch::x64>()) {
+        arch = "x64";
+    } else if (bs.is<arch::x86>()) {
+        arch = "x86";
+    } else if (bs.is<arch::arm64>()) {
+        arch = "arm64";
+    } else if (bs.is<arch::arm>()) {
+        arch = "arm";
+    } else {
+        throw std::runtime_error{"unknown arch"};
+    }
+    return arch;
+}
+auto get_windows_arch(auto &&t) {
+    return get_windows_arch(t.bs);
+}
+
 struct msvc_instance {
     path root;
     package_version vs_version;
@@ -226,8 +418,7 @@ struct msvc_instance {
                     else if constexpr (requires { r(tgt, t); }) {
                         r(tgt, t);
                     } else {
-                        int a = 5;
-                        a++;
+                        std::cerr << "rule was not executed\n";
                     }
                 }));
             }});
@@ -821,18 +1012,28 @@ void detect_winsdk(auto &&s) {
 
 // maybe cache detected packages for subsequent calls? -sw1/-sw2
 void detect_gcc_clang(auto &s) {
-    /*auto detect = [&](auto &&prog, auto &&pkg) {
+    auto detect = [&](auto &&prog, auto &&pkg, auto ... rules) {
         if (auto p = resolve_executable(prog); !p.empty()) {
-            s.add_entry_point(pkg, entry_point{[prog,pkg,p](decltype(s) &s2) {
-                auto &t = s2.template add<binary_target>(pkg);
+            s.add_entry_point(pkg, entry_point{[...rules = rules,prog,pkg,p](decltype(s) &s2) {
+                auto &t = s2.template add<executable_target>(pkg, native_library_target::raw_target_tag());
                 t.executable = p;
+                auto add_one_rule = [&](auto rule){
+                    t.interface_.rules.push_back(make_rule([&, r = rule](auto &&tgt) mutable {
+                        if constexpr (requires { r(tgt, t); }) {
+                            r(tgt, t);
+                        } else {
+                            std::cerr << "rule was not executed\n";
+                        }
+                    }));
+                };
+                (add_one_rule(rules),...);
             }});
             return true;
         }
         return false;
     };
 
-    detect("ar", "org.gnu.binutils.ar");
+    detect("ar", "org.gnu.binutils.ar", lib_ar_rule{});
 
     // actual subset based on current year
 #ifdef _MSC_VER
@@ -852,13 +1053,16 @@ void detect_gcc_clang(auto &s) {
     auto gccversall = std::views::iota(3, 15); // many versions
     auto clangversall = std::views::iota(2, 25);
 
-    auto f = [&](auto &&cname, auto &&cppname, auto &cpkg, auto &cpppkg, auto &&vers, auto &&versall) {
-        auto found = detect(cname, cpkg);
-        found |= detect(cppname, cpppkg);
+    auto f = [&](auto &&cname, auto &&cppname, auto &cpkg, auto &cpppkg, auto &&vers, auto &&versall, auto ccrule, auto linkrule) {
+        auto crule = ccrule;
+        auto cpprule = ccrule;
+        cpprule.cpp = true;
+        auto found = detect(cname, cpkg, crule, linkrule);
+        found |= detect(cppname, cpppkg, cpprule, linkrule);
         auto f = [&](auto &&v) {
             for (int i : v) {
-                found |= detect(cname + "-"s + std::to_string(i), package_name{cpkg, package_version{i}});
-                found |= detect(cppname + "-"s + std::to_string(i), package_name{cpppkg, package_version{i}});
+                found |= detect(cname + "-"s + std::to_string(i), package_name{cpkg, package_version{i}}, crule, linkrule);
+                found |= detect(cppname + "-"s + std::to_string(i), package_name{cpppkg, package_version{i}}, cpprule, linkrule);
             }
             return found;
         };
@@ -870,9 +1074,7 @@ void detect_gcc_clang(auto &s) {
     search_gcc = true;
 #endif
     if (search_gcc) {
-        f("gcc", "g++", c_compiler::gcc::package_name, cpp_compiler::gcc::package_name, gccvers, gccversall);
+        f("gcc", "g++", c_compiler::gcc::package_name, cpp_compiler::gcc::package_name, gccvers, gccversall, gcc_compile_rule{}, gcc_link_rule{});
     }
-    f("clang", "clang++", c_compiler::clang::package_name, cpp_compiler::clang::package_name, clangvers, clangversall);*/
+    f("clang", "clang++", c_compiler::clang::package_name, cpp_compiler::clang::package_name, clangvers, clangversall, gcc_compile_rule{.clang = true}, gcc_link_rule{});
 }
-
-} // namespace sw

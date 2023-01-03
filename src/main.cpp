@@ -82,7 +82,7 @@ auto make_solution() {
     }
     // detect_gcc_clang(s);
 #else
-    // detect_gcc_clang(s);
+    detect_gcc_clang(s);
 #endif
     return s;
 }

@@ -195,7 +195,7 @@ struct solution {
     abspath binary_dir;
     const build_settings host_settings_;
     // current, per loaded package data
-    abspath source_dir;
+    path source_dir;
     const build_settings *bs{nullptr};
     // internal data
     target_map targets;

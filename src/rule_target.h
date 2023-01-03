@@ -3,8 +3,6 @@
 
 #pragma once
 
-#include "rule.h"
-#include "rule_list.h"
 #include "build_settings.h"
 #include "target_list.h"
 #include "target_properties.h"

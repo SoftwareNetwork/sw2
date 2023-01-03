@@ -15,6 +15,7 @@ struct keccak_p {
     static inline constexpr auto state_square_size = 5;
     static inline constexpr auto state_size = state_square_size * state_square_size;
     static inline constexpr auto w = b / state_size;
+    static_assert(w >= 8 && w <= 64, "not supported");
     static consteval unsigned log2floor(auto x) {
         return x == 1 ? 0 : 1+log2floor(x >> 1);
     }
