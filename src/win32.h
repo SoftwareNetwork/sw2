@@ -238,6 +238,16 @@ inline void debug_break() {
     DebugBreak();
 #endif
 }
+inline bool is_debugger_attached() {
+#ifdef _WIN32
+    return IsDebuggerPresent();
+#endif
+}
+inline void debug_break_if_not_attached() {
+    if (!is_debugger_attached()) {
+        debug_break();
+    }
+}
 
 }
 

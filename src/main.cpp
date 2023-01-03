@@ -257,15 +257,15 @@ int main1(int argc, char *argv[]) {
     if (cl.sleep) {
         std::this_thread::sleep_for(std::chrono::seconds(cl.sleep));
     }
+    if (cl.int3) {
+        debug_break_if_not_attached();
+    }
 
     auto this_path = fs::current_path();
     if (cl.working_directory) {
         fs::current_path(cl.working_directory);
     }
     if (cl.sw1) {
-        if (cl.int3) {
-            debug_break();
-        }
         sw1(cl);
     }
 #ifdef SW1_BUILD
@@ -286,8 +286,7 @@ int main1(int argc, char *argv[]) {
         string load_inputs;
         std::vector<input> inputs;
         if (!b.inputs) {
-            b.inputs.value = std::vector<string>{};
-            b.inputs.value->push_back(".sw");
+            b.inputs.value = std::vector<string>{"."};
         }
         for (auto &&bi : *b.inputs.value) {
             input i;
@@ -299,13 +298,17 @@ int main1(int argc, char *argv[]) {
                 }
                 return false;
             };
+            if (
             0
                 || check_spec("sw.h")
                 || check_spec("sw.cpp") // old compat. After rewrite remove sw.h
                 //|| check_spec("sw2.cpp")
                 //|| (i = directory_input{"."}, true)
-                ;
-            inputs.push_back(i);
+                ) {
+                inputs.push_back(i);
+            } else {
+                throw std::runtime_error{"no inputs found/heuristics not implemented"};
+            }
         }
         for (auto &&i : inputs) {
             visit_any(i, [&](specification_file_input &i) {

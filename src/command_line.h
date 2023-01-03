@@ -264,7 +264,7 @@ struct command_line_parser {
                 });
             }
             if (iscmd) {
-                return;
+                break;
             }
             bool parsed{};
             if constexpr (requires{obj.option_list();}) {
@@ -318,7 +318,9 @@ struct command_line_parser {
         }
         // now errors
         for (auto &&a : args.active()) {
-            throw std::runtime_error{format("unknown option: {}", a.value)};
+            if (!command) {
+                throw std::runtime_error{format("unknown option: {}", a.value)};
+            }
         }
     }
 };
