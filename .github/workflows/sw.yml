@@ -18,26 +18,8 @@ jobs:
       with:
         name: sw-${{github.job}}
         path: "*.exe"
-
-  ubuntu:
-    runs-on: ubuntu-22.04
-    steps:
-    - uses: actions/checkout@v3
-    - name: prepare
-      run: |
-        sudo apt-get install -y gcc g++ libfmt-dev
-    - name: stage1
-      run: |
-        g++ -std=c++2b src/*.cpp -o sw
-    - name: stage2
-      run: |
-        ./sw build
-    - uses: actions/upload-artifact@v3
-      with:
-        name: sw-${{github.job}}
-        path: sw
         
-  fedora:
+  linux:
     runs-on: ubuntu-22.04
     container:
       image: fedora:37
