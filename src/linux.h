@@ -6,6 +6,7 @@
 #ifdef __linux__
 #include "helpers.h"
 
+#include <fcntl.h>
 #include <signal.h>
 #include <sys/epoll.h>
 #include <sys/syscall.h>
