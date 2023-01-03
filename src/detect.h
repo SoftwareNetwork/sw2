@@ -291,12 +291,20 @@ struct lib_exe_rule {
         c.name_ = format_log_record(tgt, tgt.library.extension().string());
         c += "-OUT:" + tgt.library.string();
         c.outputs.insert(tgt.library);
+        bool has_files{};
         for (auto &&[f, rules] : tgt.processed_files) {
+            if (rules.contains(this)) {
+                continue;
+            }
             if (f.extension() == ".obj") {
+                has_files = true;
                 c += f;
                 c.inputs.insert(f);
                 rules.insert(this);
             }
+        }
+        if (!has_files) {
+            return;
         }
         tgt.commands.emplace_back(std::move(c));
     }
@@ -334,12 +342,20 @@ struct link_exe_rule {
         } else {
             SW_UNIMPLEMENTED;
         }
+        bool has_files{};
         for (auto &&[f, rules] : tgt.processed_files) {
+            if (rules.contains(this)) {
+                continue;
+            }
             if (f.extension() == objext) {
+                has_files = true;
                 c += f;
                 c.inputs.insert(f);
                 rules.insert(this);
             }
+        }
+        if (!has_files) {
+            return;
         }
         c += "-NODEFAULTLIB";
         tgt.bs.build_type.visit_any(
