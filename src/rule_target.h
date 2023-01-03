@@ -422,10 +422,10 @@ struct native_target : rule_target, target_data_storage<native_target> {
         add(s.load_target(bs.kernel_lib, bs));
 #endif
 
-        bs.c.compiler.visit_no_special([&](auto &c) {
+        bs.cpp.compiler.visit_no_special([&](auto &c) {
             add(s.load_target(c.package, bs));
         });
-        bs.cpp.compiler.visit_no_special([&](auto &c) {
+        bs.c.compiler.visit_no_special([&](auto &c) {
             add(s.load_target(c.package, bs));
         });
     }

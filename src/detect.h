@@ -117,6 +117,12 @@ struct gcc_link_rule {
 
     //gcc_link_rule(target_uptr &t) : linker{*std::get<uptr<target_type>>(t)} {}
 
+    size_t hash() const {
+        size_t h{};
+        h = hash_combine(h, "link"sv);
+        return h;
+    }
+
     void operator()(auto &&tgt, auto &&linker) requires requires { tgt.link_libraries; } {
         io_command c;
         c += linker.executable;
@@ -1019,8 +1025,10 @@ void detect_winsdk(auto &&s) {
 void detect_gcc_clang(auto &s) {
     auto detect = [&](auto &&prog, auto &&pkg, auto ... rules) {
         if (auto p = resolve_executable(prog); !p.empty()) {
+            //std::cout << "detected compiler " << p << ": " << (string)pkg << "\n";
             s.add_entry_point(pkg, entry_point{[...rules = rules,prog,pkg,p](decltype(s) &s2) {
                 auto &t = s2.template add<executable_target>(pkg, native_library_target::raw_target_tag());
+                //std::cout << "loaded target " << p << ": " << (string)pkg << "\n";
                 t.executable = p;
                 auto add_one_rule = [&](auto rule){
                     t.interface_.add(make_rule(rule, [&, r = rule](auto &&tgt) mutable {
