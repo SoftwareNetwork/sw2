@@ -8,7 +8,8 @@ void build(solution &s) {
     }
     if (tgt.is<os::macos>()) {
         // for now
-        tgt += "/usr/local/opt/fmt/include"_idir;
+        tgt += "/usr/local/opt/fmt/include"_idir; // github ci
+        tgt += "/opt/homebrew/include"_idir; // brew
     }
     if (tgt.is<cpp_compiler::msvc>()) {
         // for now

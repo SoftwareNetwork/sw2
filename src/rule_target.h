@@ -121,16 +121,22 @@ struct rule_target {
     }
 
     void init_rules(/*this */auto &&self) {
-        for (auto &&[_,r] : self.merge_object().rules) {
-            if constexpr (requires { r(&self); }) {
-                r(&self);
+        while (1) {
+            auto sz = self.commands.size();
+            for (auto &&[_, r]: self.merge_object().rules) {
+                if constexpr (requires { r(&self); }) {
+                    r(&self);
+                }
+                for (auto &&c: self.commands) {
+                    ::sw::visit(c, [&](auto &&c) {
+                        for (auto &&o: c.outputs) {
+                            self.processed_files[o]; // better return a list of new files from rule and add them
+                        }
+                    });
+                }
             }
-            for (auto &&c : self.commands) {
-                ::sw::visit(c, [&](auto &&c) {
-                    for (auto &&o : c.outputs) {
-                        self.processed_files[o]; // better return a list of new files from rule and add them
-                    }
-                });
+            if (sz == self.commands.size()) {
+                break;
             }
         }
         self.cs.open(self.binary_dir);

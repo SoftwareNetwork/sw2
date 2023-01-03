@@ -137,12 +137,20 @@ struct gcc_link_rule {
         } else {
             SW_UNIMPLEMENTED;
         }
+        auto has_files = false;
         for (auto &&[f, rules] : tgt.processed_files) {
+            if (rules.contains(this)) {
+                continue;
+            }
             if (f.extension() == ".o") {
+                has_files = true;
                 c += f;
                 c.inputs.insert(f);
                 rules.insert(this);
             }
+        }
+        if (!has_files) {
+            return;
         }
         auto add = [&](auto &&v) {
             for (auto &&i : v.link_directories) {
@@ -1073,5 +1081,5 @@ void detect_gcc_clang(auto &s) {
     if (search_gcc) {
         f("gcc", "g++", c_compiler::gcc::package_name, cpp_compiler::gcc::package_name, gccvers, gccversall, gcc_compile_rule{}, gcc_link_rule{});
     }
-    f("clang", "clang++", c_compiler::clang::package_name, cpp_compiler::clang::package_name, clangvers, clangversall, gcc_compile_rule{.clang = true}, gcc_link_rule{});
+    f("clang", "clang++", c_compiler::clang::package_name, cpp_compiler::clang::package_name, clangvers, clangversall, gcc_compile_rule{.clang=true}, gcc_link_rule{});
 }
