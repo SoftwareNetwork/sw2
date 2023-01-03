@@ -223,11 +223,13 @@ struct command_line_parser {
     // some debug
     argument<int, options::flag<"-sleep"_s>{}> sleep;
     flag<options::flag<"-int3"_s>{}> int3;
+    flag<options::flag<"-trace"_s,"--trace"_s>{}> trace;
 
     auto option_list() {
         return std::tie(
             sleep,
             int3,
+            trace,
 
             working_directory,
             sw1,

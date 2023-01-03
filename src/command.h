@@ -356,6 +356,7 @@ struct raw_command {
 #endif
     }
     void run(auto &&ex, auto &&cb) {
+        //std::cout << print() << "\n";
         try {
 #ifdef _WIN32
             run_win32(ex, cb);

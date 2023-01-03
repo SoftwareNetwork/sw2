@@ -52,6 +52,13 @@ struct gcc_compile_rule {
     bool clang{};
     bool cpp{};
 
+    size_t hash() const {
+        size_t h = (size_t)rule_flag::get_rule_tag<decltype(this)>();
+        h = hash_combine(h, clang);
+        h = hash_combine(h, cpp);
+        return h;
+    }
+
     //gcc_compile_rule(target_uptr &t, bool clang = false, bool cpp = false)
     //: compiler{*std::get<uptr<target_type>>(t)}, clang{clang}, cpp{cpp} {}
 

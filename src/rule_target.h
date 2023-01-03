@@ -30,7 +30,7 @@ struct native_sources_rule {
     }
 };
 
-using rule_flag_type = const void *;
+using rule_flag_type = size_t;
 using rule_type = std::function<void(const target_ptr &)>;
 
 struct rule_flag {
@@ -53,7 +53,12 @@ struct rule_flag {
 
 template <typename T>
 auto make_rule(T rule, auto &&f) {
-    auto tag = rule_flag::get_rule_tag<T>();
+    rule_flag_type tag;
+    if constexpr (requires {rule.hash();}) {
+        tag = rule.hash();
+    } else {
+        tag = rule_flag::get_rule_tag<T>();
+    }
     rule_type fun = [f](auto &&var) mutable {
         std::visit(
             [&](auto &&v) mutable {
