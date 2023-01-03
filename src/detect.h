@@ -1008,7 +1008,7 @@ void detect_gcc_clang(auto &s) {
                 auto &t = s2.template add<executable_target>(pkg, native_library_target::raw_target_tag());
                 t.executable = p;
                 auto add_one_rule = [&](auto rule){
-                    t.interface_.add(make_rule([&, r = rule](auto &&tgt) mutable {
+                    t.interface_.add(make_rule(rule, [&, r = rule](auto &&tgt) mutable {
                         if constexpr (requires { r(tgt, t); }) {
                             r(tgt, t);
                         } else {
