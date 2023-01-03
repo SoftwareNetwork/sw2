@@ -105,22 +105,8 @@ struct rule_target {
 
     void init_rules(/*this */auto &&self) {
         for (auto &&r : self.merge_object().rules) {
-            std::visit([&](auto &&v){
-                if constexpr (requires {v(self);}) {
-                    v(self);
-                }
-            }, r);
-            for (auto &&c : self.commands) {
-                ::sw::visit(c, [&](auto &&c) {
-                    for (auto &&o : c.outputs) {
-                        self.processed_files[o]; // better return a list of new files from rule and add them
-                    }
-                });
-            }
-        }
-        for (auto &&v : self.merge_object().rules2) {
-            if constexpr (requires {v(&self);}) {
-                v(&self);
+            if constexpr (requires { r(&self); }) {
+                r(&self);
             }
             for (auto &&c : self.commands) {
                 ::sw::visit(c, [&](auto &&c) {
@@ -158,8 +144,7 @@ struct target_data : compile_options_t,link_options_t {
     T *target_{nullptr};
     files_t files;
     std::vector<dependency> dependencies;
-    std::vector<rule> rules;
-    std::vector<std::function<void(const target_ptr &)>> rules2;
+    std::vector<std::function<void(const target_ptr &)>> rules;
 
     target_data() {}
     target_data(T &t) : target_{&t} {
@@ -237,9 +222,9 @@ struct target_data : compile_options_t,link_options_t {
     void add(const system_link_library &l) {
         system_link_libraries.push_back(l);
     }
-    void add(const rule &r) {
-        rules.push_back(r);
-    }
+    //void add(const rule &r) {
+        //rules.push_back(r);
+    //}
     void add(target_uptr &ptr) {
         dependency d;
         d.target = &ptr;
@@ -255,7 +240,6 @@ struct target_data : compile_options_t,link_options_t {
         link_options_t::merge(from);
         append_vector(dependencies, from.dependencies);
         append_vector(rules, from.rules);
-        append_vector(rules2, from.rules2);
     }
 
     auto range() const {
@@ -296,7 +280,7 @@ struct target_data_storage : target_data<T> {
     base &protected_{get(groups::self | groups::project)};
     base &public_{get(groups::self | groups::project | groups::others)};
 #undef interface // some win32 stuff
-    base &interface{get(groups::project | groups::others)};
+    base &interface{get(groups::project | groups::others)}; // remove?
     base &interface_{get(groups::project | groups::others)}; // for similarity? remove?
     // base &interface_no_project{get(groups::others)};
 
@@ -329,6 +313,9 @@ struct target_data_storage : target_data<T> {
         merge(*this, groups::self);
         // merge our deps
         for (auto &&d : merge_object().dependencies) {
+            if (!d.target) {
+                continue;
+            }
             visit(*d.target, [&](auto &&v) {
                 if constexpr (requires { v->data; }) {
                     // TODO: handle project correctly
@@ -369,8 +356,15 @@ struct native_target : rule_target, target_data_storage<native_target> {
     string api_name;
     string &ApiName{api_name}; // v1 compat
 
-    native_target(auto &&s, auto &&id) : base{s, id}, target_data_storage<native_target>{*this} {
-        *this += native_sources_rule{};
+    native_target(auto &&s, auto &&id) : native_target{s, id, raw_target_tag{}} {
+        rules.push_back([&](auto &&) {
+            for (auto &&f : merge_object()) {
+                if (is_cpp_file(f) || is_c_file(f)) {
+                    processed_files[f].insert(this);
+                }
+            }
+        });
+
         init_compilers(s);
 
         bs.os.visit_any([&](os::windows) {
@@ -387,7 +381,6 @@ struct native_target : rule_target, target_data_storage<native_target> {
         public_ += include_directory{local_binary_dir()};
     }
     native_target(auto &&s, auto &&id, raw_target_tag) : base{s, id}, target_data_storage<native_target>{*this} {
-        *this += native_sources_rule{};
     }
 
     void init_compilers(auto &&s) {
@@ -683,16 +676,9 @@ struct native_library_target : native_target {
         binary_dir = make_binary_dir(s.binary_dir);
 
         if (is<library_type::shared>()) {
-            ::sw::visit(
-                bs.linker,
-                [&](linker::msvc &c) {
-                    auto &t = s.load_target(c.package, bs);
-                    add(t);
-                    //add(linker::msvc::rule_type{t});
-                },
-                [](auto &) {
-                    SW_UNIMPLEMENTED;
-                });
+            bs.linker.visit_no_special([&](auto &c) {
+                add(s.load_target(c.package, bs));
+            });
 
             library = binary_dir / "bin" / (string)name;
             implib = binary_dir / "lib" / (string)name;
@@ -708,16 +694,9 @@ struct native_library_target : native_target {
                 *this += "_WINDLL"_def;
             });
         } else {
-            ::sw::visit(
-                bs.librarian,
-                [&](librarian::msvc &c) {
-                    auto &t = s.load_target(c.package, bs);
-                    add(t);
-                    //add(librarian::msvc::rule_type{t});
-                },
-                [](auto &) {
-                    SW_UNIMPLEMENTED;
-                });
+            bs.librarian.visit_no_special([&](auto &c) {
+                add(s.load_target(c.package, bs));
+            });
 
             library = binary_dir / "lib" / (string)name;
             ::sw::visit(bs.os, [&](auto &&os) {
@@ -755,26 +734,9 @@ struct executable_target : native_target {
                 executable += os.executable_extension;
             }
         });
-        ::sw::visit(
-            bs.linker,
-            [&](linker::msvc &c) {
-                auto &t = s.load_target(c.package, bs);
-                add(t);
-                //add(linker::msvc::rule_type{t});
-            },
-            [&](linker::gcc &c) {
-                auto &t = s.load_target(c.package, bs);
-                add(t);
-                //add(linker::gcc::rule_type{t});
-            },
-            [&](linker::gpp &c) {
-                auto &t = s.load_target(c.package, bs);
-                add(t);
-                //add(linker::gpp::rule_type{t});
-            },
-            [](auto &) {
-                SW_UNIMPLEMENTED;
-            });
+        bs.linker.visit_no_special([&](auto &c) {
+            add(s.load_target(c.package, bs));
+        });
     }
     executable_target(auto &&s, auto &&id, raw_target_tag t) : base{s, id, t} {
     }

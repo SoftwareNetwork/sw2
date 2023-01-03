@@ -44,11 +44,8 @@ auto get_windows_arch(auto &&t) {
 
 struct msvc_instance;
 
-struct cl_exe_rule2 {
-    executable_target &compiler;
-    // cl_exe_rule(executable_target &t) : compiler{t} {}
-
-    void operator()(auto &tgt, auto &&msvc) requires requires { tgt.compile_options; }
+struct cl_exe_rule {
+    void operator()(auto &&tgt, auto &&compiler, auto &&msvc) requires requires { tgt.compile_options; }
     {
         auto objext = tgt.bs.os.visit([](auto &&v) -> string_view {
             if constexpr (requires { v.object_file_extension; }) {
@@ -113,6 +110,91 @@ struct cl_exe_rule2 {
         }
     }
 };
+struct lib_exe_rule {
+    void operator()(auto &&tgt, auto &&librarian)
+        requires requires { tgt.library; }
+    {
+        io_command c;
+        c.err = ""s;
+        c.out = ""s;
+        c += librarian.executable, "-nologo";
+        c.inputs.insert(librarian.executable);
+        c.name_ = format_log_record(tgt, tgt.library.extension().string());
+        c += "-OUT:" + tgt.library.string();
+        c.outputs.insert(tgt.library);
+        for (auto &&[f, rules] : tgt.processed_files) {
+            if (f.extension() == ".obj") {
+                c += f;
+                c.inputs.insert(f);
+                rules.insert(this);
+            }
+        }
+        tgt.commands.emplace_back(std::move(c));
+    }
+};
+struct link_exe_rule {
+    void operator()(auto &&tgt, auto &&linker)
+        requires requires { tgt.link_libraries; }
+    {
+        auto objext = tgt.bs.os.visit([](auto &&v) -> string_view {
+            if constexpr (requires { v.object_file_extension; }) {
+                return v.object_file_extension;
+            } else {
+                throw std::runtime_error{"no object extension"};
+            }
+        });
+
+        io_command c;
+        c.err = ""s;
+        c.out = ""s;
+        c += linker.executable, "-nologo";
+        c.inputs.insert(linker.executable);
+        if constexpr (requires { tgt.executable; }) {
+            c.name_ = format_log_record(tgt, tgt.executable.extension().string());
+            c += "-OUT:" + tgt.executable.string();
+            c.outputs.insert(tgt.executable);
+        } else if constexpr (requires { tgt.library; }) {
+            c.name_ = format_log_record(tgt, tgt.library.extension().string());
+            if (!tgt.implib.empty()) {
+                c += "-DLL";
+                c += "-IMPLIB:" + tgt.implib.string();
+                c.outputs.insert(tgt.implib);
+            }
+            c += "-OUT:" + tgt.library.string();
+            c.outputs.insert(tgt.library);
+        } else {
+            SW_UNIMPLEMENTED;
+        }
+        for (auto &&[f, rules] : tgt.processed_files) {
+            if (f.extension() == objext) {
+                c += f;
+                c.inputs.insert(f);
+                rules.insert(this);
+            }
+        }
+        c += "-NODEFAULTLIB";
+        tgt.bs.build_type.visit_any(
+            [&](build_type::debug) {
+                c += "-DEBUG:FULL";
+            },
+            [&](build_type::release) {
+                c += "-DEBUG:NONE";
+            });
+        auto add = [&](auto &&v) {
+            for (auto &&i : v.link_directories) {
+                c += "-LIBPATH:" + i.string();
+            }
+            for (auto &&d : v.link_libraries) {
+                c += d;
+            }
+            for (auto &&d : v.system_link_libraries) {
+                c += d;
+            }
+        };
+        add(tgt.merge_object());
+        tgt.commands.emplace_back(std::move(c));
+    }
+};
 
 struct msvc_instance {
     path root;
@@ -128,7 +210,7 @@ struct msvc_instance {
         return fs::exists(get_program_path(s,t) / "cl.exe");
     }
     auto bin_targets(auto &&s) const {
-        auto add_target = [&](const char *name, const char *pgmname) {
+        auto add_target = [&]<typename T>(const char *name, const char *pgmname, T rule) {
             s.add_entry_point(package_name{name, version()}, entry_point{[this, name, pgmname](decltype(s) &s) {
                 auto prog = get_program_path(s,*s.bs) / pgmname;
                 if (!fs::exists(prog)) {
@@ -137,21 +219,22 @@ struct msvc_instance {
                 //auto &t = s.template add<binary_target_msvc>(package_name{name, version()}, *this);
                 auto &t = s.template add<executable_target>(package_name{name, version()}, native_library_target::raw_target_tag());
                 t.executable = prog;
-                //t.rules.push_back(cl_exe_rule{});
-                t.public_.rules2.push_back([&, r = cl_exe_rule2{t}](auto &&var) mutable {
-                    std::visit(
-                        [&](auto &&v) mutable {
-                            if constexpr (requires { r(*v, *this); }) {
-                                r(*v, *this);
-                            }
-                        },
-                        var);
-                });
+                t.interface_.rules.push_back(make_rule([&, r = T{}](auto &&tgt) mutable {
+                    if constexpr (requires { r(tgt, t, *this); }) {
+                        r(tgt, t, *this);
+                    }
+                    else if constexpr (requires { r(tgt, t); }) {
+                        r(tgt, t);
+                    } else {
+                        int a = 5;
+                        a++;
+                    }
+                }));
             }});
         };
-        add_target("com.Microsoft.VisualStudio.VC.cl", "cl.exe");
-        add_target("com.Microsoft.VisualStudio.VC.lib", "lib.exe");
-        add_target("com.Microsoft.VisualStudio.VC.link", "link.exe");
+        add_target("com.Microsoft.VisualStudio.VC.cl", "cl.exe", cl_exe_rule{});
+        add_target("com.Microsoft.VisualStudio.VC.lib", "lib.exe", lib_exe_rule{});
+        add_target("com.Microsoft.VisualStudio.VC.link", "link.exe", link_exe_rule{});
     }
     auto vcruntime_target(auto &&s) const {
     }

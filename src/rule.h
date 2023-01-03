@@ -34,6 +34,16 @@ string format_log_record(auto &&tgt, auto &&second_part) {
     return s;
 }
 
+auto make_rule(auto &&f) {
+    return [f](auto &&var) mutable {
+        std::visit(
+            [&](auto &&v) mutable {
+                f(*v);
+            },
+            var);
+    };
+}
+
 void add_compile_options(auto &&obj, auto &&c) {
     for (auto &&o : obj.compile_options) {
         c += o;
@@ -45,167 +55,6 @@ void add_compile_options(auto &&obj, auto &&c) {
         c += "-I", i;
     }
 }
-
-struct cl_exe_rule {
-    //executable_target &compiler;
-    //cl_exe_rule(executable_target &t) : compiler{t} {}
-
-    void operator()(auto &tgt, auto &compiler) requires requires { tgt.compile_options; } {
-        auto objext = tgt.bs.os.visit([](auto &&v) -> string_view {
-            if constexpr (requires { v.object_file_extension; }) {
-                return v.object_file_extension;
-            } else {
-                throw std::runtime_error{"no object extension"};
-            }
-        });
-
-        for (auto &&[f, rules] : tgt.processed_files) {
-            if (rules.contains(this) || !(is_c_file(f) || is_cpp_file(f))) {
-                continue;
-            }
-            cl_exe_command c;
-            c.working_directory = tgt.binary_dir / "obj";
-            auto out = tgt.binary_dir / "obj" / f.filename() += objext;
-            c.name_ = format_log_record(tgt, "/"s + normalize_path(f.lexically_relative(tgt.source_dir).string()));
-            c.old_includes = compiler.msvc.vs_version < package_version{16,7};
-            c += compiler.executable, "-nologo", "-c";
-            c.inputs.insert(compiler.executable);
-            c += "-FS"; // ForceSynchronousPDBWrites
-            c += "-Zi"; // DebugInformationFormatType::ProgramDatabase
-            tgt.bs.build_type.visit(
-                [&](build_type::debug) {
-                    c += "-Od";
-                }, [&](auto) {
-                    c += "-O2";
-                });
-            auto mt_md = [&](auto &&obj) {
-                if (obj.template is<library_type::static_>()) {
-                    tgt.bs.build_type.visit(
-                        [&](build_type::debug) {
-                            c += "-MTd";
-                        },
-                        [&](auto) {
-                            c += "-MT";
-                        });
-                } else {
-                    tgt.bs.build_type.visit(
-                        [&](build_type::debug) {
-                            c += "-MDd";
-                        },
-                        [&](auto) {
-                            c += "-MD";
-                        });
-                }
-            };
-            if (is_c_file(f)) {
-                mt_md(tgt.bs.c.runtime);
-            } else if (is_cpp_file(f)) {
-                c += "-EHsc"; // enable for c too?
-                c += "-std:c++latest";
-                mt_md(tgt.bs.cpp.runtime);
-            }
-            c += f, "-Fo" + out.string();
-            add_compile_options(tgt.merge_object(), c);
-            c.inputs.insert(f);
-            c.outputs.insert(out);
-            tgt.commands.emplace_back(std::move(c));
-            rules.insert(this);
-        }
-    }
-};
-struct lib_exe_rule {
-    //using target_type = binary_target_msvc;
-
-    //target_type &librarian;
-
-    //lib_exe_rule(target_uptr &t) : librarian{*std::get<uptr<target_type>>(t)} {}
-
-    void operator()(auto &tgt, auto &librarian) requires requires { tgt.library; } {
-        io_command c;
-        c.err = ""s;
-        c.out = ""s;
-        c += librarian.executable, "-nologo";
-        c.inputs.insert(librarian.executable);
-        c.name_ = format_log_record(tgt, tgt.library.extension().string());
-        c += "-OUT:" + tgt.library.string();
-        c.outputs.insert(tgt.library);
-        for (auto &&[f, rules] : tgt.processed_files) {
-            if (f.extension() == ".obj") {
-                c += f;
-                c.inputs.insert(f);
-                rules.insert(this);
-            }
-        }
-        tgt.commands.emplace_back(std::move(c));
-    }
-};
-struct link_exe_rule {
-    //using target_type = binary_target_msvc;
-
-    //target_type &linker;
-
-    //link_exe_rule(target_uptr &t) : linker{*std::get<uptr<target_type>>(t)} {}
-
-    void operator()(auto &tgt, auto &linker) requires requires { tgt.link_options; } {
-        auto objext = tgt.bs.os.visit([](auto &&v) -> string_view {
-            if constexpr (requires { v.object_file_extension; }) {
-                return v.object_file_extension;
-            } else {
-                throw std::runtime_error{"no object extension"};
-            }
-        });
-
-        io_command c;
-        c.err = ""s;
-        c.out = ""s;
-        c += linker.executable, "-nologo";
-        c.inputs.insert(linker.executable);
-        if constexpr (requires { tgt.executable; }) {
-            c.name_ = format_log_record(tgt, tgt.executable.extension().string());
-            c += "-OUT:" + tgt.executable.string();
-            c.outputs.insert(tgt.executable);
-        } else if constexpr (requires { tgt.library; }) {
-            c.name_ = format_log_record(tgt, tgt.library.extension().string());
-            if (!tgt.implib.empty()) {
-                c += "-DLL";
-                c += "-IMPLIB:" + tgt.implib.string();
-                c.outputs.insert(tgt.implib);
-            }
-            c += "-OUT:" + tgt.library.string();
-            c.outputs.insert(tgt.library);
-        } else {
-            SW_UNIMPLEMENTED;
-        }
-        for (auto &&[f, rules] : tgt.processed_files) {
-            if (f.extension() == objext) {
-                c += f;
-                c.inputs.insert(f);
-                rules.insert(this);
-            }
-        }
-        c += "-NODEFAULTLIB";
-        tgt.bs.build_type.visit_any(
-            [&](build_type::debug) {
-                c += "-DEBUG:FULL";
-            },
-            [&](build_type::release) {
-                c += "-DEBUG:NONE";
-            });
-        auto add = [&](auto &&v) {
-            for (auto &&i : v.link_directories) {
-                c += "-LIBPATH:" + i.string();
-            }
-            for (auto &&d : v.link_libraries) {
-                c += d;
-            }
-            for (auto &&d : v.system_link_libraries) {
-                c += d;
-            }
-        };
-        add(tgt.merge_object());
-        tgt.commands.emplace_back(std::move(c));
-    }
-};
 
 struct gcc_compile_rule {
     //using target_type = binary_target;

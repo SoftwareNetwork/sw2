@@ -93,6 +93,13 @@
     <Type Name="sw::target_base">
         <DisplayString>{name}</DisplayString>
     </Type>
+    <Type Name="sw::rule_target">
+        <DisplayString>{name}</DisplayString>
+    </Type>
+    <Type Name="sw::dependency">
+        <DisplayString Condition="target">{target}</DisplayString>
+        <DisplayString>{name}</DisplayString>
+    </Type>
 
     <Type Name="sw::package_version_range">
         <DisplayString Condition="range._Which == 1">{range._Tail._Head,sb}</DisplayString>
