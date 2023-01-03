@@ -33,16 +33,6 @@ string format_log_record(auto &&tgt, auto &&second_part) {
     return s;
 }
 
-auto make_rule(auto &&f) {
-    return [f](auto &&var) mutable {
-        std::visit(
-                [&](auto &&v) mutable {
-                    f(*v);
-                },
-                var);
-    };
-}
-
 void add_compile_options(auto &&obj, auto &&c) {
     for (auto &&o : obj.compile_options) {
         c += o;
@@ -411,7 +401,7 @@ struct msvc_instance {
                 //auto &t = s.template add<binary_target_msvc>(package_name{name, version()}, *this);
                 auto &t = s.template add<executable_target>(package_name{name, version()}, native_library_target::raw_target_tag());
                 t.executable = prog;
-                t.interface_.rules.push_back(make_rule([&, r = T{}](auto &&tgt) mutable {
+                t.interface_.add(make_rule(T{}, [&, r = T{}](auto &&tgt) mutable {
                     if constexpr (requires { r(tgt, t, *this); }) {
                         r(tgt, t, *this);
                     }
@@ -1018,7 +1008,7 @@ void detect_gcc_clang(auto &s) {
                 auto &t = s2.template add<executable_target>(pkg, native_library_target::raw_target_tag());
                 t.executable = p;
                 auto add_one_rule = [&](auto rule){
-                    t.interface_.rules.push_back(make_rule([&, r = rule](auto &&tgt) mutable {
+                    t.interface_.add(make_rule([&, r = rule](auto &&tgt) mutable {
                         if constexpr (requires { r(tgt, t); }) {
                             r(tgt, t);
                         } else {

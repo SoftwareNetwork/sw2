@@ -21,9 +21,7 @@ auto operator""_dep(const char *s, size_t len) {
 }
 
 struct native_sources_rule {
-    void operator()(auto &) const {
-    }
-    void operator()(auto &tgt) const requires requires {tgt.begin();} {
+    void operator()(auto &&tgt) const requires requires {tgt.merge_object();} {
         for (auto &&f : tgt.merge_object()) {
             if (is_cpp_file(f) || is_c_file(f)) {
                 tgt.processed_files[f].insert(this);
@@ -32,13 +30,16 @@ struct native_sources_rule {
     }
 };
 
+using rule_flag_type = const void *;
+using rule_type = std::function<void(const target_ptr &)>;
+
 struct rule_flag {
-    std::set<void *> rules;
+    std::set<rule_flag_type> rules;
 
     template <typename T>
-    auto get_rule_tag() {
+    static auto get_rule_tag() {
         static void *p;
-        return (void *)&p;
+        return (rule_flag_type)&p;
     }
     template <typename T>
     bool contains(T &&) {
@@ -49,6 +50,19 @@ struct rule_flag {
         return rules.insert(get_rule_tag<std::remove_cvref_t<std::remove_pointer_t<T>>>());
     }
 };
+
+template <typename T>
+auto make_rule(T rule, auto &&f) {
+    auto tag = rule_flag::get_rule_tag<T>();
+    rule_type fun = [f](auto &&var) mutable {
+        std::visit(
+            [&](auto &&v) mutable {
+                f(*v);
+            },
+            var);
+    };
+    return std::pair{tag, fun};
+}
 
 // basic target: throw files, rules etc.
 struct rule_target {
@@ -102,7 +116,7 @@ struct rule_target {
     }
 
     void init_rules(/*this */auto &&self) {
-        for (auto &&r : self.merge_object().rules) {
+        for (auto &&[_,r] : self.merge_object().rules) {
             if constexpr (requires { r(&self); }) {
                 r(&self);
             }
@@ -142,7 +156,7 @@ struct target_data : compile_options_t,link_options_t {
     T *target_{nullptr};
     files_t files;
     std::vector<dependency> dependencies;
-    std::vector<std::function<void(const target_ptr &)>> rules;
+    std::vector<std::pair<rule_flag_type, rule_type>> rules;
 
     target_data() {}
     target_data(T &t) : target_{&t} {
@@ -220,9 +234,11 @@ struct target_data : compile_options_t,link_options_t {
     void add(const system_link_library &l) {
         system_link_libraries.push_back(l);
     }
-    //void add(const rule &r) {
-        //rules.push_back(r);
-    //}
+    void add(const decltype(rules)::value_type &r) {
+        if (std::ranges::find_if(rules, [&](auto &&v){return v.first == r.first;}) == rules.end()) {
+            rules.push_back(r);
+        }
+    }
     void add(target_uptr &ptr) {
         dependency d;
         d.target = &ptr;
@@ -237,7 +253,9 @@ struct target_data : compile_options_t,link_options_t {
         compile_options_t::merge(from);
         link_options_t::merge(from);
         append_vector(dependencies, from.dependencies);
-        append_vector(rules, from.rules);
+        for (auto &&p : from.rules) {
+            add(p);
+        }
     }
 
     auto range() const {
@@ -355,13 +373,13 @@ struct native_target : rule_target, target_data_storage<native_target> {
     string &ApiName{api_name}; // v1 compat
 
     native_target(auto &&s, auto &&id) : native_target{s, id, raw_target_tag{}} {
-        rules.push_back([&](auto &&) {
+        add(make_rule(native_sources_rule{}, [&](auto &&) {
             for (auto &&f : merge_object()) {
                 if (is_cpp_file(f) || is_c_file(f)) {
                     processed_files[f].insert(this);
                 }
             }
-        });
+        }));
 
         init_compilers(s);
 
