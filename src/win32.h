@@ -234,14 +234,10 @@ namespace sw {
 using win32::executor;
 
 inline void debug_break() {
-#ifdef _WIN32
     DebugBreak();
-#endif
 }
 inline bool is_debugger_attached() {
-#ifdef _WIN32
     return IsDebuggerPresent();
-#endif
 }
 inline void debug_break_if_not_attached() {
     if (!is_debugger_attached()) {
@@ -249,7 +245,7 @@ inline void debug_break_if_not_attached() {
     }
 }
 
-}
+} // namespace sw
 
 //#undef WINAPI_CALL
 

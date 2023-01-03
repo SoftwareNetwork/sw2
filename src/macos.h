@@ -91,13 +91,25 @@ namespace sw {
 using macos::executor;
 
 inline void debug_break() {
-#ifdef _WIN32
-#elif defined(__aarch64__)
+#if defined(__aarch64__)
     __asm__("brk #0x1"); // "trap" does not work for gcc
 #else
     __asm__("int3");
 #endif
 }
-
+inline bool is_debugger_attached() {
+    int mib[4] = {CTL_KERN, KERN_PROC, KERN_PROC_PID, getpid()}
+    struct kinfo_proc info{};
+    auto size = sizeof(info);
+    sysctl(mib, sizeof(mib) / sizeof(*mib), &info, &size, NULL, 0);
+    // check sysctl result?
+    return ((info.kp_proc.p_flag & P_TRACED) != 0);
 }
+inline void debug_break_if_not_attached() {
+    if (!is_debugger_attached()) {
+        debug_break();
+    }
+}
+
+} // namespace sw
 #endif

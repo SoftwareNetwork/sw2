@@ -116,14 +116,39 @@ namespace sw {
 using linux::executor;
 
 inline void debug_break() {
-#ifdef _WIN32
-#elif defined(__aarch64__)
+#if defined(__aarch64__)
     __asm__("brk #0x1"); // "trap" does not work for gcc
 #else
     __asm__("int3");
 #endif
 }
-
+inline bool is_debugger_attached() {
+    char buf[4096];
+    const int status_fd = ::open("/proc/self/status", O_RDONLY);
+    if (status_fd == -1)
+        return false;
+    auto num_read = ::read(status_fd, buf, sizeof(buf) - 1);
+    if (num_read <= 0)
+        return false;
+    buf[num_read] = '\0';
+    constexpr char tracerPidString[] = "TracerPid:";
+    const auto tracer_pid_ptr = ::strstr(buf, tracerPidString);
+    if (!tracer_pid_ptr)
+        return false;
+    for (const char *characterPtr = tracer_pid_ptr + sizeof(tracerPidString) - 1; characterPtr <= buf + num_read;
+         ++characterPtr) {
+        if (::isspace(*characterPtr))
+            continue;
+        else
+            return ::isdigit(*characterPtr) != 0 && *characterPtr != '0';
+    }
+    return false;
+}
+inline void debug_break_if_not_attached() {
+    if (!is_debugger_attached()) {
+        debug_break();
+    }
 }
 
+} // namespace sw
 #endif
