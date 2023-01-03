@@ -273,7 +273,7 @@ int main1(int argc, char *argv[]) {
 #endif
     visit_any(cl.c, [&](command_line_parser::build &b) {
         auto s = make_solution();
-        auto cfg_dir = s.binary_dir / "cfg";
+        auto cfg_dir = s.binary_dir / "c:f :g:";
         s.binary_dir = cfg_dir;
         auto fn = cfg_dir / "src" / "main.cpp";
         fs::create_directories(fn.parent_path());

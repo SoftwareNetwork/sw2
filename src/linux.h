@@ -87,7 +87,6 @@ struct executor {
             }
         }
     }
-
     void register_read_handle(auto &&fd, auto &&f) {
         read_callbacks.emplace(fd, f);
 

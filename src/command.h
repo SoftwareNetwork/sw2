@@ -23,7 +23,8 @@ struct raw_command {
 
     // stdin,stdout,stderr
     using stream_callback = std::function<void(string_view)>;
-    using stream = variant<std::monostate, string, stream_callback, path>;
+    struct inherit {};
+    using stream = variant<inherit, string, stream_callback, path>;
     //stream in;
     stream out, err;
     string out_text; // filtered, workaround
@@ -105,7 +106,7 @@ struct raw_command {
         auto setup_stream = [&](auto &&s, auto &&h, auto &&stdh, auto &&pipe) {
             visit(
                 s,
-                [&](std::monostate) {
+                [&](inherit) {
                     h = GetStdHandle(stdh);
                 },
                 [&](path &fn) {
@@ -166,7 +167,7 @@ struct raw_command {
         auto post_setup_stream = [&](auto &&s, auto &&h, auto &&pipe) {
             visit(
                 s,
-                [&](std::monostate) {
+                [&](inherit) {
                 },
                 [&](string &s) {
                     pipe.w.reset();
@@ -243,8 +244,36 @@ struct raw_command {
             }
             return my_pipe;
         };
-        int pout[2]; mkpipe(pout);
-        int perr[2]; mkpipe(perr);
+        int pout[2];
+        int perr[2];
+
+        auto setup_stream = [&](auto &&s, auto &&pipe) {
+            visit(
+                    s,
+                    [&](inherit) {
+                        // nothing, inheritance is by default
+                    },
+                    [&](path &fn) {
+                        SW_UNIMPLEMENTED;
+                        mkpipe(pipe);
+                        auto fd = open(fn.string().c_str(), O_CREAT | O_WRONLY | O_TRUNC);
+                        if (fd == -1) {
+                            std::cerr << "open error: " << errno << "\n";
+                            exit(1);
+                        }
+                        if (dup2(pipe[0], fd) == -1) {
+                            std::cerr << "dup2 error: " << errno << "\n";
+                            exit(1);
+                        }
+                    },
+                    [&](auto &) {
+                        // callback
+                        SW_UNIMPLEMENTED;
+                        mkpipe(pipe);
+                    });
+        };
+        setup_stream(out, pout);
+        setup_stream(err, perr);
 
         clone_args cargs{};
         cargs.flags |= CLONE_PIDFD;
@@ -254,7 +283,7 @@ struct raw_command {
         cargs.pidfd = &pidfd;
         auto pid = clone3(&cargs, sizeof(cargs));
         if (pid == -1) {
-            throw std::runtime_error{"cant clone3: "s + std::to_string(errno)};
+            throw std::runtime_error{"can't clone3: "s + std::to_string(errno)};
         }
         if (pid == 0) {
             auto setup_pipe = [](auto my_pipe, auto fd) {
@@ -290,11 +319,11 @@ struct raw_command {
         };
         //postsetup_pipe(pout, out);
         //postsetup_pipe(perr, err);
-        ex.register_process(pidfd, [pid, pidfd, pout = pout[0], perr = perr[0], cb](){
+        ex.register_process(pidfd, [pid, pidfd, pout = pout[0], perr = perr[0], cb]() {
             scope_exit se{[&] {
                 //close(pout);
                 //close(perr);
-                close(pidfd);;
+                close(pidfd);
             }};
 
             int wstatus;
