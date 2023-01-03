@@ -6,12 +6,12 @@
 #include "detect.h"
 #include "main.h"
 
-auto &get_msvc_detector1() {
+auto &get_msvc_detector() {
     static msvc_detector d;
     return d;
 }
 void get_msvc_detector(auto &&s) {
-    get_msvc_detector1().add(s);
+    get_msvc_detector().add(s);
     // return d;
 }
 
@@ -38,7 +38,7 @@ auto default_host_settings() {
 #if defined(_WIN32)
     bs.os = os::windows{};
     bs.kernel_lib = unresolved_package_name{"com.Microsoft.Windows.SDK.um"s};
-    if (get_msvc_detector1().exists()) {
+    if (get_msvc_detector().exists()) {
         bs.c.compiler = c_compiler::msvc{}; // switch to gcc-12+
         bs.c.stdlib.emplace_back("com.Microsoft.Windows.SDK.ucrt"s);
         bs.c.stdlib.emplace_back("com.Microsoft.VisualStudio.VC.libc"s);
@@ -75,13 +75,11 @@ auto default_build_settings() {
 auto make_solution() {
     auto binary_dir = ".sw";
     solution s{binary_dir, default_host_settings()};
-    if (get_msvc_detector1().exists()) {
+#ifdef _WIN32
+    if (get_msvc_detector().exists()) {
         get_msvc_detector(s);
         detect_winsdk(s);
     }
-#ifdef _WIN32
-    // detect_winsdk(s);
-    // get_msvc_detector(s);
     // detect_gcc_clang(s);
 #else
     // detect_gcc_clang(s);
@@ -316,7 +314,7 @@ int main1(int argc, char *argv[]) {
                 auto fnh = std::hash<string>{}(fns);
                 auto nsname = "sw_ns_" + std::to_string(fnh);
                 auto ns = e.namespace_(nsname);
-                e += "using this_namespace = ::" + nsname + ";";
+                e += "namespace this_namespace = ::" + nsname + ";";
                 // add inline ns?
                 e.include(fn);
                 load_inputs += "    f(&" + nsname + "::build, \"" + normalize_path_and_drive(fn.parent_path()) + "\");\n";

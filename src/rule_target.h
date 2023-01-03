@@ -15,6 +15,8 @@ namespace sw {
 struct dependency {
     unresolved_package_name name;
     target_uptr *target = nullptr;
+
+    auto resolved() const { return !!target; }
 };
 auto operator""_dep(const char *s, size_t len) {
     return dependency{std::string{s, len}};
@@ -102,12 +104,24 @@ struct rule_target {
     }
 
     void init_rules(/*this */auto &&self) {
-        for (auto &&r : self.rules) {
+        for (auto &&r : self.merge_object().rules) {
             std::visit([&](auto &&v){
                 if constexpr (requires {v(self);}) {
                     v(self);
                 }
             }, r);
+            for (auto &&c : self.commands) {
+                ::sw::visit(c, [&](auto &&c) {
+                    for (auto &&o : c.outputs) {
+                        self.processed_files[o]; // better return a list of new files from rule and add them
+                    }
+                });
+            }
+        }
+        for (auto &&v : self.merge_object().rules2) {
+            if constexpr (requires {v(&self);}) {
+                v(&self);
+            }
             for (auto &&c : self.commands) {
                 ::sw::visit(c, [&](auto &&c) {
                     for (auto &&o : c.outputs) {
@@ -145,6 +159,7 @@ struct target_data : compile_options_t,link_options_t {
     files_t files;
     std::vector<dependency> dependencies;
     std::vector<rule> rules;
+    std::vector<std::function<void(const target_ptr &)>> rules2;
 
     target_data() {}
     target_data(T &t) : target_{&t} {
@@ -240,6 +255,7 @@ struct target_data : compile_options_t,link_options_t {
         link_options_t::merge(from);
         append_vector(dependencies, from.dependencies);
         append_vector(rules, from.rules);
+        append_vector(rules2, from.rules2);
     }
 
     auto range() const {
@@ -371,6 +387,7 @@ struct native_target : rule_target, target_data_storage<native_target> {
         public_ += include_directory{local_binary_dir()};
     }
     native_target(auto &&s, auto &&id, raw_target_tag) : base{s, id}, target_data_storage<native_target>{*this} {
+        *this += native_sources_rule{};
     }
 
     void init_compilers(auto &&s) {

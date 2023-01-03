@@ -42,6 +42,78 @@ auto get_windows_arch(auto &&t) {
     return get_windows_arch(t.bs);
 }
 
+struct msvc_instance;
+
+struct cl_exe_rule2 {
+    executable_target &compiler;
+    // cl_exe_rule(executable_target &t) : compiler{t} {}
+
+    void operator()(auto &tgt, auto &&msvc) requires requires { tgt.compile_options; }
+    {
+        auto objext = tgt.bs.os.visit([](auto &&v) -> string_view {
+            if constexpr (requires { v.object_file_extension; }) {
+                return v.object_file_extension;
+            } else {
+                throw std::runtime_error{"no object extension"};
+            }
+        });
+
+        for (auto &&[f, rules] : tgt.processed_files) {
+            if (rules.contains(this) || !(is_c_file(f) || is_cpp_file(f))) {
+                continue;
+            }
+            cl_exe_command c;
+            c.working_directory = tgt.binary_dir / "obj";
+            auto out = tgt.binary_dir / "obj" / f.filename() += objext;
+            c.name_ = format_log_record(tgt, "/"s + normalize_path(f.lexically_relative(tgt.source_dir).string()));
+            c.old_includes = msvc.vs_version < package_version{16, 7};
+            c += compiler.executable, "-nologo", "-c";
+            c.inputs.insert(compiler.executable);
+            c += "-FS"; // ForceSynchronousPDBWrites
+            c += "-Zi"; // DebugInformationFormatType::ProgramDatabase
+            tgt.bs.build_type.visit(
+                [&](build_type::debug) {
+                    c += "-Od";
+                },
+                [&](auto) {
+                    c += "-O2";
+                });
+            auto mt_md = [&](auto &&obj) {
+                if (obj.template is<library_type::static_>()) {
+                    tgt.bs.build_type.visit(
+                        [&](build_type::debug) {
+                            c += "-MTd";
+                        },
+                        [&](auto) {
+                            c += "-MT";
+                        });
+                } else {
+                    tgt.bs.build_type.visit(
+                        [&](build_type::debug) {
+                            c += "-MDd";
+                        },
+                        [&](auto) {
+                            c += "-MD";
+                        });
+                }
+            };
+            if (is_c_file(f)) {
+                mt_md(tgt.bs.c.runtime);
+            } else if (is_cpp_file(f)) {
+                c += "-EHsc"; // enable for c too?
+                c += "-std:c++latest";
+                mt_md(tgt.bs.cpp.runtime);
+            }
+            c += f, "-Fo" + out.string();
+            add_compile_options(tgt.merge_object(), c);
+            c.inputs.insert(f);
+            c.outputs.insert(out);
+            tgt.commands.emplace_back(std::move(c));
+            rules.insert(this);
+        }
+    }
+};
+
 struct msvc_instance {
     path root;
     package_version vs_version;
@@ -65,8 +137,16 @@ struct msvc_instance {
                 //auto &t = s.template add<binary_target_msvc>(package_name{name, version()}, *this);
                 auto &t = s.template add<executable_target>(package_name{name, version()}, native_library_target::raw_target_tag());
                 t.executable = prog;
-                // public_
-                t.rules.push_back(cl_exe_rule{});
+                //t.rules.push_back(cl_exe_rule{});
+                t.public_.rules2.push_back([&, r = cl_exe_rule2{t}](auto &&var) mutable {
+                    std::visit(
+                        [&](auto &&v) mutable {
+                            if constexpr (requires { r(*v, *this); }) {
+                                r(*v, *this);
+                            }
+                        },
+                        var);
+                });
             }});
         };
         add_target("com.Microsoft.VisualStudio.VC.cl", "cl.exe");
