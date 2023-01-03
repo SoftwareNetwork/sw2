@@ -6,6 +6,20 @@
 
 namespace sw {
 
+// gcc issue 1 - cannot be used inside class
+template <auto ... Options>
+static consteval bool is_single_val1() {
+    constexpr auto is_multi = [&](auto &&v) constexpr {
+        // gcc issue 2 - is_single does not work as function is_single()
+        if constexpr (requires { v.is_single; }) {
+            return !v.is_single;
+        }
+        return false;
+    };
+    constexpr bool r = !(is_multi(Options) || ... || false);
+    return r;
+}
+
 struct command_line_parser {
     struct options {
         template <auto Name, auto ... Aliases>
@@ -20,7 +34,7 @@ struct command_line_parser {
         struct nargs {
             static constexpr auto min() { return Min; }
             static constexpr auto max() { return Max; }
-            static constexpr auto is_single() { return Min == 1 && Max == 1; }
+            static inline constexpr auto is_single = Min == 1 && Max == 1;
         };
         struct zero_or_more : nargs<0, -1> {};
         struct one_or_more : nargs<1, -1> {};
@@ -62,16 +76,7 @@ struct command_line_parser {
 
     template <typename T, auto ... Options>
     struct argument {
-        static constexpr bool is_single_val1() {
-            auto is_multi = [&](auto &&v) {
-                if constexpr (requires { v.is_single(); }) {
-                    return !v.is_single();
-                }
-                return false;
-            };
-            return !(is_multi(Options) || ... || false);
-        }
-        static inline constexpr bool is_single_val = is_single_val1();
+        static inline constexpr bool is_single_val = is_single_val1<Options...>();
         using value_type = std::conditional_t<is_single_val, T, std::vector<T>>;
 
         std::optional<value_type> value;

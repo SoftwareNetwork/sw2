@@ -9,6 +9,7 @@
 #include <spawn.h>
 #include <sys/event.h>
 #include <unistd.h>
+#include <sys/sysctl.h>
 
 extern char **environ;
 
@@ -98,7 +99,7 @@ inline void debug_break() {
 #endif
 }
 inline bool is_debugger_attached() {
-    int mib[4] = {CTL_KERN, KERN_PROC, KERN_PROC_PID, getpid()}
+    int mib[4] = {CTL_KERN, KERN_PROC, KERN_PROC_PID, getpid()};
     struct kinfo_proc info{};
     auto size = sizeof(info);
     sysctl(mib, sizeof(mib) / sizeof(*mib), &info, &size, NULL, 0);
