@@ -73,6 +73,15 @@ auto operator""_copt(const char *s, size_t len) {
     return compile_option{std::string{s, len}};
 }
 
+struct link_library {
+    path p;
+    link_library(const char *p) : p{p} {}
+    link_library(const path &p) : p{p} {}
+    operator const auto &() const {
+        return p;
+    }
+};
+
 struct system_link_library {
     path p;
     operator const auto &() const {
@@ -96,7 +105,7 @@ struct compile_options_t {
 };
 struct link_options_t {
     std::vector<path> link_directories;
-    std::vector<path> link_libraries;
+    std::vector<link_library> link_libraries;
     std::vector<system_link_library> system_link_libraries;
 
     void merge(auto &&from) {

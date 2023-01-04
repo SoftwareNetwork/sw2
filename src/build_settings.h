@@ -80,10 +80,26 @@ struct build_settings {
     librarian_type librarian;
     linker_type linker;
 
-    auto for_each() const {
+    auto for_each_hash() const {
         // same types wont work and will give wrong results
         // i.e. library_type and runtimes
         return std::tie(os, arch, build_type, library_type, c.compiler, c.runtime, cpp.compiler, cpp.runtime);
+    }
+    auto for_each() const {
+        // same types wont work and will give wrong results
+        // i.e. library_type and runtimes
+        return std::tie(os, arch, build_type, library_type, c.compiler
+            //, c.runtime
+            , cpp.compiler
+            //, cpp.runtime
+        );
+    }
+    auto for_each_hash(auto &&f) const {
+        std::apply(
+            [&](auto &&...args) {
+                (f(FWD(args)), ...);
+            },
+            for_each_hash());
     }
     auto for_each(auto &&f) const {
         std::apply(
@@ -119,7 +135,7 @@ struct build_settings {
 
     size_t hash() const {
         size_t h = 0;
-        for_each([&](auto &&a) {
+        for_each_hash([&](auto &&a) {
             ::sw::visit(a, [&](auto &&v) {
                 h = hash_combine(h, v.name);
             });

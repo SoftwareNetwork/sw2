@@ -216,10 +216,11 @@ struct command_line_parser {
     using command = command_types::variant_type;
 
     command c;
-    argument<path, options::flag<"-d"_s>{}> working_directory;
+    argument<path, options::flag<"-d"_s>{}> working_directory; // make -C?
     flag<options::flag<"-sw1"_s>{}> sw1; // not a driver, but a real invocation
     flag<options::flag<"-sfc"_s>{}> save_failed_commands;
     flag<options::flag<"-sec"_s>{}> save_executed_commands;
+    flag<options::flag<"-B"_s>{}> rebuild_all;
     // some debug
     argument<int, options::flag<"-sleep"_s>{}> sleep;
     flag<options::flag<"-int3"_s>{}> int3;
@@ -234,7 +235,8 @@ struct command_line_parser {
             working_directory,
             sw1,
             save_failed_commands,
-            save_executed_commands
+            save_executed_commands,
+            rebuild_all
         );
     }
 
@@ -295,6 +297,8 @@ struct command_line_parser {
             if (!parsed) {
                 if (command) {
                     a.consumed = false;
+                } else {
+                    throw std::runtime_error{format("unknown option: {}", a.value)};
                 }
             }
         }

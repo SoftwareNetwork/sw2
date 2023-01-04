@@ -1306,9 +1306,12 @@ struct command_executor {
         }
     }
     void prepare(auto &&cl, auto &&sln) {
-        // some preps
-        if (cl.save_executed_commands || cl.save_failed_commands) {
-            fs::create_directories(get_saved_commands_dir(sln));
+        if (cl.rebuild_all) {
+            for (auto &&c : external_commands) {
+                visit(*c, [&](auto &&c) {
+                    c.always = true;
+                });
+            }
         }
     }
     path get_saved_commands_dir(auto &&sln) {

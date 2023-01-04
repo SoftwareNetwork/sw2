@@ -257,10 +257,13 @@ struct target_data : compile_options_t,link_options_t {
         definitions.push_back(d);
     }
     void add(const include_directory &d) {
-        include_directories.push_back(d);
+        include_directories.push_back(target().source_dir / d);
     }
     void add(const compile_option &d) {
         compile_options.push_back(d);
+    }
+    void add(const link_library &l) {
+        link_libraries.push_back(l);
     }
     void add(const system_link_library &l) {
         system_link_libraries.push_back(l);
@@ -726,7 +729,7 @@ struct native_library_target : native_target {
         }
         if (*shared) {
             bs.library_type = library_type::shared{};
-        } else if (!*shared) {
+        } else {
             bs.library_type = library_type::static_{};
         }
         make_binary_dir(s.binary_dir);
@@ -747,6 +750,7 @@ struct native_library_target : native_target {
                     implib += os.static_library_extension;
                 }
             });
+            interface_ += link_library{implib};
             bs.os.visit_any([&](os::windows) {
                 *this += "_WINDLL"_def;
             });
