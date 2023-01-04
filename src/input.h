@@ -23,13 +23,12 @@ struct directory_specification_file_input {};
 using input = variant<specification_file_input, directory_input>;
 
 struct input_with_settings {
-    entry_point i;
+    entry_point ep;
     std::set<build_settings> settings;
 
     void operator()(auto &sln) {
         for (auto &&s : settings) {
-            i(sln, s);
-            //visit(i, [&](auto &&v){v(sln, s);});
+            ep(sln, s);
         }
     }
 };

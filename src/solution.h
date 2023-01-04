@@ -192,6 +192,7 @@ struct target_map {
 };
 
 struct solution {
+    abspath work_dir;
     abspath binary_dir;
     const build_settings host_settings_;
     // current, per loaded package data
@@ -199,12 +200,14 @@ struct solution {
     const build_settings *bs{nullptr};
     // internal data
     target_map targets;
-    target_map predefined_targets; // or system targets
-    //std::vector<rule> rules;
+    //target_map predefined_targets; // or system targets
     std::vector<input_with_settings> inputs;
+    bool dry_run = false;
+    input_with_settings current_input;
+    std::vector<target_uptr> temp_targets;
 
     //solution() {}
-    solution(const abspath &binary_dir, const build_settings &host_settings) : binary_dir{binary_dir}, host_settings_{host_settings} {
+    solution(const abspath &binary_dir, const build_settings &host_settings) : work_dir{binary_dir}, binary_dir{binary_dir}, host_settings_{host_settings} {
     }
 
     template <typename T, typename... Args>
@@ -221,12 +224,22 @@ struct solution {
             throw std::runtime_error{"cannot create target: "s + e.what()};
         }
         auto &t = *ptr;
-        targets.emplace(id, std::move(ptr));
+        if (dry_run) {
+            targets[name].ep = current_input.ep;
+            temp_targets.emplace_back(std::move(ptr));
+        } else {
+            targets.emplace(id, std::move(ptr));
+        }
         return t;
     }
     template <typename T, typename... Args>
     T &addTarget(const package_path &name, const package_version &v) {
         return add<T>(package_name{name,v});
+    }
+
+    void gather_entry_points(const input_with_settings &i) {
+        current_input = i;
+        current_input(*this);
     }
 
     void add_entry_point(const package_name &n, entry_point &&ep) {

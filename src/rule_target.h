@@ -15,6 +15,9 @@ struct dependency {
     target_uptr *target = nullptr;
 
     auto resolved() const { return !!target; }
+    void resolve(auto &&sln) {
+        target = &sln.load_target(name, bs);
+    }
 };
 auto operator""_dep(const char *s, size_t len) {
     return dependency{std::string{s, len}};
@@ -69,9 +72,12 @@ auto make_rule(T rule, auto &&f) {
     return std::pair{tag, fun};
 }
 
+struct solution;
+
 // basic target: throw files, rules etc.
 struct rule_target {
     package_name name;
+    solution &sln;
     const build_settings solution_bs;
     build_settings bs;
     path source_dir;
@@ -83,21 +89,29 @@ struct rule_target {
     //
     bool dry_run{};
     // v1 compat
+    path binary_dir_bd;
+    path binary_dir_bdp;
     path &SourceDir{source_dir};
-    path &BinaryDir{binary_dir};
+    path &BinaryDir{binary_dir_bd};
+    path &BinaryPrivateDir{binary_dir_bdp};
     bool &DryRun{dry_run};
 
     rule_target(auto &&solution, auto &&id)
         : name{id}
+        , sln{solution}
         , solution_bs{*solution.bs}
         , bs{*solution.bs}
    {
         source_dir = solution.source_dir;
         binary_dir = make_binary_dir(solution.binary_dir);
         //solution_binary_dir = solution.binary_dir;
+        dry_run = solution.dry_run;
     }
     path make_binary_dir(const path &parent) {
-        return make_binary_dir(parent, bs.hash());
+        binary_dir = make_binary_dir(parent, bs.hash());
+        binary_dir_bd = binary_dir / "bd";
+        binary_dir_bdp = binary_dir / "bdp";
+        return binary_dir;
     }
     path make_binary_dir(const path &parent, auto &&config) {
         return parent / "t" / std::to_string(config) / std::to_string(name.hash());
@@ -217,6 +231,12 @@ struct target_data : compile_options_t,link_options_t {
             }
         });
     }
+    void add(const char *p) {
+        add(path{p});
+    }
+    void add(const string &p) {
+        add(path{p});
+    }
     void add(const path &p) {
         files.insert(p.is_absolute() ? p : target().source_dir / p);
     }
@@ -255,11 +275,19 @@ struct target_data : compile_options_t,link_options_t {
         d.target = &ptr;
         add(d);
     }*/
-    void add(const dependency &d) {
-        dependencies.push_back(d);
+    void add(const dependency &in) {
+        dependencies.push_back(in);
+        if (target().dry_run) {
+            return;
+        }
+        auto &d = dependencies.back();
+        d.bs = target().solution_bs;
+        if (!d.resolved()) {
+            d.resolve(target().sln);
+        }
     }
     void add(const unresolved_package_name &d) {
-        dependencies.push_back({d,target().solution_bs});
+        add(dependency{d,target().solution_bs});
     }
 
     void merge(auto &&from) {
@@ -404,11 +432,7 @@ struct native_target : rule_target, target_data_storage<native_target> {
         if (!bs.build_type.is<build_type::debug>()) {
             *this += "NDEBUG"_def;
         }
-
-        // unexistent, cmake cannot idir such dirs, it requires to create them
-        // create during cmake project export?
-        *this += include_directory{local_binary_private_dir()};
-        public_ += include_directory{local_binary_dir()};
+        set_binary_include_dirs();
     }
     native_target(auto &&s, auto &&id, raw_target_tag) : base{s, id}, target_data_storage<native_target>{*this} {
     }
@@ -447,6 +471,15 @@ struct native_target : rule_target, target_data_storage<native_target> {
     //void build() { operator()(); }
     // void run(){}
 
+    void set_binary_include_dirs() {
+        include_directories.clear();
+        public_.include_directories.clear();
+
+        // unexistent, cmake cannot idir such dirs, it requires to create them
+        // create during cmake project export?
+        *this += include_directory{binary_dir_bdp};
+        public_ += include_directory{binary_dir_bd};
+    }
     void prepare_no_deps(/*this */ auto &&self, auto &&sln) {
         if (!api_name.empty()) {
             *this += definition{api_name, "SW_EXPORT"};
@@ -457,13 +490,6 @@ struct native_target : rule_target, target_data_storage<native_target> {
     }
     void prepare(/*this */auto &&self) {
         rule_target::prepare(self);
-    }
-
-    path local_binary_dir() {
-        return binary_dir / "bd";
-    }
-    path local_binary_private_dir() {
-        return binary_dir / "bdp";
     }
 
     bool has_file(const path &fn) {
@@ -489,7 +515,7 @@ struct native_target : rule_target, target_data_storage<native_target> {
     void configure_file(path from, path to, int flags = 0) {
         add_file_silently(from);
 
-        auto bdir = local_binary_private_dir();
+        auto bdir = binary_dir_bdp;
 
         // before resolving
         if (!to.is_absolute())
@@ -703,7 +729,8 @@ struct native_library_target : native_target {
         } else if (!*shared) {
             bs.library_type = library_type::static_{};
         }
-        binary_dir = make_binary_dir(s.binary_dir);
+        make_binary_dir(s.binary_dir);
+        set_binary_include_dirs();
 
         if (is<library_type::shared>()) {
             bs.linker.visit_no_special([&](auto &c) {

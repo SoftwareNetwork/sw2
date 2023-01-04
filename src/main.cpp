@@ -122,14 +122,26 @@ void sw1(auto &cl) {
         cl.c,
         [&](command_line_parser::build &b) {
             auto s = make_solution();
-            auto f = [&](auto &&add_input) {
+            auto f = [&](auto &&in) {
 #ifdef SW1_BUILD
-                sw1_load_inputs(add_input);
+                sw1_load_inputs(in);
 #else
                 throw std::runtime_error{"no entry function was specified"};
 #endif
             };
+
             std::vector<build_settings> settings{default_build_settings()};
+            {
+                swap_and_restore sr{s.dry_run, true};
+                auto add_input = [&](auto &&f, auto &&dir) {
+                    input_with_settings is;
+                    is.ep = entry_point{f, dir};
+                    is.settings.insert(settings.begin(), settings.end());
+                    s.gather_entry_points(is);
+                };
+                f(add_input);
+            }
+
             auto apply = [&]() {
             };
             //
@@ -239,7 +251,7 @@ void sw1(auto &cl) {
 
             auto add_input = [&](auto &&f, auto &&dir) {
                 input_with_settings is;
-                is.i = entry_point{f, dir};
+                is.ep = entry_point{f, dir};
                 is.settings.insert(settings.begin(), settings.end());
                 s.add_input(is);
             };
@@ -257,15 +269,15 @@ int main1(int argc, char *argv[]) {
     if (cl.sleep) {
         std::this_thread::sleep_for(std::chrono::seconds(cl.sleep));
     }
-    if (cl.int3) {
-        debug_break_if_not_attached();
-    }
 
     auto this_path = fs::current_path();
     if (cl.working_directory) {
         fs::current_path(cl.working_directory);
     }
     if (cl.sw1) {
+        if (cl.int3) {
+            debug_break_if_not_attached();
+        }
         sw1(cl);
     }
 #ifdef SW1_BUILD
@@ -339,6 +351,9 @@ int main1(int argc, char *argv[]) {
         s.build(cl);
 
         auto &&t = s.targets.find_first<executable>("sw");
+        if (!fs::exists(t.executable)) {
+            throw std::runtime_error{"missing sw1 file"};
+        }
 
         auto setup_path = [](auto &&in) {
             auto s = normalize_path_and_drive(in);

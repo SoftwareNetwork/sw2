@@ -1312,7 +1312,7 @@ struct command_executor {
         }
     }
     path get_saved_commands_dir(auto &&sln) {
-        return sln.binary_dir / "rsp";
+        return sln.work_dir / "rsp";
     }
 
     void operator+=(std::vector<command> &commands) {
@@ -1322,4 +1322,4 @@ struct command_executor {
     }
 };
 
-}
+} // namespace sw
