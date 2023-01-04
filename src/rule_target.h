@@ -6,12 +6,12 @@
 #include "build_settings.h"
 #include "target_list.h"
 #include "target_properties.h"
-#include "suffix.h"
 
 namespace sw {
 
 struct dependency {
     unresolved_package_name name;
+    build_settings bs;
     target_uptr *target = nullptr;
 
     auto resolved() const { return !!target; }
@@ -250,13 +250,16 @@ struct target_data : compile_options_t,link_options_t {
             rules.push_back(r);
         }
     }
-    void add(target_uptr &ptr) {
+    /*void add(target_uptr &ptr) {
         dependency d;
         d.target = &ptr;
         add(d);
-    }
+    }*/
     void add(const dependency &d) {
         dependencies.push_back(d);
+    }
+    void add(const unresolved_package_name &d) {
+        dependencies.push_back({d,target().solution_bs});
     }
 
     void merge(auto &&from) {
@@ -413,20 +416,20 @@ struct native_target : rule_target, target_data_storage<native_target> {
     void init_compilers(auto &&s) {
         // order
         for (auto &&l : bs.cpp.stdlib) {
-            add(s.load_target(l, bs));
+            add(l);
         }
         for (auto &&l : bs.c.stdlib) {
-            add(s.load_target(l, bs));
+            add(l);
         }
 #if defined(_WIN32)
-        add(s.load_target(bs.kernel_lib, bs));
+        add(bs.kernel_lib);
 #endif
 
         bs.cpp.compiler.visit_no_special([&](auto &c) {
-            add(s.load_target(c.package, bs));
+            add(c.package);
         });
         bs.c.compiler.visit_no_special([&](auto &c) {
-            add(s.load_target(c.package, bs));
+            add(c.package);
         });
     }
 
@@ -704,7 +707,7 @@ struct native_library_target : native_target {
 
         if (is<library_type::shared>()) {
             bs.linker.visit_no_special([&](auto &c) {
-                add(s.load_target(c.package, bs));
+                add(c.package);
             });
 
             library = binary_dir / "bin" / (string)name;
@@ -722,7 +725,7 @@ struct native_library_target : native_target {
             });
         } else {
             bs.librarian.visit_no_special([&](auto &c) {
-                add(s.load_target(c.package, bs));
+                add(c.package);
             });
 
             library = binary_dir / "lib" / (string)name;
@@ -762,7 +765,7 @@ struct executable_target : native_target {
             }
         });
         bs.linker.visit_no_special([&](auto &c) {
-            add(s.load_target(c.package, bs));
+            add(c.package);
         });
     }
     executable_target(auto &&s, auto &&id, raw_target_tag t) : base{s, id, t} {

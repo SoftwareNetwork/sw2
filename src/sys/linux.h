@@ -97,6 +97,9 @@ struct executor {
             throw std::runtime_error{"error epoll_ctl: " + std::to_string(errno)};
         }
     }
+    void unregister_read_handle(auto &&fd) {
+        read_callbacks.erase(fd);
+    }
     void register_process(auto &&fd, auto &&f) {
         process_callbacks.emplace(fd, std::move(f));
 

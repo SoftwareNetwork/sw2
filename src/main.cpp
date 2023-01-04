@@ -3,7 +3,7 @@
 
 #include "sw.h"
 #include "command_line.h"
-#include "detect.h"
+#include "builtin/detect.h"
 #include "main.h"
 
 auto &get_msvc_detector() {
@@ -298,8 +298,7 @@ int main1(int argc, char *argv[]) {
                 }
                 return false;
             };
-            if (
-            0
+            if (0
                 || check_spec("sw.h")
                 || check_spec("sw.cpp") // old compat. After rewrite remove sw.h
                 //|| check_spec("sw2.cpp")

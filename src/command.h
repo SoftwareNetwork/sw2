@@ -4,10 +4,10 @@
 #pragma once
 
 #include "helpers.h"
-#include "win32.h"
-#include "linux.h"
-#include "macos.h"
-#include "mmap.h"
+#include "sys/win32.h"
+#include "sys/linux.h"
+#include "sys/macos.h"
+#include "sys/mmap.h"
 #include "json.h"
 
 namespace sw {
@@ -252,8 +252,8 @@ struct raw_command {
             }
             return my_pipe;
         };
-        int pout[2];
-        int perr[2];
+        int pout[2] = {-1,-1};
+        int perr[2] = {-1,-1};
 
         auto setup_stream = [&](auto &&s, auto &&pipe) {
             visit(
@@ -262,21 +262,19 @@ struct raw_command {
                         // nothing, inheritance is by default
                     },
                     [&](path &fn) {
-                        SW_UNIMPLEMENTED;
                         mkpipe(pipe);
                         auto fd = open(fn.string().c_str(), O_CREAT | O_WRONLY | O_TRUNC);
                         if (fd == -1) {
                             std::cerr << "open error: " << errno << "\n";
                             exit(1);
                         }
-                        if (dup2(pipe[0], fd) == -1) {
+                        if (dup2(fd, pipe[0]) == -1) {
                             std::cerr << "dup2 error: " << errno << "\n";
                             exit(1);
                         }
+                        close(fd);
                     },
                     [&](auto &) {
-                        // callback
-                        SW_UNIMPLEMENTED;
                         mkpipe(pipe);
                     });
         };
@@ -294,43 +292,90 @@ struct raw_command {
             throw std::runtime_error{"can't clone3: "s + std::to_string(errno)};
         }
         if (pid == 0) {
-            auto setup_pipe = [](auto my_pipe, auto fd) {
-                //while ((dup2(my_pipe[1], STDERR_FILENO) == -1) && (errno == EINTR)) {}
-                if (dup2(my_pipe[1], fd) == -1) {
-                    std::cerr << "dup2 error: " << errno << "\n";
-                    exit(1);
-                }
-                close(my_pipe[0]);
-                close(my_pipe[1]);
+            auto postsetup_pipe = [&](auto &&s, auto &&pipe, auto fd) {
+                visit(
+                    s,
+                    [&](inherit) {
+                        // nothing, inheritance is by default
+                    },
+                    [&](auto &) {
+                        // while ((dup2(my_pipe[1], STDERR_FILENO) == -1) && (errno == EINTR)) {}
+                        if (dup2(my_pipe[1], fd) == -1) {
+                            std::cerr << "dup2 error: " << errno << "\n";
+                            exit(1);
+                        }
+                        close(my_pipe[0]);
+                        close(my_pipe[1]);
+                    });
             };
-            //setup_pipe(pout, STDOUT_FILENO);
-            //setup_pipe(perr, STDERR_FILENO);
+            postsetup_pipe(out, pout, STDOUT_FILENO);
+            postsetup_pipe(err, perr, STDERR_FILENO);
             // child
             if (execve(args2[0], args2.data(), environ) == -1) {
                 std::cerr << "execve error: " << errno << "\n";
                 exit(1);
             }
         }
-        auto postsetup_pipe = [&](auto my_pipe, auto &&s) {
-            close(my_pipe[1]);
-            ex.register_read_handle(my_pipe[0], [&s](auto &&buf, int count) {
-                if (count == -1) {
-                    SW_UNIMPLEMENTED;
-                    perror("read failed");
-                    exit(1);
-                } else if (count == 0) {
-                    return;
-                } else {
-                    s.append(buf, count);
+        auto postsetup_pipe = [&](auto &&s, auto &&pipe) {
+            visit(
+                s,
+                [&](inherit) {
+                    // nothing, inheritance is by default
+                },
+                [&](path &) {
+                    // nothing
+                },
+                [&](string &s) {
+                    close(pipe[1]);
+                    ex.register_read_handle(pipe[0], [&s](auto &&buf, int count) {
+                        if (count == -1) {
+                            SW_UNIMPLEMENTED;
+                            perror("read failed");
+                            exit(1);
+                        } else if (count == 0) {
+                            return;
+                        } else {
+                            s.append(buf, count);
+                        }
+                    });
+                },
+                [&](stream_callback &cb) {
+                    close(pipe[1]);
+                    ex.register_read_handle(pipe[0], [&cb](auto &&buf, int count) {
+                        if (count == -1) {
+                            SW_UNIMPLEMENTED;
+                            perror("read failed");
+                            exit(1);
+                        } else if (count == 0) {
+                            return;
+                        } else {
+                            cb(string_view{buf, count});
+                        }
+                    });
                 }
-            });
+            );
         };
-        //postsetup_pipe(pout, out);
-        //postsetup_pipe(perr, err);
+        postsetup_pipe(out, pout);
+        postsetup_pipe(err, perr);
         ex.register_process(pidfd, [pid, pidfd, pout = pout[0], perr = perr[0], cb]() {
             scope_exit se{[&] {
-                //close(pout);
-                //close(perr);
+                auto postsetup_pipe = [&](auto &&s, auto &&pipe) {
+                    visit(
+                        s,
+                        [&](inherit) {
+                            // nothing, inheritance is by default
+                        },
+                        [&](path &) {
+                            close(pipe);
+                        },
+                        [&](auto &) {
+                            close(pipe);
+                            ex.unregister_read_handle(pipe);
+                        }
+                    );
+                };
+                postsetup_pipe(out, pout);
+                postsetup_pipe(err, perr);
                 close(pidfd);
             }};
 
