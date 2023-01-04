@@ -4,7 +4,7 @@
 #pragma once
 
 #ifdef _WIN32
-#include "helpers.h"
+#include "../helpers.h"
 
 #define WIN32_LEAN_AND_MEAN
 #ifndef NOMINMAX
