@@ -88,7 +88,7 @@ struct executor {
         }
     }
     void register_read_handle(auto &&fd, auto &&f) {
-        read_callbacks.emplace(fd, f);
+        read_callbacks.emplace(fd, std::move(f));
 
         epoll_event ev{};
         ev.events = EPOLLIN;
