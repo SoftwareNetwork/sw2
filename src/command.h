@@ -357,7 +357,7 @@ struct raw_command {
         };
         postsetup_pipe(out, pout);
         postsetup_pipe(err, perr);
-        ex.register_process(pidfd, [&ex, pid, pidfd, pout = pout[0], perr = perr[0], cb]() {
+        ex.register_process(pidfd, [&, &ex, pid, pidfd, pout = pout[0], perr = perr[0], cb]() {
             scope_exit se{[&] {
                 auto postsetup_pipe = [&](auto &&s, auto &&pipe) {
                     visit(
