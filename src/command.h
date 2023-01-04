@@ -349,7 +349,7 @@ struct raw_command {
                         } else if (count == 0) {
                             return;
                         } else {
-                            cb(string_view{buf, count});
+                            cb(string_view{buf, (size_t)count});
                         }
                     });
                 }
