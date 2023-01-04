@@ -299,13 +299,13 @@ struct raw_command {
                         // nothing, inheritance is by default
                     },
                     [&](auto &) {
-                        // while ((dup2(my_pipe[1], STDERR_FILENO) == -1) && (errno == EINTR)) {}
-                        if (dup2(my_pipe[1], fd) == -1) {
+                        // while ((dup2(pipe[1], STDERR_FILENO) == -1) && (errno == EINTR)) {}
+                        if (dup2(pipe[1], fd) == -1) {
                             std::cerr << "dup2 error: " << errno << "\n";
                             exit(1);
                         }
-                        close(my_pipe[0]);
-                        close(my_pipe[1]);
+                        close(pipe[0]);
+                        close(pipe[1]);
                     });
             };
             postsetup_pipe(out, pout, STDOUT_FILENO);
