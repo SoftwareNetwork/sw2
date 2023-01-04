@@ -46,7 +46,7 @@ struct executor {
     int efd;
     std::atomic_bool stopped{false};
     std::atomic_int jobs{0};
-    std::map<int, std::move_only_function<void()>> read_callbacks;
+    std::map<int, std::move_only_function<void(uint8_t*,int)>> read_callbacks;
     std::map<int, std::move_only_function<void()>> process_callbacks;
 
     executor() {
@@ -74,7 +74,7 @@ struct executor {
             return;
         }
         auto it = read_callbacks.find(ev.data.fd);
-        char buffer[4096];
+        uint8_t buffer[4096];
         while (1) {
             auto count = read(ev.data.fd, buffer, sizeof(buffer));
             if (count == -1) {
@@ -83,7 +83,7 @@ struct executor {
                 }
             }
             if (it != read_callbacks.end()) {
-                it->second();
+                it->second(buffer, count);
             }
         }
     }
