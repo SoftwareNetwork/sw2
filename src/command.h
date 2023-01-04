@@ -335,7 +335,7 @@ struct raw_command {
                         } else if (count == 0) {
                             return;
                         } else {
-                            s.append(buf, count);
+                            s.append(buf, (size_t)count);
                         }
                     });
                 },
