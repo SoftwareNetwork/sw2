@@ -357,7 +357,7 @@ struct raw_command {
         };
         postsetup_pipe(out, pout);
         postsetup_pipe(err, perr);
-        ex.register_process(pidfd, [pid, pidfd, pout = pout[0], perr = perr[0], cb]() {
+        ex.register_process(pidfd, [&ex, pid, pidfd, pout = pout[0], perr = perr[0], cb]() {
             scope_exit se{[&] {
                 auto postsetup_pipe = [&](auto &&s, auto &&pipe) {
                     visit(
@@ -419,7 +419,7 @@ struct raw_command {
         pid_t pid;
         auto r = posix_spawn(&pid, args2[0], 0, 0, args2.data(), environ);
         if (r) {
-            throw std::runtime_error{"cant posix_spawn: "s + std::to_string(errno)};
+            throw std::runtime_error{"can't posix_spawn: "s + std::to_string(errno)};
         }
 
         ex.register_process(pid, [pid, cb](){
