@@ -5,7 +5,7 @@
 
 #ifdef _WIN32
 
-#include "helpers.h"
+#include "../helpers.h"
 
 // Published by Visual Studio Setup team
 // <copyright file="Setup.Configuration.h" company="Microsoft Corporation">
