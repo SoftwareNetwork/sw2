@@ -303,6 +303,31 @@ struct solution {
         }
         ce.run(cl, *this);
     }
+    void test(auto &&cl) {
+        executor ex;
+        test(ex, cl);
+    }
+    void test(auto &&ex, auto &&cl) {
+        for (auto &&i : inputs) {
+            i(*this);
+        }
+
+        prepare();
+
+        command_executor ce{ex};
+        for (auto &&[id, t] : targets) {
+            visit(t, [&](auto &&vp) {
+                auto &v = *vp;
+                if constexpr (requires { v.commands; }) {
+                    ce += v.commands;
+                }
+                if constexpr (requires { v.tests; }) {
+                    ce += v.tests;
+                }
+            });
+        }
+        ce.run(cl, *this);
+    }
 };
 using Solution = solution; // v1 compat
 

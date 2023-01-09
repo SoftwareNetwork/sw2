@@ -41,6 +41,18 @@ using fmt::format;
 #include <unordered_set>
 #include <variant>
 
+#if defined(_MSC_VER)
+#if _MSC_VER < 1934
+#error "use VS 17.4 or later"
+#endif
+#elif defined(__GNUC__)
+#if __GNUC__ < 12
+#error "use gcc 12 or later"
+#endif
+#else
+#error "compiler is not working or not tested"
+#endif
+
 #ifdef _MSC_VER
 template <>
 struct std::formatter<std::source_location> : std::formatter<std::string> {

@@ -145,7 +145,7 @@ struct command_line_parser {
 
     // subcommands
 
-    struct build {
+    struct build_common {
         static constexpr inline auto name = "build"sv;
 
         argument<string, options::positional{}, options::zero_or_more{}> inputs;
@@ -153,7 +153,7 @@ struct command_line_parser {
         flag<options::flag<"-shared"_s>{}> shared;
         flag<options::flag<"-c_static_runtime"_s>{}> c_static_runtime;
         flag<options::flag<"-cpp_static_runtime"_s>{}> cpp_static_runtime;
-        flag<options::flag<"-mt"_s, "-c_and_cpp_static_runtime"_s>{}> c_and_cpp_static_runtime; // windows compat
+        flag<options::flag<"-mt"_s, "-c_and_cpp_static_runtime"_s>{}> c_and_cpp_static_runtime;   // windows compat
         flag<options::flag<"-md"_s, "-c_and_cpp_dynamic_runtime"_s>{}> c_and_cpp_dynamic_runtime; // windows compat
         argument<string, options::flag<"-arch"_s>{}, options::comma_separated_value{}> arch;
         argument<string, options::flag<"-config"_s>{}, options::comma_separated_value{}> config;
@@ -161,20 +161,12 @@ struct command_line_parser {
         argument<string, options::flag<"-os"_s>{}, options::comma_separated_value{}> os;
 
         auto option_list() {
-            return std::tie(
-                inputs,
-                static_,
-                shared,
-                c_static_runtime,
-                cpp_static_runtime,
-                c_and_cpp_static_runtime,
-                c_and_cpp_dynamic_runtime,
-                arch,
-                config,
-                compiler,
-                os
-            );
+            return std::tie(inputs, static_, shared, c_static_runtime, cpp_static_runtime, c_and_cpp_static_runtime,
+                            c_and_cpp_dynamic_runtime, arch, config, compiler, os);
         }
+    };
+    struct build : build_common {
+        static constexpr inline auto name = "build"sv;
     };
     struct override {
         static constexpr inline auto name = "override"sv;
@@ -200,11 +192,8 @@ struct command_line_parser {
             parse1(*this, args);
         }
     };
-    struct test {
+    struct test : build_common {
         static constexpr inline auto name = "test"sv;
-
-        void parse(auto &&args) {
-        }
     };
     struct generate {
         static constexpr inline auto name = "generate"sv;
@@ -225,12 +214,14 @@ struct command_line_parser {
     argument<int, options::flag<"-sleep"_s>{}> sleep;
     flag<options::flag<"-int3"_s>{}> int3;
     flag<options::flag<"-trace"_s,"--trace"_s>{}> trace;
+    flag<options::flag<"-version"_s,"--version"_s>{}> version;
 
     auto option_list() {
         return std::tie(
             sleep,
             int3,
             trace,
+            version,
 
             working_directory,
             sw1,

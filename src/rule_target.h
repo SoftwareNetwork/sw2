@@ -86,6 +86,7 @@ struct rule_target {
     command_storage cs;
     std::map<path, rule_flag> processed_files;
     std::vector<command> commands;
+    std::vector<command> tests;
     //
     bool dry_run{};
     // v1 compat
@@ -159,6 +160,11 @@ struct rule_target {
                 c2.cs = &self.cs;
             });
         }
+        for (auto &&c : self.tests) {
+            ::sw::visit(c, [&](auto &&c2) {
+                c2.cs = &self.cs;
+            });
+        }
     }
 
     void prepare(/*this */auto &&self) {
@@ -172,6 +178,36 @@ struct rule_target {
     }
 
     //auto visit()
+
+    template <typename T = io_command>
+    auto add_test() {
+        struct command_wrapper {
+            rule_target &t;
+            T &c;
+            decltype(T::inputs) &inputs{c.inputs};
+
+            auto operator+=(auto &&arg) {
+                return c += arg;
+            }
+            path operator>(const path &p) {
+                // check absolute
+                auto fn = t.binary_dir / "test" / p;
+                c > fn;
+                return fn;
+            }
+            void operator<(const path &p) {
+                // check absolute?
+                //auto fn = t.binary_dir / "test" / p;
+                c < p;
+            }
+        };
+
+        tests.reserve(50); // todo: implement normal non relocating vector finally
+        tests.push_back(T{});
+        auto &c = std::get<T>(tests.back());
+        command_wrapper w{*this,c};
+        return w;
+    }
 };
 
 template <typename T>
@@ -805,8 +841,34 @@ struct executable_target : native_target {
     void run(auto && ... args) {
         // make rule?
     }
+
+    template <typename T = io_command>
+    auto add_test() {
+        auto c = native_target::add_test<T>();
+        c += executable;
+        c.inputs.insert(executable);
+        return c;
+    }
 };
 using executable = executable_target;
+
+struct test_target {
+    package_name name;
+    solution &sln;
+    build_settings bs;
+    path source_dir;
+    path binary_dir;
+    command_storage cs;
+    std::vector<command> commands;
+    io_command main_command;
+
+    test_target(auto &&solution, auto &&id) : name{id}, sln{solution}, bs{*solution.bs} {
+        source_dir = solution.source_dir;
+        binary_dir = make_binary_dir(solution.binary_dir);
+    }
+
+};
+using test = test_target;
 
 using target = target_type::variant_type;
 

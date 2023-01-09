@@ -228,6 +228,8 @@ struct package_version_range {
     }
     package_version_range(const char *s) : package_version_range{string{s}} {
     }
+    package_version_range(std::string_view s) : package_version_range{string{s.begin(), s.end()}} {
+    }
     package_version_range(const std::string &s) {
         if (s == "*") {
             package_version::number_version from{{0}};

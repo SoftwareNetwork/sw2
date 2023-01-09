@@ -11,6 +11,7 @@ struct native_library_target;
 struct native_shared_library_target;
 struct native_static_library_target;
 struct executable_target;
+struct test_target;
 //struct binary_target;
 //struct binary_library_target;
 //struct binary_target_msvc;
@@ -18,7 +19,8 @@ struct executable_target;
 using target_type = types<
     //files_target, rule_target,
     native_target, native_library_target, native_shared_library_target,
-    native_static_library_target, executable_target
+    native_static_library_target, executable_target,
+    test_target
     //, binary_target, binary_library_target, binary_target_msvc
 >;
 

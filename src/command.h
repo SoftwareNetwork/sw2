@@ -25,8 +25,7 @@ struct raw_command {
     using stream_callback = std::function<void(string_view)>;
     struct inherit {};
     using stream = variant<inherit, string, stream_callback, path>;
-    //stream in;
-    stream out, err;
+    stream in, out, err;
     string out_text; // filtered, workaround
 #ifdef _WIN32
     win32::pipe pout, perr;
@@ -471,6 +470,9 @@ struct raw_command {
         return appender{[&](auto &&v){add(v);}};
     }
 
+    void operator<(const path &p) {
+        in = p;
+    }
     void operator>(const path &p) {
         out = p;
     }
@@ -815,6 +817,8 @@ if [ $E -ne 0 ]; then echo "Error code: $E"; fi
     dag_status dagstatus{};
     //
 
+    void process_deps(){} // msvc 17.5P2 bug workaround
+
     bool outdated() const {
         return always || cs && cs->outdated(*this);
     }
@@ -859,8 +863,7 @@ if [ $E -ne 0 ]; then echo "Error code: $E"; fi
         if (!outputs.empty()) {
             string s = "generating: ";
             for (auto &&o : outputs) {
-                SW_UNIMPLEMENTED;
-                //s += std::format("\"{}\", ", (const char *) o.u8string().c_str());
+                s += format("\"{}\", ", (const char *)o.u8string().c_str());
             }
             s.resize(s.size() - 2);
             return s;
@@ -1123,7 +1126,9 @@ struct command_executor {
         for (auto &&c : commands) {
             visit(*c, [&](auto &&c) {
                 for (auto &&o : c.outputs) {
-                    outdirs.insert(o.parent_path());
+                    if (auto p = o.parent_path(); !p.empty()) {
+                        outdirs.insert(p);
+                    }
                 }
             });
         }

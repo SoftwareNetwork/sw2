@@ -120,7 +120,10 @@ struct cpp_emitter {
 void sw1(auto &cl) {
     visit(
         cl.c,
-        [&](command_line_parser::build &b) {
+        [&](auto &b) requires (false
+            || std::same_as<std::decay_t<decltype(b)>, command_line_parser::build>
+            || std::same_as<std::decay_t<decltype(b)>, command_line_parser::test>
+            ) {
             auto s = make_solution();
             auto f = [&](auto &&in) {
 #ifdef SW1_BUILD
@@ -221,11 +224,18 @@ void sw1(auto &cl) {
                 }
             };
             auto check_and_set = [](auto &&s, auto &&v) {
+                auto v2 = v.substr(0, v.find("-"));
                 bool set{};
                 s.for_each([&](auto &&a) {
                     using T = std::decay_t<decltype(a)>;
-                    if (T::is(v)) {
-                        s = T{};
+                    if (T::is(v2)) {
+                        T t{};
+                        if (v != v2) {
+                            if constexpr (requires {t.package;}) {
+                                t.package.range = v.substr(v.find("-") + 1);
+                            }
+                        }
+                        s = t;
                         set = true;
                     }
                 });
@@ -256,7 +266,12 @@ void sw1(auto &cl) {
                 s.add_input(is);
             };
             f(add_input);
-            s.build(cl);
+            if constexpr (std::same_as<std::decay_t<decltype(b)>, command_line_parser::build>) {
+                s.build(cl);
+            }
+            if constexpr (std::same_as<std::decay_t<decltype(b)>, command_line_parser::test>) {
+                s.test(cl);
+            }
         },
         [](auto &&) {
             SW_UNIMPLEMENTED;
@@ -266,7 +281,12 @@ void sw1(auto &cl) {
 int main1(int argc, char *argv[]) {
     command_line_parser cl{argc, argv};
 
+    if (cl.version) {
+        std::cout << "sw2\n";
+        return 0;
+    }
     if (cl.sleep) {
+        std::cerr << "sleep started\n";
         std::this_thread::sleep_for(std::chrono::seconds(cl.sleep));
         std::cerr << "sleep completed\n";
     }
@@ -284,7 +304,10 @@ int main1(int argc, char *argv[]) {
 #ifdef SW1_BUILD
     return 0;
 #endif
-    visit_any(cl.c, [&](command_line_parser::build &b) {
+    visit_any(cl.c, [&](auto &b) requires (false
+        || std::same_as<std::decay_t<decltype(b)>, command_line_parser::build>
+        || std::same_as<std::decay_t<decltype(b)>, command_line_parser::test>
+        ) {
         auto s = make_solution();
         auto cfg_dir = s.binary_dir / "cfg";
         s.binary_dir = cfg_dir;
@@ -369,6 +392,7 @@ int main1(int argc, char *argv[]) {
         for (int i = 1; i < argc; ++i) {
             c += (const char *)argv[i];
         }
+        std::cout << "entering child\n";
         c.run();
     });
     return 0;
