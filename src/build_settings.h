@@ -136,6 +136,9 @@ struct build_settings {
     size_t hash() const {
         size_t h = 0;
         for_each_hash([&](auto &&a) {
+            /*if (a.valueless_by_exception()) {
+                return;
+            }*/
             ::sw::visit(a, [&](auto &&v) {
                 h = hash_combine(h, v.name);
             });

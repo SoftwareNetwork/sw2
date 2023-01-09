@@ -66,6 +66,9 @@ struct executor {
     void run_one() {
         epoll_event ev;
         if (epoll_wait(efd, &ev, 1, -1) == -1) {
+            if (errno == EINTR) {
+                return;
+            }
             //throw std::runtime_error{"error epoll_wait"};
             perror("error epoll_wait");
             exit(1);

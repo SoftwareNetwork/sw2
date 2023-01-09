@@ -104,6 +104,13 @@ struct gcc_compile_rule {
                 c += t;
             }
             c += f, "-MD", "-o", out;
+            tgt.bs.build_type.visit(
+                    [&](build_type::debug) {
+                        c += "-g", "-O0";
+                    },
+                    [&](auto) {
+                        c += "-O2"; // O3?
+                    });
             add_compile_options(tgt.merge_object(), c);
             c.inputs.insert(f);
             c.outputs.insert(out);
