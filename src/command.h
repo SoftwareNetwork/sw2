@@ -251,9 +251,30 @@ struct raw_command {
             }
             return my_pipe;
         };
+        int pin[2] = {-1,-1};
         int pout[2] = {-1,-1};
         int perr[2] = {-1,-1};
 
+        visit(
+                in,
+                [&](inherit) {
+                    // nothing, we close child by default
+                },
+                [&](path &fn) {
+                    mkpipe(pin);
+                    auto fd = open(fn.string().c_str(), O_RDONLY);
+                    if (fd == -1) {
+                        throw std::runtime_error(format("cannot open file for reading: {}", fn.string()));
+                    }
+                    if (dup2(pin[1], fd) == -1) {
+                        std::cerr << "dup2 error: " << errno << "\n";
+                        exit(1);
+                    }
+                    close(pin[1]);
+                },
+                [&](auto &) {
+                    mkpipe(pin);
+                });
         auto setup_stream = [&](auto &&s, auto &&pipe) {
             visit(
                     s,
@@ -264,8 +285,7 @@ struct raw_command {
                         mkpipe(pipe);
                         auto fd = open(fn.string().c_str(), O_CREAT | O_WRONLY | O_TRUNC);
                         if (fd == -1) {
-                            std::cerr << "open error: " << errno << "\n";
-                            exit(1);
+                            throw std::runtime_error(format("cannot open file for writing: {}", fn.string()));
                         }
                         if (dup2(fd, pipe[0]) == -1) {
                             std::cerr << "dup2 error: " << errno << "\n";
@@ -291,6 +311,20 @@ struct raw_command {
             throw std::runtime_error{"can't clone3: "s + std::to_string(errno)};
         }
         if (pid == 0) {
+            visit(
+                    in,
+                    [&](inherit) {
+                        close(STDIN_FILENO);
+                    },
+                    [&](auto &) {
+                        // while ((dup2(pipe[1], STDERR_FILENO) == -1) && (errno == EINTR)) {}
+                        if (dup2(pin[0], STDIN_FILENO) == -1) {
+                            std::cerr << "dup2 error: " << errno << "\n";
+                            exit(1);
+                        }
+                        close(pin[0]);
+                        close(pin[1]);
+                    });
             auto postsetup_pipe = [&](auto &&s, auto &&pipe, auto fd) {
                 visit(
                     s,
@@ -315,6 +349,29 @@ struct raw_command {
                 exit(1);
             }
         }
+        visit(
+                in,
+                [&](inherit) {
+                    // nothing, we close child by default
+                },
+                [&](path &) {
+                    // nothing
+                },
+                [&](string &s) {
+                    close(pin[0]);
+                    SW_UNIMPLEMENTED;
+                    /*ex.register_write_handle(pin[1], [&s](auto &&buf, auto count) {
+                        s.append(buf, count);
+                    });*/
+                },
+                [&](stream_callback &cb) {
+                    close(pin[0]);
+                    SW_UNIMPLEMENTED;
+                    /*ex.register_write_handle(pin[1], [&cb](auto &&buf, auto count) {
+                        cb(string_view{buf, count});
+                    });*/
+                }
+        );
         auto postsetup_pipe = [&](auto &&s, auto &&pipe) {
             visit(
                 s,
@@ -340,8 +397,22 @@ struct raw_command {
         };
         postsetup_pipe(out, pout);
         postsetup_pipe(err, perr);
-        ex.register_process(pidfd, [&, pid, pidfd, pout = pout[0], perr = perr[0], cb]() {
+        ex.register_process(pidfd, [&, pid, pidfd, pin = pin[1], pout = pout[0], perr = perr[0], cb]() {
             scope_exit se{[&] {
+                visit(
+                        in,
+                        [&](inherit) {
+                            // nothing, we close child by default
+                        },
+                        [&](path &) {
+                            close(pin);
+                        },
+                        [&](auto &) {
+                            close(pin);
+                            SW_UNIMPLEMENTED;
+                            //ex.unregister_write_handle(pipe);
+                        }
+                );
                 auto postsetup_pipe = [&](auto &&s, auto &&pipe) {
                     visit(
                         s,
