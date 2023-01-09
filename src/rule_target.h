@@ -76,6 +76,28 @@ struct solution;
 
 // basic target: throw files, rules etc.
 struct rule_target {
+    template <typename Command>
+    struct command_wrapper {
+        rule_target &t;
+        Command &c;
+        decltype(Command::inputs) &inputs{c.inputs};
+
+        auto operator+=(auto &&arg) {
+            return c += arg;
+        }
+        path operator>(const path &p) {
+            // check absolute
+            auto fn = t.binary_dir / "test" / p;
+            c > fn;
+            return fn;
+        }
+        void operator<(const path &p) {
+            // check absolute?
+            //auto fn = t.binary_dir / "test" / p;
+            c < p;
+        }
+    };
+
     package_name name;
     solution &sln;
     const build_settings solution_bs;
@@ -181,31 +203,10 @@ struct rule_target {
 
     template <typename T = io_command>
     auto add_test() {
-        struct command_wrapper {
-            rule_target &t;
-            T &c;
-            decltype(T::inputs) &inputs{c.inputs};
-
-            auto operator+=(auto &&arg) {
-                return c += arg;
-            }
-            path operator>(const path &p) {
-                // check absolute
-                auto fn = t.binary_dir / "test" / p;
-                c > fn;
-                return fn;
-            }
-            void operator<(const path &p) {
-                // check absolute?
-                //auto fn = t.binary_dir / "test" / p;
-                c < p;
-            }
-        };
-
         tests.reserve(50); // todo: implement normal non relocating vector finally
         tests.push_back(T{});
         auto &c = std::get<T>(tests.back());
-        command_wrapper w{*this,c};
+        command_wrapper<T> w{*this,c};
         return w;
     }
 };
