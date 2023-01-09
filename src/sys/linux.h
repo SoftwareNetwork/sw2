@@ -46,7 +46,7 @@ struct executor {
     int efd;
     std::atomic_bool stopped{false};
     std::atomic_int jobs{0};
-    std::map<int, std::move_only_function<void(char*,int)>> read_callbacks;
+    std::map<int, std::move_only_function<void(char*,size_t)>> read_callbacks;
     std::map<int, std::move_only_function<void()>> process_callbacks;
 
     executor() {
@@ -66,7 +66,9 @@ struct executor {
     void run_one() {
         epoll_event ev;
         if (epoll_wait(efd, &ev, 1, -1) == -1) {
-            throw std::runtime_error{"error epoll_wait"};
+            //throw std::runtime_error{"error epoll_wait"};
+            perror("error epoll_wait");
+            exit(1);
         }
         if (auto it = process_callbacks.find(ev.data.fd); it != process_callbacks.end()) {
             it->second();
@@ -77,10 +79,15 @@ struct executor {
         char buffer[4096];
         while (1) {
             auto count = read(ev.data.fd, buffer, sizeof(buffer));
-            if (count == -1) {
+            if (count <= -1) {
                 if (errno == EINTR) {
                     continue;
                 }
+                //perror("read failed");
+                //exit(1);
+                break;
+            } else if (count == 0) {
+                break;
             }
             if (it != read_callbacks.end()) {
                 it->second(buffer, count);

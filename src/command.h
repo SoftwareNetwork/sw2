@@ -327,30 +327,14 @@ struct raw_command {
                 },
                 [&](string &s) {
                     close(pipe[1]);
-                    ex.register_read_handle(pipe[0], [&s](auto &&buf, int count) {
-                        if (count == -1) {
-                            SW_UNIMPLEMENTED;
-                            perror("read failed");
-                            exit(1);
-                        } else if (count == 0) {
-                            return;
-                        } else {
-                            s.append(buf, (size_t)count);
-                        }
+                    ex.register_read_handle(pipe[0], [&s](auto &&buf, auto count) {
+                        s.append(buf, count);
                     });
                 },
                 [&](stream_callback &cb) {
                     close(pipe[1]);
-                    ex.register_read_handle(pipe[0], [&cb](auto &&buf, int count) {
-                        if (count == -1) {
-                            SW_UNIMPLEMENTED;
-                            perror("read failed");
-                            exit(1);
-                        } else if (count == 0) {
-                            return;
-                        } else {
-                            cb(string_view{buf, (size_t)count});
-                        }
+                    ex.register_read_handle(pipe[0], [&cb](auto &&buf, auto count) {
+                        cb(string_view{buf, count});
                     });
                 }
             );
@@ -835,6 +819,9 @@ if [ $E -ne 0 ]; then echo "Error code: $E"; fi
         return always || cs && cs->outdated(*this);
     }
     void run(auto &&ex, auto &&cb) {
+        run(*this, ex, cb);
+    }
+    void run(auto &&obj, auto &&ex, auto &&cb) {
         /*if (!outdated()) {
             cb();
             return;
@@ -844,6 +831,9 @@ if [ $E -ne 0 ]; then echo "Error code: $E"; fi
         raw_command::run(ex, [&, cb](auto exit_code) {
             end = clock::now();
             // before cb
+            if constexpr (requires {obj.process_deps();}) {
+                obj.process_deps();
+            }
             if (exit_code == 0 && cs) {
                 cs->add(*this);
             }
@@ -1067,56 +1057,61 @@ struct gcc_command : io_command {
         err = ""s;
         out = ""s;
 
-        io_command::run(ex, [&, cb](int exit_code) {
+        io_command::run(*this, ex, [&, cb](int exit_code) {
             cb(exit_code); // before processing (start another process)
 
             bool time_not_set = start == decltype(start){};
             if (exit_code || time_not_set) {
                 return;
             }
-
-            auto is_space = [](auto c) {
-                return c == ' ' || c == '\n' || c == '\r' || c == '\t';
-            };
-            auto add_file = [&](auto sv) {
-                string s;
-                s.reserve(sv.size());
-                for (auto c : sv) {
-                    if (c == '\\') {
-                        continue;
-                    }
-                    s += c;
-                }
-                // we may have 'src/../sw.h' or 'sw4/./sw.h' paths
-                // call absolute? or lexi normal?
-                implicit_inputs.insert(s);
-            };
-
-            mmap_file<char> f{deps_file};
-            string_view sv{f.p, f.sz};
-            auto p = sv.find(": ");
-            if (p == -1) {
-                SW_UNIMPLEMENTED;
-            }
-            //auto outputs = sv.substr(0, p);
-            auto inputs = sv.substr(p + 2);
-            while (!inputs.empty()) {
-                if (isspace(inputs[0]) || inputs[0] == '\\') {
-                    inputs = inputs.substr(1);
+        });
+    }
+    void process_deps() {
+        auto is_space = [](auto c) {
+            return c == ' ' || c == '\n' || c == '\r' || c == '\t';
+        };
+        auto add_file = [&](auto sv) {
+            string s;
+            s.reserve(sv.size());
+            for (auto c : sv) {
+                if (c == '\\') {
                     continue;
                 }
-                for (int i = 0; auto &c : inputs) {
-                    if (is_space(c) && *(&c-1) != '\\') {
-                        add_file(inputs.substr(0, i));
-                        inputs = inputs.substr(i);
-                        goto next;
-                    }
-                    ++i;
-                }
-                add_file(inputs);
-                next:;
+                s += c;
             }
-        });
+            // we may have 'src/../sw.h' or 'sw4/./sw.h' paths
+            // call absolute? or lexi normal?
+            path p = s;
+#ifndef _WIN32
+            p = p.lexically_normal();
+#endif
+            implicit_inputs.insert(p);
+        };
+
+        mmap_file<char> f{deps_file};
+        string_view sv{f.p, f.sz};
+        auto p = sv.find(": ");
+        if (p == -1) {
+            SW_UNIMPLEMENTED;
+        }
+        //auto outputs = sv.substr(0, p);
+        auto inputs = sv.substr(p + 2);
+        while (!inputs.empty()) {
+            if (isspace(inputs[0]) || inputs[0] == '\\') {
+                inputs = inputs.substr(1);
+                continue;
+            }
+            for (int i = 0; auto &c : inputs) {
+                if (is_space(c) && *(&c-1) != '\\') {
+                    add_file(inputs.substr(0, i));
+                    inputs = inputs.substr(i);
+                    goto next;
+                }
+                ++i;
+            }
+            add_file(inputs);
+            next:;
+        }
     }
 };
 

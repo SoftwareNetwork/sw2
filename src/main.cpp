@@ -268,6 +268,7 @@ int main1(int argc, char *argv[]) {
 
     if (cl.sleep) {
         std::this_thread::sleep_for(std::chrono::seconds(cl.sleep));
+        std::cerr << "sleep completed\n";
     }
 
     auto this_path = fs::current_path();
