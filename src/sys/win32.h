@@ -235,10 +235,11 @@ struct executor {
                 std::cerr << "read_async: GetLastError(): " << err << "\n";
                 f(std::move(f), cb->buf, std::error_code(err, std::generic_category()));
                 delete cb;
-                return;
             }
         } else {
             std::cerr << "read_async: ok\n";
+            --jobs;
+            f(std::move(f), cb->buf, std::error_code{});
         }
     }
 };
