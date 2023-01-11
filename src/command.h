@@ -1101,6 +1101,11 @@ struct cl_exe_command : io_command {
             out = [&, line = 0](auto sv) mutable {
                 static const auto msvc_prefix = [&]() -> string {
                     path base = fs::temp_directory_path() / "sw_msvc_prefix";
+                    std::cerr << "string to find4: " << base << "\n";
+                    base = fs::absolute(base);
+                    std::cerr << "string to find5: " << base << "\n";
+                    base = base.lexically_normal();
+                    std::cerr << "string to find6: " << base << "\n";
                     auto fc = path{base} += ".c";
                     auto fh = path{base} += ".h";
                     auto fo = path{base} += ".obj";
