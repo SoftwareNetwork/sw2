@@ -17,6 +17,7 @@
 #if __has_include(<format>)
 #include <format>
 using std::format;
+namespace fmt = std;
 #elif __has_include(<format.h>)
 #define FMT_HEADER_ONLY
 #include <format.h>
@@ -53,21 +54,25 @@ using fmt::format;
 #error "compiler is not working or not tested"
 #endif
 
-#ifdef _MSC_VER
+namespace sw {
+
+namespace fs = std::filesystem;
+using path = fs::path;
+
+} // namespace sw
+
 template <>
-struct std::formatter<std::source_location> : std::formatter<std::string> {
+struct fmt::formatter<std::source_location> : formatter<std::string> {
     auto format(const std::source_location &p, format_context &ctx) {
-        return formatter<std::string>::format(std::format("{}:{}", p.file_name(), p.line()), ctx);
+        return fmt::formatter<std::string>::format(fmt::format("{}:{}", p.file_name(), p.line()), ctx);
     }
 };
-#else
 template <>
-struct fmt::formatter<std::source_location> : fmt::formatter<std::string> {
-    auto format(const std::source_location &p, format_context &ctx) {
-        return formatter<std::string>::format(fmt::format("{}:{}", p.file_name(), p.line()), ctx);
+struct fmt::formatter<sw::path> : formatter<std::string> {
+    auto format(const sw::path &p, format_context &ctx) {
+        return fmt::formatter<std::string>::format(p.string(), ctx);
     }
 };
-#endif
 
 //#define SW_BINARY_DIR ".sw"
 
