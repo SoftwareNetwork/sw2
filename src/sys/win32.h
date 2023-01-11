@@ -118,11 +118,16 @@ struct pipe {
         SW_UNIMPLEMENTED;
         //init_write(inherit);
     }
-    void init_read(bool inherit = false) {
+    auto pipe_id() {
         static std::atomic_int pipe_id{0};
+        return pipe_id++;
+    }
+    auto pipe_name() {
+        return format(L"\\\\.\\pipe\\swpipe.{}.{}", GetCurrentProcessId(), pipe_id());
+    }
+    void init_read(bool inherit = false) {
         DWORD sz = 0;
-        //auto s = std::format(L"\\\\.\\pipe\\swpipe.{}.{}", GetCurrentProcessId(), pipe_id++);
-        auto s = L"\\\\.\\pipe\\swpipe."s + std::to_wstring(GetCurrentProcessId()) + L"."s + std::to_wstring(pipe_id++) + L"";
+        auto s = pipe_name();
         r = CreateNamedPipeW(s.c_str(), PIPE_ACCESS_OUTBOUND | FILE_FLAG_OVERLAPPED, 0, 1, sz, sz, 0, 0);
 
         SECURITY_ATTRIBUTES sa = {0};
@@ -130,22 +135,26 @@ struct pipe {
         w = CreateFileW(s.c_str(), GENERIC_READ, 0, &sa, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED, 0);
     }
     void init_write(bool inherit = false) {
-        static std::atomic_int pipe_id{0};
         DWORD sz = 0;
-        // auto s = std::format(L"\\\\.\\pipe\\swpipe.{}.{}", GetCurrentProcessId(), pipe_id++);
-        auto s = L"\\\\.\\pipe\\swpipe."s + std::to_wstring(GetCurrentProcessId()) + L"."s +
-                 std::to_wstring(pipe_id++) + L"";
+        auto s = pipe_name();
         r = CreateNamedPipeW(s.c_str(), PIPE_ACCESS_INBOUND | FILE_FLAG_OVERLAPPED, 0, 1, sz, sz, 0, 0);
 
         SECURITY_ATTRIBUTES sa = {0};
         sa.bInheritHandle = !!inherit;
         w = CreateFileW(s.c_str(), GENERIC_WRITE, 0, &sa, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED, 0);
     }
+    void init_write_double() {
+        SECURITY_ATTRIBUTES sa = {0};
+        sa.bInheritHandle = true;
+
+        DWORD sz = 0;
+        auto s = pipe_name();
+        r = CreateNamedPipeW(s.c_str(), PIPE_ACCESS_INBOUND, 0, 1, sz, sz, 0, &sa);
+        w = CreateFileW(s.c_str(), GENERIC_WRITE, 0, &sa, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
+    }
 };
 
 struct executor {
-    static inline constexpr ULONG_PTR process_completion_key = 123;
-
     handle port;
     std::atomic_bool stopped{false};
     std::atomic_int jobs{0};
@@ -180,7 +189,7 @@ struct executor {
                 return;
             }
         }
-        if (key == process_completion_key) {
+        if (key == (ULONG_PTR)port.h) {
             switch (bytes) {
             case JOB_OBJECT_MSG_NEW_PROCESS:
                 break;
@@ -214,7 +223,7 @@ struct executor {
     void register_job(auto &&job) {
         JOBOBJECT_ASSOCIATE_COMPLETION_PORT jcp{};
         jcp.CompletionPort = port;
-        jcp.CompletionKey = (PVOID)process_completion_key;
+        jcp.CompletionKey = (PVOID)port.h;
         WINAPI_CALL(SetInformationJobObject(job, JobObjectAssociateCompletionPortInformation, &jcp, sizeof(jcp)));
         //this->job = job;
     }

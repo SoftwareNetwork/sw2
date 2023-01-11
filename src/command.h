@@ -18,7 +18,7 @@ struct raw_command {
     path working_directory;
     std::map<string, string> environment;
 
-    int exit_code{-1};
+    std::optional<int> exit_code;
     // pid, pidfd
 
     // stdin,stdout,stderr
@@ -28,7 +28,17 @@ struct raw_command {
     stream in, out, err;
     string out_text; // filtered, workaround
 #ifdef _WIN32
-    win32::pipe pin, pout, perr;
+    struct process_data {
+        STARTUPINFOEXW si = {0};
+        PROCESS_INFORMATION pi = {0};
+        win32::handle thread, process;
+        win32::pipe pin, pout, perr;
+
+        process_data() {
+            si.StartupInfo.cb = sizeof(si);
+        }
+    };
+    process_data d;
 #endif
 
     // sync()
@@ -95,9 +105,6 @@ struct raw_command {
     void run_win32(auto &&ex, auto &&cb) {
 #ifdef _WIN32
         DWORD flags = 0;
-        STARTUPINFOEXW si = {0};
-        si.StartupInfo.cb = sizeof(si);
-        PROCESS_INFORMATION pi = {0};
         LPVOID env = 0;// GetEnvironmentStringsW();
         int inherit_handles = 1; // must be 1, we pass handles in proc attributes
         std::vector<HANDLE> handles;
@@ -108,7 +115,7 @@ struct raw_command {
         flags |= EXTENDED_STARTUPINFO_PRESENT;
         // flags |= CREATE_NO_WINDOW;
 
-        si.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
+        d.si.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
 
         visit(
             in,
@@ -119,15 +126,15 @@ struct raw_command {
             [&](path &fn) {
                 SECURITY_ATTRIBUTES sa = {0};
                 sa.bInheritHandle = TRUE;
-                si.StartupInfo.hStdInput = CreateFileW(fn.wstring().c_str(), GENERIC_READ, 0, &sa, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
+                d.si.StartupInfo.hStdInput = CreateFileW(fn.wstring().c_str(), GENERIC_READ, 0, &sa, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
             },
             [&](raw_command *c) {
-                SW_UNIMPLEMENTED;
+                d.si.StartupInfo.hStdInput = c->d.pout.r;
             },
             [&](auto &) {
-                pin.init_read(true);
-                ex.register_handle(pin.w);
-                si.StartupInfo.hStdInput = pin.r;
+                d.pin.init_read(true);
+                ex.register_handle(d.pin.w);
+                d.si.StartupInfo.hStdInput = d.pin.r;
             });
         auto setup_stream = [&](auto &&s, auto &&h, auto &&stdh, auto &&pipe) {
             visit(
@@ -141,7 +148,8 @@ struct raw_command {
                     h = CreateFileW(fn.wstring().c_str(), GENERIC_WRITE, 0, &sa, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, 0);
                 },
                 [&](raw_command *c) {
-                    SW_UNIMPLEMENTED;
+                    pipe.init_write_double();
+                    h = pipe.w;
                 },
                 [&](auto &) {
                     pipe.init_write(true);
@@ -149,8 +157,8 @@ struct raw_command {
                     h = pipe.w;
                 });
         };
-        setup_stream(out, si.StartupInfo.hStdOutput, STD_OUTPUT_HANDLE, pout);
-        setup_stream(err, si.StartupInfo.hStdError, STD_ERROR_HANDLE, perr);
+        setup_stream(out, d.si.StartupInfo.hStdOutput, STD_OUTPUT_HANDLE, d.pout);
+        setup_stream(err, d.si.StartupInfo.hStdError, STD_ERROR_HANDLE, d.perr);
 
         auto mingw = is_mingw_shell();
         auto add_handle = [&](auto &&h) {
@@ -164,26 +172,26 @@ struct raw_command {
                 handles.push_back(h);
             }
         };
-        add_handle(si.StartupInfo.hStdInput);
-        add_handle(si.StartupInfo.hStdOutput);
-        add_handle(si.StartupInfo.hStdError);
+        add_handle(d.si.StartupInfo.hStdInput);
+        add_handle(d.si.StartupInfo.hStdOutput);
+        add_handle(d.si.StartupInfo.hStdError);
         SIZE_T size = 0;
         InitializeProcThreadAttributeList(0, 1, 0, &size);
         if (GetLastError() != ERROR_INSUFFICIENT_BUFFER) {
             throw std::runtime_error{"InitializeProcThreadAttributeList()"};
         }
-        si.lpAttributeList = (LPPROC_THREAD_ATTRIBUTE_LIST)HeapAlloc(GetProcessHeap(), 0, size);
-        if (!si.lpAttributeList) {
+        d.si.lpAttributeList = (LPPROC_THREAD_ATTRIBUTE_LIST)HeapAlloc(GetProcessHeap(), 0, size);
+        if (!d.si.lpAttributeList) {
             throw std::runtime_error{"cannot alloc GetProcessHeap()"};
         }
         scope_exit seh{[&] {
-            HeapFree(GetProcessHeap(), 0, si.lpAttributeList);
+            HeapFree(GetProcessHeap(), 0, d.si.lpAttributeList);
         }};
-        WINAPI_CALL(InitializeProcThreadAttributeList(si.lpAttributeList, 1, 0, &size));
+        WINAPI_CALL(InitializeProcThreadAttributeList(d.si.lpAttributeList, 1, 0, &size));
         scope_exit sel{[&]{
-            DeleteProcThreadAttributeList(si.lpAttributeList);
+            DeleteProcThreadAttributeList(d.si.lpAttributeList);
         }};
-        WINAPI_CALL(UpdateProcThreadAttribute(si.lpAttributeList, 0, PROC_THREAD_ATTRIBUTE_HANDLE_LIST, handles.data(),
+        WINAPI_CALL(UpdateProcThreadAttribute(d.si.lpAttributeList, 0, PROC_THREAD_ATTRIBUTE_HANDLE_LIST, handles.data(),
                                               handles.size() * sizeof(HANDLE), 0, 0));
 
         auto [prog,cmd] = printw();
@@ -191,8 +199,9 @@ struct raw_command {
         WINAPI_CALL(CreateProcessW(prog.data(), cmd.data(), 0, 0,
             inherit_handles, flags, env,
             wdir.empty() ? 0 : wdir.data(),
-            (LPSTARTUPINFOW)&si, &pi));
-        CloseHandle(pi.hThread);
+            (LPSTARTUPINFOW)&d.si, &d.pi));
+        d.thread = d.pi.hThread;
+        d.process = d.pi.hProcess;
 
         visit(
             in,
@@ -209,7 +218,7 @@ struct raw_command {
                 });*/
             },
             [&](raw_command *c) {
-                SW_UNIMPLEMENTED;
+                //CloseHandle(d.si.StartupInfo.hStdInput);
             },
             [&](stream_callback &cb) {
                 SW_UNIMPLEMENTED;
@@ -227,7 +236,7 @@ struct raw_command {
                 });*/
             },
             [&](path &fn) {
-                CloseHandle(si.StartupInfo.hStdInput);
+                //CloseHandle(d.si.StartupInfo.hStdInput);
             });
         auto post_setup_stream = [&](auto &&s, auto &&h, auto &&pipe) {
             visit(
@@ -244,7 +253,7 @@ struct raw_command {
                     });
                 },
                 [&](raw_command *c) {
-                    SW_UNIMPLEMENTED;
+                   //CloseHandle(h);
                 },
                 [&](stream_callback &cb) {
                     pipe.w.reset();
@@ -261,26 +270,32 @@ struct raw_command {
                     });
                 },
                 [&](path &fn) {
-                    CloseHandle(h);
+                    //CloseHandle(h);
                 }
             );
         };
-        post_setup_stream(out, si.StartupInfo.hStdOutput, pout);
-        post_setup_stream(err, si.StartupInfo.hStdError, perr);
+        post_setup_stream(out, d.si.StartupInfo.hStdOutput, d.pout);
+        post_setup_stream(err, d.si.StartupInfo.hStdError, d.perr);
 
         // If we do not create default job for main process, we have a race here.
         // If main process is killed before register_process() call, created process
         // won't stop.
-        ex.register_process(pi.hProcess, pi.dwProcessId, [this, cb, h = pi.hProcess]() {
-            DWORD exit_code;
-            WINAPI_CALL(GetExitCodeProcess(h, &exit_code));
-            while (exit_code == STILL_ACTIVE) {
-                WINAPI_CALL(GetExitCodeProcess(h, &exit_code));
+        ex.register_process(d.pi.hProcess, d.pi.dwProcessId, [this, cb]() {
+            if (d.pi.hProcess) {
+                DWORD exit_code;
+                WINAPI_CALL(GetExitCodeProcess(d.pi.hProcess, &exit_code));
+                while (exit_code == STILL_ACTIVE) {
+                    WINAPI_CALL(GetExitCodeProcess(d.pi.hProcess, &exit_code));
+                }
+                this->exit_code = exit_code;
+            } else {
+                return;
             }
             scope_exit se{[&] {
-                CloseHandle(h); // we may want to use h in the callback
+                //CloseHandle(pi.hProcess); // we may want to use h in the callback
+                d = decltype(d){};
             }};
-            cb(exit_code);
+            cb();
         });
         visit(
             out,
@@ -577,9 +592,9 @@ struct raw_command {
         }
     }
     void run(auto &&ex) {
-        run(ex, [&](auto exit_code) {
-            if (exit_code) {
-                throw std::runtime_error{get_error_message(exit_code)};
+        run(ex, [&]() {
+            if (!exit_code || *exit_code) {
+                throw std::runtime_error{get_error_message()};
             }
         });
     }
@@ -587,6 +602,11 @@ struct raw_command {
         executor ex;
         run(ex);
         ex.run();
+    }
+
+    void terminate() {
+        TerminateProcess(d.pi.hProcess, 1);
+        d = decltype(d){};
     }
 
     void add(auto &&p) {
@@ -620,8 +640,24 @@ struct raw_command {
         out = &c;
         c.in = this;
     }
-    bool is_chained_child() const {
-        return std::holds_alternative<raw_command *>(in);
+    bool is_pipe_child() const {
+        auto p = (raw_command *)std::get_if<raw_command *>(&in);
+        return p;
+    }
+    bool is_pipe_leader() const {
+        auto p = (raw_command *)std::get_if<raw_command *>(&out);
+        return p && !is_pipe_child();
+    }
+    void terminate_chain() {
+        if (is_pipe_leader()) {
+            if (d.pi.hProcess) {
+                //SW_UNIMPLEMENTED;
+                terminate();
+            }
+        } else {
+            auto p = (raw_command *)std::get_if<raw_command *>(&in);
+            p->terminate_chain();
+        }
     }
     void operator||(const raw_command &c) {
         SW_UNIMPLEMENTED;
@@ -630,11 +666,17 @@ struct raw_command {
         SW_UNIMPLEMENTED;
     }
 
-    string get_error_message() {
-        return get_error_message(exit_code);
+    bool ok() const {
+        return exit_code && *exit_code == 0;
     }
-    string get_error_message(int exit_code) {
-        if (!exit_code) {
+    string get_error_code() const {
+        if (exit_code) {
+            return format("process exit code: {}", *exit_code);
+        }
+        return "process did not start";
+    }
+    string get_error_message() {
+        if (ok()) {
             return {};
         }
         string t;
@@ -648,9 +690,7 @@ struct raw_command {
         if (!t.empty()) {
             t = "\nerror:\n" + t;
         }
-        return
-            // format("process exit code: {}\nerror: {}", exit_code, std::get<string>(err))
-            "process exit code: " + std::to_string(exit_code) + t;
+        return format("{}\nerror:\n{}", get_error_code(), t);
     }
 };
 
@@ -985,16 +1025,16 @@ if [ $E -ne 0 ]; then echo "Error code: $E"; fi
         }*/
         // use GetProcessTimes or similar for time
         start = clock::now();
-        raw_command::run(ex, [&, cb](auto exit_code) {
+        raw_command::run(ex, [&, cb]() {
             end = clock::now();
             // before cb
             if constexpr (requires {obj.process_deps();}) {
                 obj.process_deps();
             }
-            if (exit_code == 0 && cs) {
+            if (ok() && cs) {
                 cs->add(*this);
             }
-            cb(exit_code);
+            cb();
         });
     }
     auto hash() const {
@@ -1029,13 +1069,10 @@ if [ $E -ne 0 ]; then echo "Error code: $E"; fi
     }
 
     string get_error_message() {
-        return get_error_message(exit_code);
-    }
-    string get_error_message(int exit_code) {
-        if (!exit_code) {
+        if (ok()) {
             return {};
         }
-        return "command failed: " + name() + ":\n" + raw_command::get_error_message(exit_code);
+        return "command failed: " + name() + ":\n" + raw_command::get_error_message();
     }
 
     void save(const path &dir, shell_type t = detect_shell()) {
@@ -1184,8 +1221,8 @@ struct cl_exe_command : io_command {
                     arguments.pop_back();
                     arguments.pop_back();
                 }};
-                io_command::run(ex, [&, depsfile, add_deps, cb](int exit_code) {
-                    cb(exit_code); // before processing (start another process)
+                io_command::run(ex, [&, depsfile, add_deps, cb]() {
+                    cb(); // before processing (start another process)
 
                     bool time_not_set = start == decltype(start){};
                     if (exit_code || time_not_set) {
@@ -1201,8 +1238,8 @@ struct cl_exe_command : io_command {
                 scope_exit se{[&] {
                     arguments.pop_back();
                 }};
-                io_command::run(ex, [&, add_deps, cb](int exit_code) {
-                    cb(exit_code); // before processing (start another process)
+                io_command::run(ex, [&, add_deps, cb]() {
+                    cb(); // before processing (start another process)
 
                     bool time_not_set = start == decltype(start){};
                     if (exit_code || time_not_set) {
@@ -1225,8 +1262,8 @@ struct gcc_command : io_command {
         err = ""s;
         out = ""s;
 
-        io_command::run(*this, ex, [&, cb](int exit_code) {
-            cb(exit_code); // before processing (start another process)
+        io_command::run(*this, ex, [&, cb]() {
+            cb(); // before processing (start another process)
 
             bool time_not_set = start == decltype(start){};
             if (exit_code || time_not_set) {
@@ -1361,7 +1398,12 @@ struct command_executor {
     executor ex;
     executor *ex_external{nullptr};
     std::vector<command*> external_commands;
-    int command_id{0};
+    // this number differs with external_commands.size() because we have:
+    // 1. pipes a | b | ...
+    // 2. command sequences a; b; c; ...
+    // 3. OR or AND chains: a || b || ... ; a && b && ...
+    int number_of_commands{};
+    int command_id{};
     std::vector<command*> errors;
     int ignore_errors{0};
 
@@ -1390,6 +1432,9 @@ struct command_executor {
             auto cmd = pending_commands.front();
             pending_commands.pop_front();
             visit(*cmd, [&](auto &&c) {
+                if (c.is_pipe_child()) {
+                    return;
+                }
                 ++command_id;
                 auto run_dependents = [&]() {
                     for (auto &&d : c.dependents) {
@@ -1404,30 +1449,36 @@ struct command_executor {
                     return run_dependents();
                 }
                 ++running_commands;
-                //auto pos = ceil(log10(external_commands.size()));
+                //auto pos = ceil(log10(number_of_commands));
                 std::cout << "["
                     //<< std::setw(pos)
-                    << command_id << format("/{}] {}\n", external_commands.size(), c.name());
+                    << command_id << format("/{}] {}\n", number_of_commands, c.name());
                 if (cl.trace) {
                     std::cout << c.print() << "\n";
                 }
                 try {
-                    c.run(get_executor(), [&, run_dependents, cmd](int exit_code) {
+                    c.run(get_executor(), [&, run_dependents, cmd]() {
                         --running_commands;
-                        c.exit_code = exit_code;
-                        if (exit_code) {
+                        if (!c.exit_code || *c.exit_code) {
                             errors.push_back(cmd);
                         } else {
                             run_dependents();
                         }
-                        if (cl.save_executed_commands || cl.save_failed_commands && exit_code) {
+                        if (cl.save_executed_commands || cl.save_failed_commands && (!c.exit_code || *c.exit_code)) {
                             c.save(get_saved_commands_dir(sln));
                         }
                         run_next(cl, sln);
                     });
                 } catch (std::exception &e) {
-                    --running_commands;
                     c.out_text = e.what();
+                    if (c.is_pipe_child()) {
+                        c.terminate_chain();
+                        return;
+                    }
+                    if (c.is_pipe_leader()) {
+                        c.terminate_chain();
+                    }
+                    --running_commands;
                     errors.push_back(cmd);
                     if (cl.save_executed_commands || cl.save_failed_commands) {
                         //c.save(get_saved_commands_dir(sln));//save not started commands?
@@ -1476,12 +1527,24 @@ struct command_executor {
         }
     }
     void prepare(auto &&cl, auto &&sln) {
-        if (cl.rebuild_all) {
-            for (auto &&c : external_commands) {
-                visit(*c, [&](auto &&c) {
+        if (cl.jobs) {
+            maximum_running_commands = cl.jobs;
+        }
+        for (auto &&c : external_commands) {
+            visit(*c, [&](auto &&c) {
+                if (cl.rebuild_all) {
                     c.always = true;
-                });
-            }
+                }
+                if (!c.is_pipe_child()) {
+                    ++number_of_commands;
+                }
+                if (auto p = std::get_if<path>(&c.out)) {
+                    c.outputs.insert(*p);
+                }
+                if (auto p = std::get_if<path>(&c.err)) {
+                    c.outputs.insert(*p);
+                }
+            });
         }
     }
     path get_saved_commands_dir(auto &&sln) {
@@ -1490,11 +1553,6 @@ struct command_executor {
 
     void operator+=(std::vector<command> &commands) {
         for (auto &&c : commands) {
-            if (visit(c, [&](auto &&c) {
-                return c.is_chained_child();
-            })) {
-                continue;
-            }
             external_commands.push_back(&c);
         }
     }

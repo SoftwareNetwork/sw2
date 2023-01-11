@@ -242,7 +242,7 @@ struct rule_target {
         auto n = !name.empty() ? name : format("{}", tests.size());
         c.name_ = format_log_record(*this, "/[test]/["s + n + "]");
         auto testdir = [&](auto &&sln) {
-            return sln.binary_dir / "test" / format_log_settings(solution_bs) / n;
+            return sln.binary_dir / "test" / format_log_settings(solution_bs) / (string)this->name / n;
         }(sln);
         c.working_directory = testdir / "wdir";
         // no txt?

@@ -196,6 +196,8 @@ struct lib_ar_rule {
 };
 
 struct cl_exe_rule {
+    bool clang{};
+
     void operator()(auto &&tgt, auto &&compiler, auto &&msvc) requires requires { tgt.compile_options; }
     {
         auto objext = tgt.bs.os.visit([](auto &&v) -> string_view {
@@ -1088,4 +1090,5 @@ void detect_gcc_clang(auto &s) {
         f("gcc", "g++", c_compiler::gcc::package_name, cpp_compiler::gcc::package_name, gccvers, gccversall, gcc_compile_rule{}, gcc_link_rule{});
     }
     f("clang", "clang++", c_compiler::clang::package_name, cpp_compiler::clang::package_name, clangvers, clangversall, gcc_compile_rule{.clang=true}, gcc_link_rule{});
+    f("clang-cl", "clang-cl", c_compiler::clang_cl::package_name, cpp_compiler::clang_cl::package_name, clangvers, clangversall, cl_exe_rule{.clang=true}, link_exe_rule{});
 }

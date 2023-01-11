@@ -244,6 +244,13 @@ struct clang : clang_base {
     clang() : clang_base{unresolved_package_name{package_name, "*"}} {
     }
 };
+struct clang_cl : clang_base {
+    // using rule_type = gcc_compile_rule;
+    static inline constexpr auto package_name = "org.llvm.clangcl";
+
+    clang_cl() : clang_base{unresolved_package_name{package_name, "*"}} {
+    }
+};
 struct gcc : gcc_base {
     // using rule_type = gcc_compile_rule;
     static inline constexpr auto package_name = "org.gnu.gcc";
@@ -265,6 +272,13 @@ struct clang : clang_base {
     static inline constexpr auto package_name = "org.llvm.clang++";
 
     clang() : clang_base{unresolved_package_name{package_name, "*"}} {
+    }
+};
+struct clang_cl : clang_base {
+    // using rule_type = gcc_compile_rule;
+    static inline constexpr auto package_name = "org.llvm.clangcl";
+
+    clang_cl() : clang_base{unresolved_package_name{package_name, "*"}} {
     }
 };
 struct gcc : gcc_base {

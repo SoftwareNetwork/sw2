@@ -113,4 +113,11 @@
         <DisplayString>{ppath}-{version}</DisplayString>
     </Type>
 
+    <Type Name="sw::raw_command">
+        <DisplayString>{arguments}</DisplayString>
+        <Expand>
+            <ExpandedItem>arguments</ExpandedItem>
+        </Expand>
+    </Type>
+
 </AutoVisualizer>

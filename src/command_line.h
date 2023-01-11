@@ -90,6 +90,9 @@ struct command_line_parser {
             };
             return (f(Options) || ... || false);
         }
+        static bool is_positional() {
+            return false;
+        }
 
         explicit operator bool() const {
             return !!value;
@@ -134,6 +137,9 @@ struct command_line_parser {
 
         static bool is_option_flag(auto &&arg) {
             return FlagName.is_option_flag(arg);
+        }
+        static bool is_positional() {
+            return false;
         }
         explicit operator bool() const {
             return value;
@@ -212,6 +218,7 @@ struct command_line_parser {
     flag<options::flag<"-B"_s>{}> rebuild_all;
     // some debug
     argument<int, options::flag<"-sleep"_s>{}> sleep;
+    argument<int, options::flag<"-j"_s>{}> jobs;
     flag<options::flag<"-int3"_s>{}> int3;
     flag<options::flag<"-trace"_s,"--trace"_s>{}> trace;
     flag<options::flag<"-version"_s,"--version"_s>{}> version;
@@ -227,7 +234,8 @@ struct command_line_parser {
             sw1,
             save_failed_commands,
             save_executed_commands,
-            rebuild_all
+            rebuild_all,
+            jobs
         );
     }
 
@@ -275,7 +283,7 @@ struct command_line_parser {
                                 a.consumed = true;
                                 opt.parse(args, a);
                                 parsed = true;
-                            } else if (a.value[0] != '-') {
+                            } else if (a.value[0] != '-' && opt.is_positional()) {
                                 opt.parse(args, a);
                                 parsed = true;
                             }
@@ -305,7 +313,7 @@ struct command_line_parser {
                                 a.consumed = true;
                                 opt.parse(args, a);
                                 parsed = true;
-                            } else if (a.value[0] != '-') {
+                            } else if (a.value[0] != '-' && opt.is_positional()) {
                                 opt.parse(args, a);
                                 parsed = true;
                             }
