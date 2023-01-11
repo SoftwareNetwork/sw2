@@ -237,9 +237,9 @@ struct executor {
                 delete cb;
             }
         } else {
-            std::cerr << "read_async: ok\n";
-            --jobs;
-            f(std::move(f), cb->buf, std::error_code{});
+            //std::cerr << "read_async: ok\n";
+            //--jobs;
+            //f(std::move(f), cb->buf, std::error_code{});
         }
     }
 };
