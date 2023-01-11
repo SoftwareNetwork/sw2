@@ -1138,10 +1138,10 @@ struct cl_exe_command : io_command {
                             ++p1;
                             std::cerr << "spaces\n";
                         }
-                        std::cerr << "substr: " + str.substr(p1) + "\n";
-                        std::cerr << "string to find1: " + fh + "\n";
-                        std::cerr << "string to find2: " + fh.string() + "\n";
-                        std::cerr << "string to find3: " + (const char *)fh.u8string().c_str() + "\n";
+                        std::cerr << "substr: " << str.substr(p1) << "\n";
+                        std::cerr << "string to find1: " << fh << "\n";
+                        std::cerr << "string to find2: " << fh.string() << "\n";
+                        std::cerr << "string to find3: " << (const char *)fh.u8string().c_str() << "\n";
                         if (auto p2 = str.find((const char *)fh.u8string().c_str(), p1); p2 != -1) {
                             return str.substr(p1, p2 - p1);
                         }
