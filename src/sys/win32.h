@@ -108,13 +108,26 @@ struct pipe {
 
     pipe() = default;
     pipe(bool inherit) {
-        init(inherit);
+        SW_UNIMPLEMENTED;
+        //init_write(inherit);
     }
-    void init(bool inherit = false) {
+    void init_read(bool inherit = false) {
         static std::atomic_int pipe_id{0};
         DWORD sz = 0;
         //auto s = std::format(L"\\\\.\\pipe\\swpipe.{}.{}", GetCurrentProcessId(), pipe_id++);
         auto s = L"\\\\.\\pipe\\swpipe."s + std::to_wstring(GetCurrentProcessId()) + L"."s + std::to_wstring(pipe_id++) + L"";
+        r = CreateNamedPipeW(s.c_str(), PIPE_ACCESS_OUTBOUND | FILE_FLAG_OVERLAPPED, 0, 1, sz, sz, 0, 0);
+
+        SECURITY_ATTRIBUTES sa = {0};
+        sa.bInheritHandle = !!inherit;
+        w = CreateFileW(s.c_str(), GENERIC_READ, 0, &sa, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED, 0);
+    }
+    void init_write(bool inherit = false) {
+        static std::atomic_int pipe_id{0};
+        DWORD sz = 0;
+        // auto s = std::format(L"\\\\.\\pipe\\swpipe.{}.{}", GetCurrentProcessId(), pipe_id++);
+        auto s = L"\\\\.\\pipe\\swpipe."s + std::to_wstring(GetCurrentProcessId()) + L"."s +
+                 std::to_wstring(pipe_id++) + L"";
         r = CreateNamedPipeW(s.c_str(), PIPE_ACCESS_INBOUND | FILE_FLAG_OVERLAPPED, 0, 1, sz, sz, 0, 0);
 
         SECURITY_ATTRIBUTES sa = {0};

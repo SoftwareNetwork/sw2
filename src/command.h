@@ -24,11 +24,11 @@ struct raw_command {
     // stdin,stdout,stderr
     using stream_callback = std::function<void(string_view)>;
     struct inherit {};
-    using stream = variant<inherit, string, stream_callback, path>;
+    using stream = variant<inherit, string, stream_callback, path, raw_command *>;
     stream in, out, err;
     string out_text; // filtered, workaround
 #ifdef _WIN32
-    win32::pipe pout, perr;
+    win32::pipe pin, pout, perr;
 #endif
 
     // sync()
@@ -110,6 +110,25 @@ struct raw_command {
 
         si.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
 
+        visit(
+            in,
+            [&](inherit) {
+                // we should copy this only for raw commands
+                //si.StartupInfo.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
+            },
+            [&](path &fn) {
+                SECURITY_ATTRIBUTES sa = {0};
+                sa.bInheritHandle = TRUE;
+                si.StartupInfo.hStdInput = CreateFileW(fn.wstring().c_str(), GENERIC_READ, 0, &sa, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
+            },
+            [&](raw_command *c) {
+                SW_UNIMPLEMENTED;
+            },
+            [&](auto &) {
+                pin.init_read(true);
+                ex.register_handle(pin.w);
+                si.StartupInfo.hStdInput = pin.r;
+            });
         auto setup_stream = [&](auto &&s, auto &&h, auto &&stdh, auto &&pipe) {
             visit(
                 s,
@@ -121,8 +140,11 @@ struct raw_command {
                     sa.bInheritHandle = TRUE;
                     h = CreateFileW(fn.wstring().c_str(), GENERIC_WRITE, 0, &sa, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, 0);
                 },
+                [&](raw_command *c) {
+                    SW_UNIMPLEMENTED;
+                },
                 [&](auto &) {
-                    pipe.init(true);
+                    pipe.init_write(true);
                     ex.register_handle(pipe.r);
                     h = pipe.w;
                 });
@@ -142,6 +164,7 @@ struct raw_command {
                 handles.push_back(h);
             }
         };
+        add_handle(si.StartupInfo.hStdInput);
         add_handle(si.StartupInfo.hStdOutput);
         add_handle(si.StartupInfo.hStdError);
         SIZE_T size = 0;
@@ -171,6 +194,41 @@ struct raw_command {
             (LPSTARTUPINFOW)&si, &pi));
         CloseHandle(pi.hThread);
 
+        visit(
+            in,
+            [&](inherit) {
+            },
+            [&](string &s) {
+                SW_UNIMPLEMENTED;
+                /*pin.r.reset();
+                ex.write_async(pin.w, [&](auto &&f, auto &&buf, auto &&ec) mutable {
+                    if (!ec) {
+                        s += buf;
+                        ex.write_async(pin.w, std::move(f));
+                    }
+                });*/
+            },
+            [&](raw_command *c) {
+                SW_UNIMPLEMENTED;
+            },
+            [&](stream_callback &cb) {
+                SW_UNIMPLEMENTED;
+                /*pin.r.reset();
+                ex.write_async(pin.w, [&, cb, s = string{}](auto &&f, auto &&buf, auto &&ec) mutable {
+                    if (!ec) {
+                        s += buf;
+                        if (auto p = s.find_first_of("\r\n"); p != -1) {
+                            cb(string_view(s.data(), p));
+                            p = s.find("\n", p);
+                            s = s.substr(p + 1);
+                        }
+                        ex.write_async(pin.w, std::move(f));
+                    }
+                });*/
+            },
+            [&](path &fn) {
+                CloseHandle(si.StartupInfo.hStdInput);
+            });
         auto post_setup_stream = [&](auto &&s, auto &&h, auto &&pipe) {
             visit(
                 s,
@@ -184,6 +242,9 @@ struct raw_command {
                             ex.read_async(pipe.r, std::move(f));
                         }
                     });
+                },
+                [&](raw_command *c) {
+                    SW_UNIMPLEMENTED;
                 },
                 [&](stream_callback &cb) {
                     pipe.w.reset();
@@ -221,6 +282,13 @@ struct raw_command {
             }};
             cb(exit_code);
         });
+        visit(
+            out,
+            [&](raw_command *c) {
+                c->run(ex, cb);
+            },
+            [&](auto &) {
+            });
 #endif
     }
     void run_linux(auto &&ex, auto &&cb) {
@@ -258,7 +326,7 @@ struct raw_command {
         visit(
                 in,
                 [&](inherit) {
-                    // nothing, we close child by default
+                    // nothing, inheritance is by default?
                 },
                 [&](path &fn) {
                     mkpipe(pin);
@@ -314,6 +382,7 @@ struct raw_command {
             visit(
                     in,
                     [&](inherit) {
+                        // we should close this only for io commands
                         close(STDIN_FILENO);
                     },
                     [&](auto &) {
@@ -546,6 +615,19 @@ struct raw_command {
     }
     void operator>(const path &p) {
         out = p;
+    }
+    void operator|(raw_command &c) {
+        out = &c;
+        c.in = this;
+    }
+    bool is_chained_child() const {
+        return std::holds_alternative<raw_command *>(in);
+    }
+    void operator||(const raw_command &c) {
+        SW_UNIMPLEMENTED;
+    }
+    void operator&&(const raw_command &c) {
+        SW_UNIMPLEMENTED;
     }
 
     string get_error_message() {
@@ -922,6 +1004,10 @@ if [ $E -ne 0 ]; then echo "Error code: $E"; fi
         return h;
     }
 
+    void operator<(const path &p) {
+        base::operator<(p);
+        inputs.insert(p);
+    }
     void operator>(const path &p) {
         base::operator>(p);
         outputs.insert(p);
@@ -1049,7 +1135,7 @@ struct cl_exe_command : io_command {
                             return str.substr(p1 + 1, p2 - (p1 + 1));
                         }
                     }
-                    throw std::runtime_error{"cannot find msvc prefix"};
+                    throw std::runtime_error{"cannot find msvc prefix: "s + str};
                 }();
 
                 if (++line == 1) {
@@ -1193,17 +1279,20 @@ using command = variant<io_command, cl_exe_command, gcc_command>;
 
 struct command_executor {
     static void create_output_dirs(auto &&commands) {
-        std::unordered_set<path> outdirs;
+        std::unordered_set<path> dirs;
         for (auto &&c : commands) {
             visit(*c, [&](auto &&c) {
+                if (!c.working_directory.empty()) {
+                    dirs.insert(c.working_directory);
+                }
                 for (auto &&o : c.outputs) {
                     if (auto p = o.parent_path(); !p.empty()) {
-                        outdirs.insert(p);
+                        dirs.insert(p);
                     }
                 }
             });
         }
-        for (auto &&d : outdirs) {
+        for (auto &&d : dirs) {
             fs::create_directories(d);
         }
     }
@@ -1391,6 +1480,11 @@ struct command_executor {
 
     void operator+=(std::vector<command> &commands) {
         for (auto &&c : commands) {
+            if (visit(c, [&](auto &&c) {
+                return c.is_chained_child();
+            })) {
+                continue;
+            }
             external_commands.push_back(&c);
         }
     }

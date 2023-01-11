@@ -294,7 +294,7 @@ auto read_file(const path &fn) {
     return s;
 }
 
-void write_file(const path &fn, const string &s) {
+void write_file(const path &fn, const string &s = {}) {
     fs::create_directories(fn.parent_path());
 
     FILE *f = fopen(fn.string().c_str(), "wb");

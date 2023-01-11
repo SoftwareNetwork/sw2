@@ -9,6 +9,36 @@
 
 namespace sw {
 
+string format_log_settings(auto &&bs) {
+    string cfg;
+    bs.os.visit([&](auto &&a) {
+        cfg += format("{},", std::decay_t<decltype(a)>::name);
+    });
+    bs.arch.visit([&](auto &&a) {
+        cfg += format("{},", std::decay_t<decltype(a)>::name);
+    });
+    bs.library_type.visit([&](auto &&a) {
+        cfg += format("{},", std::decay_t<decltype(a)>::name); // short?
+    });
+    bs.build_type.visit_no_special([&](auto &&a) {
+        cfg += format("{},", std::decay_t<decltype(a)>::short_name);
+    });
+    if (bs.cpp.runtime.template is<library_type::static_>()) {
+        cfg += "cppmt,";
+    }
+    if (bs.c.runtime.template is<library_type::static_>()) {
+        cfg += "cmt,";
+    }
+    cfg.resize(cfg.size() - 1);
+    return cfg;
+}
+string format_log_record(auto &&tgt, auto &&second_part) {
+    string s = format("[{}]", (string)tgt.name);
+    string cfg = "/[" + format_log_settings(tgt.bs) + "]";
+    s += cfg + second_part;
+    return s;
+}
+
 struct dependency {
     unresolved_package_name name;
     build_settings bs;
@@ -95,6 +125,9 @@ struct rule_target {
             // check absolute?
             //auto fn = t.binary_dir / "test" / p;
             c < p;
+        }
+        void operator|(const command_wrapper &w) {
+            c | w.c;
         }
     };
 
@@ -202,10 +235,22 @@ struct rule_target {
     //auto visit()
 
     template <typename T = io_command>
-    auto add_test() {
+    auto add_test(std::string name = {}) {
         tests.reserve(50); // todo: implement normal non relocating vector finally
         tests.push_back(T{});
         auto &c = std::get<T>(tests.back());
+        auto n = !name.empty() ? name : format("{}", tests.size());
+        c.name_ = format_log_record(*this, "/[test]/["s + n + "]");
+        auto testdir = [&](auto &&sln) {
+            return sln.binary_dir / "test" / format_log_settings(solution_bs) / n;
+        }(sln);
+        c.working_directory = testdir / "wdir";
+        // no txt?
+        c.out = path{testdir / "stdout.txt"};
+        c.err = path{testdir / "stderr.txt"};
+        // todo
+        //write_file(testdir / "exit_code.txt");
+        //write_file(testdir / "time.txt"); // e.g. 5.1671528
         command_wrapper<T> w{*this,c};
         return w;
     }
@@ -844,8 +889,8 @@ struct executable_target : native_target {
     }
 
     template <typename T = io_command>
-    auto add_test() {
-        auto c = native_target::add_test<T>();
+    auto add_test(std::string name = {}) {
+        auto c = native_target::add_test<T>(name);
         c += executable;
         c.inputs.insert(executable);
         return c;

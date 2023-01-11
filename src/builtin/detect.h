@@ -6,33 +6,6 @@
 #include "../sw.h"
 #include "vs_instance_helpers.h"
 
-string format_log_record(auto &&tgt, auto &&second_part) {
-    string s = format("[{}]", (string)tgt.name);
-    string cfg = "/[";
-    tgt.bs.os.visit([&](auto &&a) {
-        cfg += format("{},", std::decay_t<decltype(a)>::name);
-    });
-    tgt.bs.arch.visit([&](auto &&a) {
-        cfg += format("{},", std::decay_t<decltype(a)>::name);
-    });
-    tgt.bs.library_type.visit([&](auto &&a) {
-        cfg += format("{},", std::decay_t<decltype(a)>::name); // short?
-    });
-    tgt.bs.build_type.visit_no_special([&](auto &&a) {
-        cfg += format("{},", std::decay_t<decltype(a)>::short_name);
-    });
-    if (tgt.bs.cpp.runtime.template is<library_type::static_>()) {
-        cfg += "cppmt,";
-    }
-    if (tgt.bs.c.runtime.template is<library_type::static_>()) {
-        cfg += "cmt,";
-    }
-    cfg.resize(cfg.size() - 1);
-    cfg += "]";
-    s += cfg + second_part;
-    return s;
-}
-
 void add_compile_options(auto &&obj, auto &&c) {
     for (auto &&o : obj.compile_options) {
         c += o;
