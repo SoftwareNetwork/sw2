@@ -1129,6 +1129,14 @@ struct cl_exe_command : io_command {
 
                     auto &str = std::get<string>(c.out).empty() ? std::get<string>(c.err) : std::get<string>(c.out);
                     if (auto p1 = str.find("\n"); p1 != -1) {
+                        while (0
+                            || str[p1] == '\n'
+                            || str[p1] == '\r'
+                            || str[p1] == '\t'
+                            || str[p1] == ' '
+                            ) {
+                            ++p1;
+                        }
                         if (auto p2 = str.find((const char *)fh.u8string().c_str(), p1 + 1); p2 != -1) {
                             return str.substr(p1 + 1, p2 - (p1 + 1));
                         }
