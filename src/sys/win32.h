@@ -232,7 +232,7 @@ struct executor {
             auto err = GetLastError();
             if (err != ERROR_IO_PENDING) {
                 --jobs;
-                std::cerr << "read_async: GetLastError(): " << err << "\n";
+                //std::cerr << "read_async: GetLastError(): " << err << "\n";
                 f(std::move(f), cb->buf, std::error_code(err, std::generic_category()));
                 delete cb;
             }
