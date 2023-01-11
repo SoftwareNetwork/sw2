@@ -1136,9 +1136,11 @@ struct cl_exe_command : io_command {
                             || str[p1] == ' '
                             ) {
                             ++p1;
+                            std::cerr << "spaces\n";
                         }
-                        if (auto p2 = str.find((const char *)fh.u8string().c_str(), p1 + 1); p2 != -1) {
-                            return str.substr(p1 + 1, p2 - (p1 + 1));
+                        std::cerr << "substr: " + str.substr(p1) + "\n";
+                        if (auto p2 = str.find((const char *)fh.u8string().c_str(), p1); p2 != -1) {
+                            return str.substr(p1, p2 - p1);
                         }
                     }
                     throw std::runtime_error{"cannot find msvc prefix: "s + str};
