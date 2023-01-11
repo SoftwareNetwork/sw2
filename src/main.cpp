@@ -35,6 +35,8 @@ auto default_host_settings() {
 #endif
 
     // see more definitions at https://opensource.apple.com/source/WTF/WTF-7601.1.46.42/wtf/Platform.h.auto.html
+//#if defined(__MINGW32__)
+    //bs.os = os::mingw{};
 #if defined(_WIN32)
     bs.os = os::windows{};
     bs.kernel_lib = unresolved_package_name{"com.Microsoft.Windows.SDK.um"s};

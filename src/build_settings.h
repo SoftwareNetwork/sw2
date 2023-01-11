@@ -7,7 +7,7 @@
 
 namespace sw {
 
-struct build_settings {
+struct build_settings_base {
     template <typename... Types>
     struct special_variant : variant<any_setting, Types...> {
         using base = variant<any_setting, Types...>;
@@ -54,6 +54,20 @@ struct build_settings {
     using build_type_type = special_variant<build_type::debug, build_type::minimum_size_release,
                                             build_type::release_with_debug_information, build_type::release>;
     using library_type_type = special_variant<library_type::static_, library_type::shared>;
+
+    os_type os;
+    arch_type arch;
+    build_type_type build_type;
+    library_type_type library_type;
+};
+
+struct dependency_base {
+    unresolved_package_name name;
+    build_settings_base bs;
+};
+
+struct build_settings : build_settings_base {
+    //
     using c_compiler_type = special_variant<c_compiler::clang, c_compiler::clang_cl, c_compiler::gcc, c_compiler::msvc>;
     using cpp_compiler_type = special_variant<cpp_compiler::clang, cpp_compiler::clang_cl, cpp_compiler::gcc, cpp_compiler::msvc>;
     using librarian_type = special_variant<librarian::ar, librarian::msvc>;
@@ -69,10 +83,6 @@ struct build_settings {
         library_type_type runtime;                   // move this flag into dependency settings
     };
 
-    os_type os;
-    arch_type arch;
-    build_type_type build_type;
-    library_type_type library_type;
     // optional?
     unresolved_package_name kernel_lib; // can be winsdk.um, mingw64, linux kernel etc.
     native_language<c_compiler_type> c;
@@ -148,40 +158,6 @@ struct build_settings {
 
     auto operator<(const build_settings &rhs) const {
         return for_each() < rhs.for_each();
-    }
-
-    static auto host_os() {
-        build_settings bs;
-        // these will be set for custom linux distribution
-        // bs.build_type = build_type::release{};
-        // bs.library_type = library_type::shared{};
-
-        // see more definitions at https://opensource.apple.com/source/WTF/WTF-7601.1.46.42/wtf/Platform.h.auto.html
-#if defined(__MINGW32__)
-        bs.os = os::mingw{};
-#elif defined(_WIN32)
-        bs.os = os::windows{};
-#elif defined(__APPLE__)
-        bs.os = os::macos{};
-#elif defined(__linux__)
-        bs.os = os::linux{};
-#else
-#error "unknown os"
-#endif
-
-#if defined(__x86_64__) || defined(_M_X64)
-        bs.arch = arch::x64{};
-#elif defined(__i386__) || defined(_M_IX86)
-        bs.arch = arch::x86{};
-#elif defined(__arm64__) || defined(__aarch64__) || defined(_M_ARM64)
-        bs.arch = arch::arm64{};
-#elif defined(__arm__) || defined(_M_ARM)
-        bs.arch = arch::arm{};
-#else
-#error "unknown arch"
-#endif
-
-        return bs;
     }
 };
 
