@@ -1101,12 +1101,8 @@ struct cl_exe_command : io_command {
             out = [&, line = 0](auto sv) mutable {
                 static const auto msvc_prefix = [&]() -> string {
                     path base = fs::temp_directory_path() / "sw_msvc_prefix";
-                    std::cerr << "string to find4: " << base << "\n";
                     base = fs::absolute(base);
-                    std::cerr << "string to find5: " << base << "\n";
                     base = base.lexically_normal();
-                    std::cerr << "string to find6: " << base << "\n";
-                    std::cerr << "string to find7: " << base.root_path() << "\n";
                     auto fc = path{base} += ".c";
                     auto fh = path{base} += ".h";
                     auto fo = path{base} += ".obj";
@@ -1142,12 +1138,7 @@ struct cl_exe_command : io_command {
                             || str[p1] == ' '
                             ) {
                             ++p1;
-                            std::cerr << "spaces\n";
                         }
-                        std::cerr << "substr: " << str.substr(p1) << "\n";
-                        std::cerr << "string to find1: " << fh << "\n";
-                        std::cerr << "string to find2: " << fh.string() << "\n";
-                        std::cerr << "string to find3: " << (const char *)fh.u8string().c_str() << "\n";
                         if (auto p2 = str.find(fh.root_path().string().c_str(), p1); p2 != -1) {
                             return str.substr(p1, p2 - p1);
                         }
