@@ -77,6 +77,11 @@ struct handle {
         CloseHandle(h);
         h = INVALID_HANDLE_VALUE;
     }
+    HANDLE release() {
+        auto hold = h;
+        h = INVALID_HANDLE_VALUE;
+        return hold;
+    }
 };
 
 auto create_job_object() {
@@ -88,8 +93,10 @@ auto create_job_object() {
     return job;
 }
 HANDLE default_job_object() {
-    static handle job = []() {
-        auto job = create_job_object();
+    static auto job = []() {
+        // we do release here, otherwise process will be terminated with 0 exit code
+        // on CloseHandle during normal exit process
+        auto job = create_job_object().release();
         /*BOOL injob{false};
         // check if we are a child in some job already
         // injob is probably true under debugger/visual studio
