@@ -1106,6 +1106,7 @@ struct cl_exe_command : io_command {
                     std::cerr << "string to find5: " << base << "\n";
                     base = base.lexically_normal();
                     std::cerr << "string to find6: " << base << "\n";
+                    std::cerr << "string to find7: " << base.root_path() << "\n";
                     auto fc = path{base} += ".c";
                     auto fh = path{base} += ".h";
                     auto fo = path{base} += ".obj";
@@ -1147,7 +1148,7 @@ struct cl_exe_command : io_command {
                         std::cerr << "string to find1: " << fh << "\n";
                         std::cerr << "string to find2: " << fh.string() << "\n";
                         std::cerr << "string to find3: " << (const char *)fh.u8string().c_str() << "\n";
-                        if (auto p2 = str.find((const char *)fh.u8string().c_str(), p1); p2 != -1) {
+                        if (auto p2 = str.find(fh.root_path().string().c_str(), p1); p2 != -1) {
                             return str.substr(p1, p2 - p1);
                         }
                     }
@@ -1416,7 +1417,9 @@ struct command_executor {
                 std::cout << "["
                     //<< std::setw(pos)
                     << command_id << format("/{}] {}\n", external_commands.size(), c.name());
-                //std::cout.flush(); // for now
+                if (cl.trace) {
+                    std::cout << c.print() << "\n";
+                }
                 try {
                     c.run(get_executor(), [&, run_dependents, cmd](int exit_code) {
                         --running_commands;
