@@ -240,6 +240,8 @@ struct raw_command {
                         if (!ec) {
                             s += buf;
                             ex.read_async(pipe.r, std::move(f));
+                        } else {
+                            std::cerr << "read async error: " << ec << "; buf = " << buf << "\n";
                         }
                     });
                 },
@@ -1125,9 +1127,7 @@ struct cl_exe_command : io_command {
 
                     c.out = c.err = ""s;
 
-                    executor ex;
-                    c.run(ex);
-                    ex.run();
+                    c.run();
 
                     auto &str = std::get<string>(c.out).empty() ? std::get<string>(c.err) : std::get<string>(c.out);
                     if (auto p1 = str.find("\n"); p1 != -1) {
