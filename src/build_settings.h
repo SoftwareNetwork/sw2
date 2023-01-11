@@ -67,7 +67,6 @@ struct dependency_base {
 };
 
 struct build_settings : build_settings_base {
-    //
     using c_compiler_type = special_variant<c_compiler::clang, c_compiler::clang_cl, c_compiler::gcc, c_compiler::msvc>;
     using cpp_compiler_type = special_variant<cpp_compiler::clang, cpp_compiler::clang_cl, cpp_compiler::gcc, cpp_compiler::msvc>;
     using librarian_type = special_variant<librarian::ar, librarian::msvc>;

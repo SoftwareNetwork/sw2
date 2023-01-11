@@ -715,6 +715,15 @@ struct command_hash {
             h ^= std::hash<string>()(k);
             h ^= std::hash<string>()(v);
         }
+        if (auto p = std::get_if<path>(&cmd.in)) {
+            h ^= std::hash<path>()(*p);
+        }
+        if (auto p = std::get_if<path>(&cmd.out)) {
+            h ^= std::hash<path>()(*p);
+        }
+        if (auto p = std::get_if<path>(&cmd.err)) {
+            h ^= std::hash<path>()(*p);
+        }
     }
     explicit operator bool() const { return h; }
     operator auto() const { return h; }
@@ -868,10 +877,7 @@ struct command_storage {
     }
 
     //
-    bool outdated(auto &&cmd) const {
-        return !std::holds_alternative<not_outdated>(outdated1(cmd));
-    }
-    outdated_reason outdated1(auto &&cmd) const {
+    outdated_reason outdated(auto &cmd, bool explain) const {
         auto h = cmd.hash();
         auto cit = commands.find(h);
         if (cit == commands.end()) {
@@ -879,26 +885,6 @@ struct command_storage {
         }
         for (auto &&f : cit->second.files) {
             if (auto r = global_fs.is_outdated(f, cit->second.mtime); !std::holds_alternative<not_outdated>(r)) {
-                auto s = visit(r, [](not_outdated) {
-                    return string{};
-                    },
-                    [](new_command &) {
-                        return "new command"s;
-                    },
-                    [](new_file &f) {
-                        return "new file: "s + f.p->string();
-                    },
-                    [](not_recorded_file &) {
-                        return "not recorded file"s;
-                    },
-                    [](missing_file &f) {
-                        return "missing file: "s + f.p->string();
-                    },
-                    [](updated_file &f) {
-                        return "updated file: "s + f.p->string();
-                    }
-                );
-                //std::cout << "outdated: " << s << "\n";
                 return r;
             }
         }
@@ -1012,17 +998,57 @@ if [ $E -ne 0 ]; then echo "Error code: $E"; fi
 
     void process_deps(){} // msvc 17.5P2 bug workaround
 
-    bool outdated() const {
-        return always || cs && cs->outdated(*this);
+    bool outdated(bool explain) const {
+        if (always) {
+            if (explain) {
+                std::cout << "outdated: build always\n";
+            }
+            return true;
+        }
+        auto explain_r = [](auto &&r) {
+            return visit(
+                r,
+                [](command_storage::not_outdated) {
+                    return string{};
+                },
+                [](command_storage::new_command &) {
+                    return "new command"s;
+                },
+                [](command_storage::new_file &f) {
+                    return "new file: "s + f.p->string();
+                },
+                [](command_storage::not_recorded_file &) {
+                    return "not recorded file"s;
+                },
+                [](command_storage::missing_file &f) {
+                    return "missing file: "s + f.p->string();
+                },
+                [](command_storage::updated_file &f) {
+                    return "updated file: "s + f.p->string();
+                });
+        };
+        if (cs) {
+            auto r = cs->outdated(*this, explain);
+            if (std::holds_alternative<command_storage::not_outdated>(r)) {
+                return true;
+            }
+            if (explain) {
+                std::cout << "outdated: " << explain_r(r) << "\n";
+            }
+            if (auto p = (raw_command *)std::get_if<raw_command *>(&out)) {
+                auto p2 = static_cast<io_command *>(p);
+                if (!p2) {
+                    throw std::runtime_error{"bad cast"};
+                }
+                return p2->outdated(explain);
+            }
+        }
+        return false;
     }
     void run(auto &&ex, auto &&cb) {
         run(*this, ex, cb);
     }
     void run(auto &&obj, auto &&ex, auto &&cb) {
-        /*if (!outdated()) {
-            cb();
-            return;
-        }*/
         // use GetProcessTimes or similar for time
         start = clock::now();
         raw_command::run(ex, [&, cb]() {
@@ -1406,6 +1432,7 @@ struct command_executor {
     int command_id{};
     std::vector<command*> errors;
     int ignore_errors{0};
+    bool explain_outdated{};
 
     command_executor() {
         init();
@@ -1445,7 +1472,7 @@ struct command_executor {
                         });
                     }
                 };
-                if (!c.outdated()) {
+                if (!c.outdated(explain_outdated)) {
                     return run_dependents();
                 }
                 ++running_commands;
@@ -1527,6 +1554,11 @@ struct command_executor {
         }
     }
     void prepare(auto &&cl, auto &&sln) {
+        visit_any(
+            cl.c,
+            [&](auto &b) requires requires {b.explain_outdated;} {
+            explain_outdated = b.explain_outdated.value;
+        });
         if (cl.jobs) {
             maximum_running_commands = cl.jobs;
         }

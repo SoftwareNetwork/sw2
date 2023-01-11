@@ -155,6 +155,7 @@ struct command_line_parser {
         static constexpr inline auto name = "build"sv;
 
         argument<string, options::positional{}, options::zero_or_more{}> inputs;
+        flag<options::flag<"-explain-outdated"_s>{}> explain_outdated;
         flag<options::flag<"-static"_s>{}> static_;
         flag<options::flag<"-shared"_s>{}> shared;
         flag<options::flag<"-c_static_runtime"_s>{}> c_static_runtime;
@@ -167,7 +168,7 @@ struct command_line_parser {
         argument<string, options::flag<"-os"_s>{}, options::comma_separated_value{}> os;
 
         auto option_list() {
-            return std::tie(inputs, static_, shared, c_static_runtime, cpp_static_runtime, c_and_cpp_static_runtime,
+            return std::tie(inputs, explain_outdated, static_, shared, c_static_runtime, cpp_static_runtime, c_and_cpp_static_runtime,
                             c_and_cpp_dynamic_runtime, arch, config, compiler, os);
         }
     };
