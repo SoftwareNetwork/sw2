@@ -378,7 +378,7 @@ int main1(int argc, char *argv[]) {
 
         auto &&t = s.targets.find_first<executable>("sw");
         if (!fs::exists(t.executable)) {
-            throw std::runtime_error{"missing sw1 file"};
+            throw std::runtime_error{format("missing sw1 file", t.executable)};
         }
 
         auto setup_path = [](auto &&in) {

@@ -59,6 +59,19 @@ struct build_settings_base {
     arch_type arch;
     build_type_type build_type;
     library_type_type library_type;
+
+    auto for_each_hash() const {
+        // same types wont work and will give wrong results
+        // i.e. library_type and runtimes
+        return std::tie(os, arch, build_type, library_type);
+    }
+    auto for_each_hash(auto &&f) const {
+        std::apply(
+            [&](auto &&...args) {
+                (f(FWD(args)), ...);
+            },
+            for_each_hash());
+    }
 };
 
 struct dependency_base {

@@ -82,7 +82,7 @@ struct gcc_compile_rule {
                         c += "-g", "-O0";
                     },
                     [&](auto) {
-                        c += "-O2"; // O3?
+                        c += "-O3";
                     });
             add_compile_options(tgt.merge_object(), c);
             c.inputs.insert(f);
