@@ -394,7 +394,7 @@ int main1(int argc, char *argv[]) {
         for (int i = 1; i < argc; ++i) {
             c += (const char *)argv[i];
         }
-        //std::cout << "entering child\n";
+        //std::cout << "sw1\n";
         c.run();
     });
     return 0;

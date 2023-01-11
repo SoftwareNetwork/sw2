@@ -12,6 +12,14 @@
 
 namespace sw {
 
+struct raw_command;
+struct io_command;
+
+struct command_pointer_holder {
+    raw_command *r;
+    io_command *io;
+};
+
 struct raw_command {
     using argument = variant<string,string_view,path>;
     std::vector<argument> arguments;
@@ -24,7 +32,7 @@ struct raw_command {
     // stdin,stdout,stderr
     using stream_callback = std::function<void(string_view)>;
     struct inherit {};
-    using stream = variant<inherit, string, stream_callback, path, raw_command *>;
+    using stream = variant<inherit, string, stream_callback, path, command_pointer_holder>;
     stream in, out, err;
     string out_text; // filtered, workaround
 #ifdef _WIN32
@@ -128,8 +136,8 @@ struct raw_command {
                 sa.bInheritHandle = TRUE;
                 d.si.StartupInfo.hStdInput = CreateFileW(fn.wstring().c_str(), GENERIC_READ, 0, &sa, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
             },
-            [&](raw_command *c) {
-                d.si.StartupInfo.hStdInput = c->d.pout.r;
+            [&](command_pointer_holder &ch) {
+                d.si.StartupInfo.hStdInput = ch.r->d.pout.r;
             },
             [&](auto &) {
                 d.pin.init_read(true);
@@ -147,7 +155,7 @@ struct raw_command {
                     sa.bInheritHandle = TRUE;
                     h = CreateFileW(fn.wstring().c_str(), GENERIC_WRITE, 0, &sa, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, 0);
                 },
-                [&](raw_command *c) {
+                [&](command_pointer_holder &) {
                     pipe.init_write_double();
                     h = pipe.w;
                 },
@@ -217,7 +225,7 @@ struct raw_command {
                     }
                 });*/
             },
-            [&](raw_command *c) {
+            [&](command_pointer_holder &) {
                 //CloseHandle(d.si.StartupInfo.hStdInput);
             },
             [&](stream_callback &cb) {
@@ -252,7 +260,7 @@ struct raw_command {
                         }
                     });
                 },
-                [&](raw_command *c) {
+                [&](command_pointer_holder &) {
                    //CloseHandle(h);
                 },
                 [&](stream_callback &cb) {
@@ -299,8 +307,8 @@ struct raw_command {
         });
         visit(
             out,
-            [&](raw_command *c) {
-                c->run(ex, cb);
+            [&](command_pointer_holder &ch) {
+                ch.r->run(ex, cb);
             },
             [&](auto &) {
             });
@@ -636,16 +644,24 @@ struct raw_command {
     void operator>(const path &p) {
         out = p;
     }
-    void operator|(raw_command &c) {
-        out = &c;
-        c.in = this;
+    void operator|(auto &c) {
+        {
+            command_pointer_holder ch;
+            ch.r = &c;
+            out = ch;
+        }
+        {
+            command_pointer_holder ch;
+            ch.r = this;
+            c.in = ch;
+        }
     }
     bool is_pipe_child() const {
-        auto p = (raw_command *)std::get_if<raw_command *>(&in);
+        auto p = std::get_if<command_pointer_holder>(&in);
         return p;
     }
     bool is_pipe_leader() const {
-        auto p = (raw_command *)std::get_if<raw_command *>(&out);
+        auto p = std::get_if<command_pointer_holder>(&out);
         return p && !is_pipe_child();
     }
     void terminate_chain() {
@@ -655,8 +671,8 @@ struct raw_command {
                 terminate();
             }
         } else {
-            auto p = (raw_command *)std::get_if<raw_command *>(&in);
-            p->terminate_chain();
+            auto ch = std::get_if<command_pointer_holder>(&in);
+            ch->r->terminate_chain();
         }
     }
     void operator||(const raw_command &c) {
@@ -1030,18 +1046,15 @@ if [ $E -ne 0 ]; then echo "Error code: $E"; fi
         if (cs) {
             auto r = cs->outdated(*this, explain);
             if (std::holds_alternative<command_storage::not_outdated>(r)) {
-                return true;
+                return false;
             }
             if (explain) {
                 std::cout << "outdated: " << explain_r(r) << "\n";
             }
-            if (auto p = (raw_command *)std::get_if<raw_command *>(&out)) {
-                auto p2 = static_cast<io_command *>(p);
-                if (!p2) {
-                    throw std::runtime_error{"bad cast"};
-                }
-                return p2->outdated(explain);
+            if (auto ch = std::get_if<command_pointer_holder>(&out)) {
+                return ch->io->outdated(explain);
             }
+            return true;
         }
         return false;
     }
@@ -1077,6 +1090,20 @@ if [ $E -ne 0 ]; then echo "Error code: $E"; fi
     void operator>(const path &p) {
         base::operator>(p);
         outputs.insert(p);
+    }
+    void operator|(auto &c) {
+        {
+            command_pointer_holder ch;
+            ch.r = &c;
+            ch.io = &c;
+            out = ch;
+        }
+        {
+            command_pointer_holder ch;
+            ch.r = this;
+            ch.io = this;
+            c.in = ch;
+        }
     }
 
     string name() const {
