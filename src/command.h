@@ -240,8 +240,6 @@ struct raw_command {
                         if (!ec) {
                             s += buf;
                             ex.read_async(pipe.r, std::move(f));
-                        } else {
-                            std::cerr << "read async error: " << ec << "; buf = " << buf << "\n";
                         }
                     });
                 },

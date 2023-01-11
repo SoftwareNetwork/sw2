@@ -222,20 +222,23 @@ struct executor {
         cb->f = [cb, f = std::move(f)](size_t sz) mutable {
             if (sz == 0) {
                 f(std::move(f), cb->buf, std::error_code(1, std::generic_category()));
-                return;
+            } else {
+                cb->buf.resize(sz);
+                f(std::move(f), cb->buf, std::error_code{});
             }
-            cb->buf.resize(sz);
-            f(std::move(f), cb->buf, std::error_code{});
         };
         ++jobs;
         if (!ReadFile(h, cb->buf.data(), cb->buf.size(), 0, (OVERLAPPED *)cb)) {
             auto err = GetLastError();
             if (err != ERROR_IO_PENDING) {
                 --jobs;
+                std::cerr << "read_async: GetLastError(): " << err << "\n";
                 f(std::move(f), cb->buf, std::error_code(err, std::generic_category()));
                 delete cb;
                 return;
             }
+        } else {
+            std::cerr << "read_async: ok\n";
         }
     }
 };
