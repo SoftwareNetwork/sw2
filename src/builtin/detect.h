@@ -1069,7 +1069,9 @@ void detect_gcc_clang(auto &s) {
     auto f = [&](auto &&cname, auto &&cppname, auto &cpkg, auto &cpppkg, auto &&vers, auto &&versall, auto ccrule, auto linkrule) {
         auto crule = ccrule;
         auto cpprule = ccrule;
-        cpprule.cpp = true;
+        if constexpr (requires{cpprule.cpp;}) {
+            cpprule.cpp = true;
+        }
         auto found = detect(cname, cpkg, crule, linkrule);
         found |= detect(cppname, cpppkg, cpprule, linkrule);
         auto f = [&](auto &&v) {

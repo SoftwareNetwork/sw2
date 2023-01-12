@@ -7,24 +7,21 @@
 
 namespace sw {
 
-struct log {
+struct log_file {
     mmap_file<char> f;
 
-    log(const path &fn) : f{fn} {
+    log_file(const path &fn) : f{fn} {
     }
 };
 
-void log() {
+constexpr void log(const char *compponent, int severity, auto &&fmtstring, auto &&...args) {
+    std::cerr << fmt::format("[{}][{}] {}\n", std::chrono::system_clock::now(), severity, fmt::vformat(fmtstring, fmt::make_format_args(FWD(args)...))) << "\n";
 }
-struct log_proxy {
-    std::string s;
-    log_proxy &operator<<(auto &&v) {
-
-        return *this;
-    }
-};
-
-// add logger arg?
-#define log_debug(x) log_proxy{} << x
+constexpr void log_debug(auto &&fmtstring, auto &&...args) {
+    log("test", 4, fmtstring, FWD(args)...);
+}
+constexpr void log_trace(auto &&fmtstring, auto &&...args) {
+    //log("test", 6, fmtstring, FWD(args)...);
+}
 
 } // namespace sw

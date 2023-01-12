@@ -5,6 +5,7 @@
 #include "runtime/command_line.h"
 #include "builtin/detect.h"
 #include "runtime/main.h"
+#include "sys/log.h"
 
 auto &get_msvc_detector() {
     static msvc_detector d;
@@ -393,7 +394,7 @@ int main1(int argc, char *argv[]) {
         for (int i = 1; i < argc; ++i) {
             c += (const char *)argv[i];
         }
-        //std::cout << "sw1\n";
+        log_debug("sw1");
         c.run();
     });
     return 0;
