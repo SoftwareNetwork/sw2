@@ -26,6 +26,7 @@ struct raw_command {
     path working_directory;
     std::map<string, string> environment;
 
+    bool started{}; // state?
     std::optional<int> exit_code;
     // pid, pidfd
 
@@ -664,6 +665,17 @@ struct raw_command {
         auto p = std::get_if<command_pointer_holder>(&out);
         return p && !is_pipe_child();
     }
+    void pipe_iterate(auto &&in) {
+        auto f = [&](auto f, auto c) -> void {
+            if (auto p = std::get_if<command_pointer_holder>(&c->out)) {
+                in(*p);
+                f(f,p->r);
+            }
+        };
+        if (auto p = std::get_if<command_pointer_holder>(&out)) {
+            f(f,p->r);
+        }
+    }
     void terminate_chain() {
         if (is_pipe_leader()) {
             if (d.pi.hProcess) {
@@ -1072,6 +1084,13 @@ if [ $E -ne 0 ]; then echo "Error code: $E"; fi
             }
             if (ok() && cs) {
                 cs->add(*this);
+                /*if (is_pipe_leader()) {
+                    pipe_iterate([&](auto &&ch) {
+                        if (ch.io->cs) {
+                            ch.io->cs->add(*ch.io);
+                        }
+                    });
+                }*/
             }
             cb();
         });
@@ -1481,64 +1500,64 @@ struct command_executor {
     bool is_stopped() const {
         return ignore_errors < errors.size();
     }
+    void run_next_raw(auto &&cl, auto &&sln, auto &&cmd, auto &&c) {
+        if (c.is_pipe_child()) {
+            return;
+        }
+        ++command_id;
+        auto run_dependents = [&]() {
+            for (auto &&d : c.dependents) {
+                visit(*(command *)d, [&](auto &&d1) {
+                    if (!--d1.n_pending_dependencies) {
+                        pending_commands.push_back((command *)d);
+                    }
+                });
+            }
+        };
+        if (!c.outdated(explain_outdated)) {
+            return run_dependents();
+        }
+        ++running_commands;
+        std::cout << format("[{}/{}] {}\n", command_id, number_of_commands, c.name());
+        if (cl.trace) {
+            std::cout << c.print() << "\n";
+        }
+        try {
+            c.run(get_executor(), [&, run_dependents, cmd]() {
+                --running_commands;
+                if (!c.exit_code || *c.exit_code) {
+                    errors.push_back(cmd);
+                } else {
+                    run_dependents();
+                }
+                if (cl.save_executed_commands || cl.save_failed_commands && (!c.exit_code || *c.exit_code)) {
+                    c.save(get_saved_commands_dir(sln));
+                }
+                run_next(cl, sln);
+            });
+        } catch (std::exception &e) {
+            c.out_text = e.what();
+            if (c.is_pipe_child()) {
+                c.terminate_chain();
+                return;
+            }
+            if (c.is_pipe_leader()) {
+                c.terminate_chain();
+            }
+            --running_commands;
+            errors.push_back(cmd);
+            if (cl.save_executed_commands || cl.save_failed_commands) {
+                // c.save(get_saved_commands_dir(sln));//save not started commands?
+            }
+            run_next(cl, sln);
+        }
+    }
     void run_next(auto &&cl, auto &&sln) {
         while (running_commands < maximum_running_commands && !pending_commands.empty() && !is_stopped()) {
             auto cmd = pending_commands.front();
             pending_commands.pop_front();
             visit(*cmd, [&](auto &&c) {
-                if (c.is_pipe_child()) {
-                    return;
-                }
-                ++command_id;
-                auto run_dependents = [&]() {
-                    for (auto &&d : c.dependents) {
-                        visit(*(command *)d, [&](auto &&d1) {
-                            if (!--d1.n_pending_dependencies) {
-                                pending_commands.push_back((command *)d);
-                            }
-                        });
-                    }
-                };
-                if (!c.outdated(explain_outdated)) {
-                    return run_dependents();
-                }
-                ++running_commands;
-                //auto pos = ceil(log10(number_of_commands));
-                std::cout << "["
-                    //<< std::setw(pos)
-                    << command_id << format("/{}] {}\n", number_of_commands, c.name());
-                if (cl.trace) {
-                    std::cout << c.print() << "\n";
-                }
-                try {
-                    c.run(get_executor(), [&, run_dependents, cmd]() {
-                        --running_commands;
-                        if (!c.exit_code || *c.exit_code) {
-                            errors.push_back(cmd);
-                        } else {
-                            run_dependents();
-                        }
-                        if (cl.save_executed_commands || cl.save_failed_commands && (!c.exit_code || *c.exit_code)) {
-                            c.save(get_saved_commands_dir(sln));
-                        }
-                        run_next(cl, sln);
-                    });
-                } catch (std::exception &e) {
-                    c.out_text = e.what();
-                    if (c.is_pipe_child()) {
-                        c.terminate_chain();
-                        return;
-                    }
-                    if (c.is_pipe_leader()) {
-                        c.terminate_chain();
-                    }
-                    --running_commands;
-                    errors.push_back(cmd);
-                    if (cl.save_executed_commands || cl.save_failed_commands) {
-                        //c.save(get_saved_commands_dir(sln));//save not started commands?
-                    }
-                    run_next(cl, sln);
-                }
+                run_next_raw(cl, sln, cmd, c);
             });
         }
     }
@@ -1553,10 +1572,10 @@ struct command_executor {
         //run();
     }
     void run(auto &&cl, auto &&sln) {
+        prepare(cl, sln);
         create_output_dirs(external_commands);
         make_dependencies(external_commands);
         check_dag(external_commands);
-        prepare(cl, sln);
 
         // initial set of commands
         for (auto &&c : external_commands) {
@@ -1597,6 +1616,9 @@ struct command_executor {
                 if (!c.is_pipe_child()) {
                     ++number_of_commands;
                 }
+                if (auto p = std::get_if<path>(&c.in)) {
+                    c.inputs.insert(*p);
+                }
                 if (auto p = std::get_if<path>(&c.out)) {
                     c.outputs.insert(*p);
                 }
@@ -1605,6 +1627,16 @@ struct command_executor {
                 }
             });
         }
+        /*for (auto &&c : external_commands) {
+            visit(*c, [&](auto &&c) {
+                if (c.is_pipe_leader()) {
+                    c.pipe_iterate([&](auto &&ch) {
+                        c.inputs.insert(ch.io->inputs.begin(), ch.io->inputs.end());
+                        c.outputs.insert(ch.io->outputs.begin(), ch.io->outputs.end());
+                    });
+                }
+            });
+        }*/
     }
     path get_saved_commands_dir(auto &&sln) {
         return sln.work_dir / "rsp";
