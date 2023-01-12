@@ -2,9 +2,9 @@
 // Copyright (C) 2022 Egor Pugin <egor.pugin@gmail.com>
 
 #include "sw.h"
-#include "command_line.h"
+#include "runtime/command_line.h"
 #include "builtin/detect.h"
-#include "main.h"
+#include "runtime/main.h"
 
 auto &get_msvc_detector() {
     static msvc_detector d;
@@ -82,10 +82,9 @@ auto make_solution() {
         get_msvc_detector(s);
         detect_winsdk(s);
     }
-    // detect_gcc_clang(s);
-#else
-    detect_gcc_clang(s);
 #endif
+    // we detect clang cl on windows atleast
+    detect_gcc_clang(s);
     return s;
 }
 

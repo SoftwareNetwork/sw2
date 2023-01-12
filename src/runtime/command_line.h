@@ -1,8 +1,6 @@
 #pragma once
 
-#include "helpers.h"
-
-#include "input.h"
+#include "helpers/common.h"
 
 namespace sw {
 

@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include "crypto.h"
+#include "crypto/common.h"
 
 #include <algorithm>
 #include <array>

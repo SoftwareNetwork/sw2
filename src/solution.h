@@ -3,7 +3,6 @@
 #include "rule_target.h"
 #include "input.h"
 #include "package_id.h"
-#include "build_settings.h"
 
 namespace sw {
 

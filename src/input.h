@@ -3,10 +3,25 @@
 
 #pragma once
 
-#include "os.h"
-#include "entry_point.h"
+#include "helpers/common.h"
 
 namespace sw {
+
+struct solution;
+
+struct entry_point {
+    std::function<void(solution &)> f;
+    path source_dir;
+
+    void operator()(auto &sln, const auto &bs) {
+        sln.bs = &bs;
+        swap_and_restore sr{sln.source_dir};
+        if (!source_dir.empty()) {
+            sln.source_dir = source_dir;
+        }
+        f(sln);
+    }
+};
 
 struct specification_file_input {
     path fn;

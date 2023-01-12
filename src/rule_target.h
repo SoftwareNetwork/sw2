@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include "build_settings.h"
+#include "builtin/build_settings.h"
 #include "target_list.h"
 #include "target_properties.h"
 

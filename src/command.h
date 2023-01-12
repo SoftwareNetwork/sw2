@@ -3,12 +3,12 @@
 
 #pragma once
 
-#include "helpers.h"
+#include "helpers/common.h"
 #include "sys/win32.h"
 #include "sys/linux.h"
 #include "sys/macos.h"
 #include "sys/mmap.h"
-#include "json.h"
+#include "helpers/json.h"
 
 namespace sw {
 
@@ -1026,6 +1026,12 @@ if [ $E -ne 0 ]; then echo "Error code: $E"; fi
 
     void process_deps(){} // msvc 17.5P2 bug workaround
 
+    auto hash() const {
+        if (!h) {
+            h(*this);
+        }
+        return h;
+    }
     bool outdated(bool explain) const {
         if (always) {
             if (explain) {
@@ -1039,8 +1045,8 @@ if [ $E -ne 0 ]; then echo "Error code: $E"; fi
                 [](command_storage::not_outdated) {
                     return string{};
                 },
-                [](command_storage::new_command &) {
-                    return "new command"s;
+                [](command_storage::new_command &c) {
+                    return format("new command: hash = {}, {}", (size_t)c.c->hash(), c.c->print());
                 },
                 [](command_storage::new_file &f) {
                     return "new file: "s + f.p->string();
@@ -1069,37 +1075,6 @@ if [ $E -ne 0 ]; then echo "Error code: $E"; fi
             return true;
         }
         return false;
-    }
-    void run(auto &&ex, auto &&cb) {
-        run(*this, ex, cb);
-    }
-    void run(auto &&obj, auto &&ex, auto &&cb) {
-        // use GetProcessTimes or similar for time
-        start = clock::now();
-        raw_command::run(ex, [&, cb]() {
-            end = clock::now();
-            // before cb
-            if constexpr (requires {obj.process_deps();}) {
-                obj.process_deps();
-            }
-            if (ok() && cs) {
-                cs->add(*this);
-                /*if (is_pipe_leader()) {
-                    pipe_iterate([&](auto &&ch) {
-                        if (ch.io->cs) {
-                            ch.io->cs->add(*ch.io);
-                        }
-                    });
-                }*/
-            }
-            cb();
-        });
-    }
-    auto hash() const {
-        if (!h) {
-            h(*this);
-        }
-        return h;
     }
 
     void operator<(const path &p) {
@@ -1334,14 +1309,7 @@ struct gcc_command : io_command {
         err = ""s;
         out = ""s;
 
-        io_command::run(*this, ex, [&, cb]() {
-            cb(); // before processing (start another process)
-
-            bool time_not_set = start == decltype(start){};
-            if (exit_code || time_not_set) {
-                return;
-            }
-        });
+        io_command::run(ex, cb);
     }
     void process_deps() {
         auto is_space = [](auto c) {
@@ -1523,14 +1491,27 @@ struct command_executor {
             std::cout << c.print() << "\n";
         }
         try {
+            // use GetProcessTimes or similar for time
+            // or get times directly from OS
+            c.start = std::decay_t<decltype(c)>::clock::now();
+
             c.run(get_executor(), [&, run_dependents, cmd]() {
                 --running_commands;
-                if (!c.exit_code || *c.exit_code) {
+
+                c.end = std::decay_t<decltype(c)>::clock::now();
+                if (!c.ok()) {
                     errors.push_back(cmd);
                 } else {
+                    if constexpr (requires { c.process_deps(); }) {
+                        c.process_deps();
+                    }
+                    if (c.cs) {
+                        // pipe commands are not added yet - and they must be added when they are finished
+                        c.cs->add(c);
+                    }
                     run_dependents();
                 }
-                if (cl.save_executed_commands || cl.save_failed_commands && (!c.exit_code || *c.exit_code)) {
+                if (cl.save_executed_commands || cl.save_failed_commands && !c.ok()) {
                     c.save(get_saved_commands_dir(sln));
                 }
                 run_next(cl, sln);
@@ -1627,16 +1608,16 @@ struct command_executor {
                 }
             });
         }
-        /*for (auto &&c : external_commands) {
+        for (auto &&c : external_commands) {
             visit(*c, [&](auto &&c) {
                 if (c.is_pipe_leader()) {
                     c.pipe_iterate([&](auto &&ch) {
                         c.inputs.insert(ch.io->inputs.begin(), ch.io->inputs.end());
-                        c.outputs.insert(ch.io->outputs.begin(), ch.io->outputs.end());
+                        //c.outputs.insert(ch.io->outputs.begin(), ch.io->outputs.end());
                     });
                 }
             });
-        }*/
+        }
     }
     path get_saved_commands_dir(auto &&sln) {
         return sln.work_dir / "rsp";
