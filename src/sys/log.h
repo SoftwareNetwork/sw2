@@ -14,14 +14,33 @@ struct log_file {
     }
 };
 
-constexpr void log(const char *compponent, int severity, auto &&fmtstring, auto &&...args) {
-    std::cerr << fmt::format("[{}][{}] {}\n", std::chrono::system_clock::now(), severity, fmt::vformat(fmtstring, fmt::make_format_args(FWD(args)...))) << "\n";
+std::string get_severity_string(int s) {
+    if (s >= 6) return "trace";
+    if (s >= 4) return "debug";
+    if (s == 0) return "info";
+    if (s <= -6) return "fatal";
+    if (s <= -4) return "error";
+    if (s <= -2) return "warn";
+    return std::to_string(s);
 }
-constexpr void log_debug(auto &&fmtstring, auto &&...args) {
+void log(const char *compponent, int severity, auto &&fmtstring, auto &&...args) {
+    std::cerr << fmt::format("[{}][{}] {}\n", std::chrono::system_clock::now(), get_severity_string(severity), fmt::vformat(fmtstring, fmt::make_format_args(FWD(args)...)));
+}
+
+void log_fatal(auto &&fmtstring, auto &&...args) {
+    log("test", -6, fmtstring, FWD(args)...);
+}
+void log_error(auto &&fmtstring, auto &&...args) {
+    log("test", -4, fmtstring, FWD(args)...);
+}
+void log_warn(auto &&fmtstring, auto &&...args) {
+    log("test", -2, fmtstring, FWD(args)...);
+}
+void log_debug(auto &&fmtstring, auto &&...args) {
     log("test", 4, fmtstring, FWD(args)...);
 }
-constexpr void log_trace(auto &&fmtstring, auto &&...args) {
-    //log("test", 6, fmtstring, FWD(args)...);
+void log_trace(auto &&fmtstring, auto &&...args) {
+    log("test", 6, fmtstring, FWD(args)...);
 }
 
 } // namespace sw

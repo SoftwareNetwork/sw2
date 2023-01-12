@@ -284,13 +284,13 @@ int main1(int argc, char *argv[]) {
     command_line_parser cl{argc, argv};
 
     if (cl.version) {
-        std::cout << "sw2\n";
+        log_trace("sw2");
         return 0;
     }
     if (cl.sleep) {
-        std::cerr << "sleep started\n";
+        log_trace("sleep started");
         std::this_thread::sleep_for(std::chrono::seconds(cl.sleep));
-        std::cerr << "sleep completed\n";
+        log_trace("sleep completed");
     }
 
     auto this_path = fs::current_path();

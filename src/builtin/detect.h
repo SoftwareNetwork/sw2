@@ -429,7 +429,7 @@ struct msvc_instance {
                     else if constexpr (requires { r(tgt, t); }) {
                         r(tgt, t);
                     } else {
-                        std::cerr << "rule was not executed\n";
+                        log_warn("rule was not executed");
                     }
                 }));
             }});
@@ -1025,17 +1025,17 @@ void detect_winsdk(auto &&s) {
 void detect_gcc_clang(auto &s) {
     auto detect = [&](auto &&prog, auto &&pkg, auto ... rules) {
         if (auto p = resolve_executable(prog); !p.empty()) {
-            //std::cout << "detected compiler " << p << ": " << (string)pkg << "\n";
+            log_trace("detected compiler {}: {}", p, (string)pkg);
             s.add_entry_point(pkg, entry_point{[...rules = rules,prog,pkg,p](decltype(s) &s2) {
                 auto &t = s2.template add<executable_target>(pkg, native_library_target::raw_target_tag());
-                //std::cout << "loaded target " << p << ": " << (string)pkg << "\n";
+                //log_trace("loaded target {}: {}", p, (string)pkg);
                 t.executable = p;
                 auto add_one_rule = [&](auto rule){
                     t.interface_.add(make_rule(rule, [&, r = rule](auto &&tgt) mutable {
                         if constexpr (requires { r(tgt, t); }) {
                             r(tgt, t);
                         } else {
-                            std::cerr << "rule was not executed\n";
+                            log_trace("rule was not executed");
                         }
                     }));
                 };

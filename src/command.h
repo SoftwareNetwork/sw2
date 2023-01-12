@@ -9,6 +9,7 @@
 #include "sys/macos.h"
 #include "sys/mmap.h"
 #include "helpers/json.h"
+#include "sys/log.h"
 
 namespace sw {
 
@@ -585,7 +586,7 @@ struct raw_command {
 #endif
     }
     void run(auto &&ex, auto &&cb) {
-        //std::cout << print() << "\n";
+        //log_trace(print());
         try {
 #ifdef _WIN32
             run_win32(ex, cb);
@@ -813,7 +814,6 @@ struct command_storage {
                 }
                 if (!exists) {
                     return missing_file{&f};
-                    // std::cerr << "outdated: file does not exists" << "\n";
                 }
                 /*if (!fs::is_regular_file(s)) {
                     std::cerr << "outdated: not regular file" << "\n";
@@ -825,7 +825,6 @@ struct command_storage {
                 if (mtime.time_since_epoch() > command_time.time_since_epoch()) {
     #endif
                     return updated_file{&f};
-                    //std::cerr << "outdated: file lwt > command time" << "\n";
                 }
                 return {};
             }
@@ -1035,7 +1034,7 @@ if [ $E -ne 0 ]; then echo "Error code: $E"; fi
     bool outdated(bool explain) const {
         if (always) {
             if (explain) {
-                std::cout << "outdated: build always\n";
+                log_trace("outdated: build always");
             }
             return true;
         }
@@ -1067,7 +1066,7 @@ if [ $E -ne 0 ]; then echo "Error code: $E"; fi
                 return false;
             }
             if (explain) {
-                std::cout << "outdated: " << explain_r(r) << "\n";
+                log_trace("outdated: {}" , explain_r(r));
             }
             if (auto ch = std::get_if<command_pointer_holder>(&out)) {
                 return ch->io->outdated(explain);
@@ -1486,9 +1485,9 @@ struct command_executor {
             return run_dependents();
         }
         ++running_commands;
-        std::cout << format("[{}/{}] {}\n", command_id, number_of_commands, c.name());
+        log_trace("[{}/{}] {}", command_id, number_of_commands, c.name());
         if (cl.trace) {
-            std::cout << c.print() << "\n";
+            log_trace(c.print());
         }
         try {
             // use GetProcessTimes or similar for time
