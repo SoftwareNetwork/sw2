@@ -190,16 +190,17 @@ struct rule_target {
         bs.visit(FWD(f)...);
     }
 
-    void init_rules(/*this */auto &&self) {
+    void prepare(/*this */ auto &&self) {
+        // init_rules
         while (1) {
             auto sz = self.commands.size();
-            for (auto &&[_, r]: self.merge_object().rules) {
+            for (auto &&[_, r] : self.merge_object().rules) {
                 if constexpr (requires { r(&self); }) {
                     r(&self);
                 }
-                for (auto &&c: self.commands) {
+                for (auto &&c : self.commands) {
                     ::sw::visit(c, [&](auto &&c) {
-                        for (auto &&o: c.outputs) {
+                        for (auto &&o : c.outputs) {
                             self.processed_files[o]; // better return a list of new files from rule and add them
                         }
                     });
@@ -220,16 +221,6 @@ struct rule_target {
                 c2.cs = &self.cs;
             });
         }
-    }
-
-    void prepare(/*this */auto &&self) {
-        self.init_rules(self);
-    }
-    void build(/*this */auto &&self) {
-        self.prepare(self);
-
-        command_executor ce;
-        ce.run(self);
     }
 
     //auto visit()

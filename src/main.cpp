@@ -283,6 +283,16 @@ void sw1(auto &cl) {
 int main1(int argc, char *argv[]) {
     command_line_parser cl{argc, argv};
 
+    if (cl.trace) {
+        log_settings.log_level = std::max(log_settings.log_level, 6);
+    }
+    if (cl.verbose) {
+        log_settings.log_level = std::max(log_settings.log_level, 4);
+    }
+    if (cl.log_level) {
+        log_settings.log_level = std::max<int>(log_settings.log_level, cl.log_level);
+    }
+
     if (cl.version) {
         log_trace("sw2");
         return 0;

@@ -295,9 +295,7 @@ struct solution {
         for (auto &&[id,t] : targets) {
             visit(t, [&](auto &&vp) {
                 auto &v = *vp;
-                if constexpr (requires { v.commands; }) {
-                    ce += v.commands;
-                }
+                ce += v.commands;
             });
         }
         ce.run(cl, *this);
@@ -317,9 +315,7 @@ struct solution {
         for (auto &&[id, t] : targets) {
             visit(t, [&](auto &&vp) {
                 auto &v = *vp;
-                if constexpr (requires { v.commands; }) {
-                    ce += v.commands;
-                }
+                ce += v.commands;
                 if constexpr (requires { v.tests; }) {
                     ce += v.tests;
                 }

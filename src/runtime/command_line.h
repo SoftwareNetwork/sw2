@@ -129,9 +129,7 @@ struct command_line_parser {
         }
     };
     template <auto FlagName, auto ... Options> struct flag {
-        bool value;
-
-        flag() : value{false} {}
+        bool value{};
 
         static bool is_option_flag(auto &&arg) {
             return FlagName.is_option_flag(arg);
@@ -220,6 +218,8 @@ struct command_line_parser {
     argument<int, options::flag<"-j"_s>{}> jobs;
     flag<options::flag<"-int3"_s>{}> int3;
     flag<options::flag<"-trace"_s,"--trace"_s>{}> trace;
+    flag<options::flag<"-v"_s,"-verbose"_s,"--verbose"_s>{}> verbose;
+    argument<int, options::flag<"-log_level"_s,"--log_level"_s>{}> log_level;
     flag<options::flag<"-version"_s,"--version"_s>{}> version;
 
     auto option_list() {
@@ -227,6 +227,8 @@ struct command_line_parser {
             sleep,
             int3,
             trace,
+            verbose,
+            log_level,
             version,
 
             working_directory,

@@ -1485,10 +1485,8 @@ struct command_executor {
             return run_dependents();
         }
         ++running_commands;
-        log_trace("[{}/{}] {}", command_id, number_of_commands, c.name());
-        if (cl.trace) {
-            log_trace(c.print());
-        }
+        log_info("[{}/{}] {}", command_id, number_of_commands, c.name());
+        log_trace(c.print());
         try {
             // use GetProcessTimes or similar for time
             // or get times directly from OS

@@ -14,6 +14,13 @@ struct log_file {
     }
 };
 
+// log sink
+// log settings per sink
+struct log_settings_type {
+    int log_level{};
+};
+log_settings_type log_settings;
+
 std::string get_severity_string(int s) {
     if (s >= 6) return "trace";
     if (s >= 4) return "debug";
@@ -24,6 +31,9 @@ std::string get_severity_string(int s) {
     return std::to_string(s);
 }
 void log(const char *compponent, int severity, auto &&fmtstring, auto &&...args) {
+    if (log_settings.log_level < severity) {
+        return;
+    }
     std::cerr << fmt::format("[{}][{}] {}\n", std::chrono::system_clock::now(), get_severity_string(severity), fmt::vformat(fmtstring, fmt::make_format_args(FWD(args)...)));
 }
 
@@ -35,6 +45,9 @@ void log_error(auto &&fmtstring, auto &&...args) {
 }
 void log_warn(auto &&fmtstring, auto &&...args) {
     log("test", -2, fmtstring, FWD(args)...);
+}
+void log_info(auto &&fmtstring, auto &&...args) {
+    log("test", 0, fmtstring, FWD(args)...);
 }
 void log_debug(auto &&fmtstring, auto &&...args) {
     log("test", 4, fmtstring, FWD(args)...);
