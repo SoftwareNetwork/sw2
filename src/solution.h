@@ -259,6 +259,23 @@ struct solution {
         return host_settings_;
     }
 
+    enum class stage_type {
+        start,
+        inputs_loaded,
+        prepared,
+        built,
+    };
+    stage_type stage{};
+
+    void load_inputs() {
+        if (stage >= stage_type::inputs_loaded) {
+            return;
+        }
+        stage = stage_type::inputs_loaded;
+        for (auto &&i : inputs) {
+            i(*this);
+        }
+    }
     void prepare() {
         for (auto &&[id, t] : targets) {
             visit(t, [&](auto &&vp) {
@@ -285,10 +302,7 @@ struct solution {
         build(ex, cl);
     }
     void build(auto &&ex, auto &&cl) {
-        for (auto &&i : inputs) {
-            i(*this);
-        }
-
+        load_inputs();
         prepare();
 
         command_executor ce{ex};
@@ -305,10 +319,7 @@ struct solution {
         test(ex, cl);
     }
     void test(auto &&ex, auto &&cl) {
-        for (auto &&i : inputs) {
-            i(*this);
-        }
-
+        load_inputs();
         prepare();
 
         command_executor ce{ex};

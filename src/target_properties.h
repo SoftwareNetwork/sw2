@@ -41,7 +41,7 @@ struct definition {
         return s;
     }
 };
-definition operator""_def(const char *in, size_t len) {
+inline definition operator""_def(const char *in, size_t len) {
     string d = in;
     auto p = d.find('=');
     if (p == d.npos)
@@ -90,6 +90,40 @@ struct system_link_library {
 };
 auto operator""_slib(const char *s, size_t len) {
     return system_link_library{std::string{s, len}};
+}
+
+struct force_include {
+    path p;
+    operator const auto &() const {
+        return p;
+    }
+};
+auto operator""_fi(const char *s, size_t len) {
+    return force_include{std::string{s, len}};
+}
+
+struct precompiled_header_raw {
+    path header;
+    // msvc
+    bool create{true};
+    bool use{true};
+    path cpp;
+    path pch;
+    path pdb;
+    path obj;
+
+    operator const auto &() const {
+        return header;
+    }
+};
+struct precompiled_header {
+    path p;
+    operator const auto &() const {
+        return p;
+    }
+};
+auto operator""_pch(const char *s, size_t len) {
+    return precompiled_header{std::string{s, len}};
 }
 
 struct compile_options_t {

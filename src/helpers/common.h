@@ -393,13 +393,38 @@ void append_vector(auto &&to, auto &&from) {
     }
 }
 
-auto is_c_file(const path &fn) {
+inline auto is_c_file(const path &fn) {
     static std::set<string> exts{".c", ".m"}; // with obj-c, separate call?
     return exts.contains(fn.extension().string());
 }
-auto is_cpp_file(const path &fn) {
+inline auto is_cpp_file(const path &fn) {
     static std::set<string> exts{".cpp", ".cxx", ".mm"}; // with obj-c++, separate call?
     return exts.contains(fn.extension().string());
+}
+
+inline path get_home_directory() {
+#ifdef _WIN32
+    wchar_t *w;
+    size_t len;
+    auto err = _wdupenv_s(&w, &len, L"USERPROFILE");
+    if (err) {
+        std::cerr << "Cannot get user's home directory (%USERPROFILE%)\n";
+        return "";
+    }
+    path home = w;
+    free(w);
+#else
+    // prefer this way
+    auto p = getpwuid(getuid());
+    if (p)
+        return p->pw_dir;
+    auto home = getenv("HOME");
+    if (!home)
+        std::cerr << "Cannot get user's home directory ($HOME)\n";
+    if (home == nullptr)
+        return "";
+#endif
+    return home;
 }
 
 } // namespace sw

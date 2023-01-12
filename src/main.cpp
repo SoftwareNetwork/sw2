@@ -326,11 +326,24 @@ int main1(int argc, char *argv[]) {
         auto fn = cfg_dir / "src" / "main.cpp";
         fs::create_directories(fn.parent_path());
         auto swdir = fs::absolute(path{std::source_location::current().file_name()}.parent_path());
+        entry_point pch_ep;
+        {
+            cpp_emitter e;
+            e += "#define SW1_BUILD";
+            e += "void sw1_load_inputs(auto &&f);";
+            e.include(swdir / "main.cpp");
+            //
+            auto pch_tmp = fs::temp_directory_path() / "sw" / "pch";
+            auto pch = pch_tmp / "sw.h";
+            write_file_if_different(pch, e.s);
+            pch_ep.source_dir = pch_tmp;
+            pch_ep.binary_dir = pch_tmp;
+            pch_ep.f = [pch](solution &s) {
+                auto &t = s.add<native_target>("sw_pch");
+                t += precompiled_header{pch};
+            };
+        }
         cpp_emitter e;
-        e += "#define SW1_BUILD";
-        e += "void sw1_load_inputs(auto &&f);";
-        e.include(swdir / "main.cpp");
-        e += "";
         string load_inputs;
         std::vector<input> inputs;
         if (!b.inputs) {
@@ -384,13 +397,19 @@ int main1(int argc, char *argv[]) {
         dbs.build_type = build_type::debug{};
         is.settings.insert(dbs);
         s.add_input(is);
+        is.ep = pch_ep;
+        s.add_input(is);
+        s.load_inputs();
+        auto &&t = s.targets.find_first<executable>("sw");
+        auto &&pch = s.targets.find_first<native_target>("sw_pch");
+        pch.make_pch();
+        t.precompiled_header = pch.precompiled_header;
+        t.precompiled_header.create = false;
         s.build(cl);
 
-        auto &&t = s.targets.find_first<executable>("sw");
         if (!fs::exists(t.executable)) {
             throw std::runtime_error{format("missing sw1 file", t.executable)};
         }
-
         auto setup_path = [](auto &&in) {
             auto s = normalize_path_and_drive(in);
             if (is_mingw_shell()) {

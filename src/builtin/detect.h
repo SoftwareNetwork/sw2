@@ -208,17 +208,10 @@ struct cl_exe_rule {
             }
         });
 
-        for (auto &&[f, rules] : tgt.processed_files) {
-            if (rules.contains(this) || !(is_c_file(f) || is_cpp_file(f))) {
-                continue;
-            }
-            cl_exe_command c;
-            c.working_directory = tgt.binary_dir / "obj";
-            auto out = tgt.binary_dir / "obj" / f.filename() += objext;
-            c.name_ = format_log_record(tgt, "/"s + normalize_path(f.lexically_relative(tgt.source_dir).string()));
+        auto add_flags = [&](auto &c, auto &&f) {
             c.old_includes = msvc.vs_version < package_version{16, 7};
-            c += compiler.executable, "-nologo", "-c";
-            c.inputs.insert(compiler.executable);
+            // https://developercommunity.visualstudio.com/t/Enable-bigobj-by-default/1031214
+            c += "-bigobj"; // we use this by default
             c += "-FS"; // ForceSynchronousPDBWrites
             c += "-Zi"; // DebugInformationFormatType::ProgramDatabase
             tgt.bs.build_type.visit(
@@ -248,14 +241,74 @@ struct cl_exe_rule {
                 }
             };
             if (is_c_file(f)) {
+                c += "-TC";
                 mt_md(tgt.bs.c.runtime);
             } else if (is_cpp_file(f)) {
+                c += "-TP";
                 c += "-EHsc"; // enable for c too?
                 c += "-std:c++latest";
                 mt_md(tgt.bs.cpp.runtime);
             }
-            c += f, "-Fo" + out.string();
             add_compile_options(tgt.merge_object(), c);
+            for (auto &&i : tgt.merge_object().force_includes) {
+                c += "-FI" + i.p.string();
+            }
+        };
+
+        if constexpr (requires { tgt.precompiled_header; }) {
+            if (!tgt.precompiled_header.header.empty()) {
+                if (tgt.precompiled_header.create) {
+                    auto &r = tgt.processed_files[tgt.precompiled_header.header];
+                    if (!r.contains(this)) {
+                        cl_exe_command c;
+                        c.working_directory = tgt.binary_dir / "obj";
+                        c += compiler.executable, "-nologo", "-c";
+                        c.inputs.insert(compiler.executable);
+                        auto out = tgt.precompiled_header.obj;
+                        c.name_ = format_log_record(tgt, "/[pch]");
+                        auto f = tgt.precompiled_header.cpp;
+                        c += "-FI" + tgt.precompiled_header.header.string();
+                        add_flags(c, f);
+                        c += f, "-Fo" + out.string();
+                        c += "-Yc" + tgt.precompiled_header.header.string();
+                        c += "-Fp" + tgt.precompiled_header.pch.string();
+                        c += "-Fd" + tgt.precompiled_header.pdb.string();
+                        c.inputs.insert(f);
+                        c.outputs.insert(out);
+                        c.outputs.insert(tgt.precompiled_header.pch);
+                        c.outputs.insert(tgt.precompiled_header.pdb);
+                        tgt.commands.emplace_back(std::move(c));
+                        r.insert(this);
+                    }
+                }
+                if (tgt.precompiled_header.use) {
+                    tgt.processed_files[tgt.precompiled_header.obj];
+                }
+            }
+        }
+        for (auto &&[f, rules] : tgt.processed_files) {
+            if (rules.contains(this) || !(is_c_file(f) || is_cpp_file(f))) {
+                continue;
+            }
+            cl_exe_command c;
+            c.working_directory = tgt.binary_dir / "obj";
+            c += compiler.executable, "-nologo", "-c";
+            c.inputs.insert(compiler.executable);
+            auto out = tgt.binary_dir / "obj" / f.filename() += objext;
+            c.name_ = format_log_record(tgt, "/"s + normalize_path(f.lexically_relative(tgt.source_dir).string()));
+            if constexpr (requires { tgt.precompiled_header; }) {
+                if (!tgt.precompiled_header.header.empty() && tgt.precompiled_header.use) {
+                    c += "-FI" + tgt.precompiled_header.header.string();
+                    c += "-Fp" + tgt.precompiled_header.pch.string();
+                    c += "-Yu" + tgt.precompiled_header.header.string();
+                    c += "-Fd" + tgt.precompiled_header.pdb.string();
+                    c.inputs.insert(tgt.precompiled_header.header);
+                    c.inputs.insert(tgt.precompiled_header.pch);
+                    c.inputs.insert(tgt.precompiled_header.pdb);
+                }
+            }
+            add_flags(c, f);
+            c += f, "-Fo" + out.string();
             c.inputs.insert(f);
             c.outputs.insert(out);
             tgt.commands.emplace_back(std::move(c));

@@ -253,6 +253,9 @@ struct target_data : compile_options_t,link_options_t {
 
     T *target_{nullptr};
     files_t files;
+    std::vector<precompiled_header> precompiled_headers;
+    //std::vector<precompiled_header_raw> precompiled_headers_raw;
+    std::vector<force_include> force_includes;
     std::vector<dependency> dependencies;
     std::vector<std::pair<rule_flag_type, rule_type>> rules;
 
@@ -313,6 +316,16 @@ struct target_data : compile_options_t,link_options_t {
     void add(const path &p) {
         files.insert(p.is_absolute() ? p : target().source_dir / p);
     }
+    void add(const force_include &p) {
+        auto pp = p;
+        pp.p = pp.p.is_absolute() ? pp.p : target().source_dir / pp.p;
+        force_includes.push_back(pp);
+    }
+    void add(const precompiled_header &p) {
+        auto pp = p;
+        pp.p = pp.p.is_absolute() ? pp.p : target().source_dir / pp.p;
+        precompiled_headers.push_back(pp);
+    }
     void remove(const file_regex &r) {
         r(target().source_dir, [&](auto &&iter) {
             for (auto &&e : iter) {
@@ -368,6 +381,9 @@ struct target_data : compile_options_t,link_options_t {
 
     void merge(auto &&from) {
         files.merge(from.files);
+        //append_vector(precompiled_headers, from.precompiled_headers);
+        //append_vector(precompiled_headers_raw, from.precompiled_headers_raw);
+        append_vector(force_includes, from.force_includes);
         compile_options_t::merge(from);
         link_options_t::merge(from);
         append_vector(dependencies, from.dependencies);
@@ -448,6 +464,7 @@ struct target_data_storage : target_data<T> {
         // merge our deps
         for (auto &&d : merge_object().dependencies) {
             if (!d.target) {
+                log_warn("target is not resolved");
                 continue;
             }
             visit(*d.target, [&](auto &&v) {
@@ -489,6 +506,8 @@ struct native_target : rule_target, target_data_storage<native_target> {
 
     string api_name;
     string &ApiName{api_name}; // v1 compat
+    // internal
+    precompiled_header_raw precompiled_header;
 
     native_target(auto &&s, auto &&id) : native_target{s, id, raw_target_tag{}} {
         add(make_rule(native_sources_rule{}, [&](auto &&) {
@@ -561,11 +580,30 @@ struct native_target : rule_target, target_data_storage<native_target> {
             *this += definition{api_name, "SW_EXPORT"};
             public_ += definition{api_name, "SW_IMPORT"};
         }
+        if (!precompiled_headers.empty()) {
+            make_pch();
+        }
         merge();
         //sln.load_target(solution_bs);
     }
     void prepare(/*this */auto &&self) {
         rule_target::prepare(self);
+    }
+
+    void make_pch() {
+        auto dir = binary_dir / "pch";
+        precompiled_header.header = dir / "sw_pch.h";
+        precompiled_header.cpp = dir / "sw_pch.cpp";
+        precompiled_header.pch = dir / "sw_pch.pch";
+        precompiled_header.pdb = dir / "sw_pch.pdb";
+        precompiled_header.obj = dir / "sw_pch.obj"; // like in cl rule
+        string s;
+        for (auto &&p : precompiled_headers) {
+            s += format("#include \"{}\"\n", p.p);
+        }
+        write_file_if_different(precompiled_header.header, s);
+        write_file_if_different(precompiled_header.cpp, "");
+        //force_includes.emplace_back(precompiled_header.header);
     }
 
     bool has_file(const path &fn) {

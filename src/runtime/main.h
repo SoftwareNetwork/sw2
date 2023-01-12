@@ -9,7 +9,7 @@ int main(int argc, char *argv[]) {
     try {
         return main1(argc, argv);
     } catch (std::exception &e) {
-        log_error(e.what());
+        log_error("{}", e.what());
     } catch (...) {
         log_error("unknown exception");
     }
