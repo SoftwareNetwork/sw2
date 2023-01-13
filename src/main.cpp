@@ -127,24 +127,22 @@ void sw1(auto &cl) {
             || std::same_as<std::decay_t<decltype(b)>, command_line_parser::test>
             ) {
             auto s = make_solution();
-            auto f = [&](auto &&in) {
+            std::vector<entry_point> entry_points;
 #ifdef SW1_BUILD
-                sw1_load_inputs(in);
+            entry_points = sw1_load_inputs();
 #else
-                throw std::runtime_error{"no entry function was specified"};
+            throw std::runtime_error{"no entry function was specified"};
 #endif
-            };
 
             std::vector<build_settings> settings{default_build_settings()};
             {
                 swap_and_restore sr{s.dry_run, true};
-                auto add_input = [&](auto &&f, auto &&dir) {
+                for (auto &&ep : entry_points) {
                     input_with_settings is;
-                    is.ep = entry_point{f, dir};
+                    is.ep = entry_point{ep.f, ep.source_dir};
                     is.settings.insert(settings.begin(), settings.end());
                     s.gather_entry_points(is);
-                };
-                f(add_input);
+                }
             }
 
             auto apply = [&]() {
@@ -261,13 +259,12 @@ void sw1(auto &cl) {
             });
             //
 
-            auto add_input = [&](auto &&f, auto &&dir) {
+            for (auto &&ep : entry_points) {
                 input_with_settings is;
-                is.ep = entry_point{f, dir};
+                is.ep = entry_point{ep.f, ep.source_dir};
                 is.settings.insert(settings.begin(), settings.end());
                 s.add_input(is);
-            };
-            f(add_input);
+            }
             if constexpr (std::same_as<std::decay_t<decltype(b)>, command_line_parser::build>) {
                 s.build(cl);
             }
@@ -329,8 +326,10 @@ int main1(int argc, char *argv[]) {
         entry_point pch_ep;
         {
             cpp_emitter e;
+            e += "#include <vector>";
+            e += "namespace sw { struct entry_point; }";
             e += "#define SW1_BUILD";
-            e += "void sw1_load_inputs(auto &&f);";
+            e += "std::vector<sw::entry_point> sw1_load_inputs();";
             e.include(swdir / "main.cpp");
             //
             auto pch_tmp = fs::temp_directory_path() / "sw" / "pch";
@@ -339,12 +338,12 @@ int main1(int argc, char *argv[]) {
             pch_ep.source_dir = pch_tmp;
             pch_ep.binary_dir = pch_tmp;
             pch_ep.f = [pch](solution &s) {
-                auto &t = s.add<native_target>("sw_pch");
+                auto &t = s.add<native_static_library_target>("sw_pch");
                 t += precompiled_header{pch};
             };
         }
         cpp_emitter e;
-        string load_inputs;
+        string load_inputs = "    return {\n";
         std::vector<input> inputs;
         if (!b.inputs) {
             b.inputs.value = std::vector<string>{"."};
@@ -380,14 +379,12 @@ int main1(int argc, char *argv[]) {
                 e += "namespace this_namespace = ::" + nsname + ";";
                 // add inline ns?
                 e.include(fn);
-                load_inputs += "    f(&" + nsname + "::build, \"" + normalize_path_and_drive(fn.parent_path()) + "\");\n";
+                load_inputs += "    {&" + nsname + "::build, \"" + normalize_path_and_drive(fn.parent_path()) + "\"},\n";
             });
             e += "";
         }
-        if (!load_inputs.empty()) {
-            load_inputs.resize(load_inputs.size() - 1);
-        }
-        e += "void sw1_load_inputs(auto &&f) {";
+        load_inputs += "    };";
+        e += "std::vector<sw::entry_point> sw1_load_inputs() {";
         e += load_inputs;
         e += "}";
         write_file_if_different(fn, e.s);
@@ -401,7 +398,7 @@ int main1(int argc, char *argv[]) {
         s.add_input(is);
         s.load_inputs();
         auto &&t = s.targets.find_first<executable>("sw");
-        auto &&pch = s.targets.find_first<native_target>("sw_pch");
+        auto &&pch = s.targets.find_first<native_static_library_target>("sw_pch");
         pch.make_pch();
         t.precompiled_header = pch.precompiled_header;
         t.precompiled_header.create = false;

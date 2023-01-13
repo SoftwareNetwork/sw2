@@ -1066,7 +1066,7 @@ if [ $E -ne 0 ]; then echo "Error code: $E"; fi
                 return false;
             }
             if (explain) {
-                log_trace("outdated: {}" , explain_r(r));
+                log_info("outdated: {}" , explain_r(r));
             }
             if (auto ch = std::get_if<command_pointer_holder>(&out)) {
                 return ch->io->outdated(explain);

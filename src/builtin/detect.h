@@ -276,7 +276,7 @@ struct cl_exe_rule {
                         c.inputs.insert(f);
                         c.outputs.insert(out);
                         c.outputs.insert(tgt.precompiled_header.pch);
-                        c.outputs.insert(tgt.precompiled_header.pdb);
+                        //c.outputs.insert(tgt.precompiled_header.pdb);
                         tgt.commands.emplace_back(std::move(c));
                         r.insert(this);
                     }
@@ -304,7 +304,7 @@ struct cl_exe_rule {
                     c += "-Fd" + tgt.precompiled_header.pdb.string();
                     c.inputs.insert(tgt.precompiled_header.header);
                     c.inputs.insert(tgt.precompiled_header.pch);
-                    c.inputs.insert(tgt.precompiled_header.pdb);
+                    //c.inputs.insert(tgt.precompiled_header.pdb);
                 }
             }
             add_flags(c, f);
