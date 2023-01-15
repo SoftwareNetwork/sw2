@@ -34,7 +34,19 @@ void log(const char *compponent, int severity, auto &&fmtstring, auto &&...args)
     if (log_settings.log_level < severity) {
         return;
     }
-    std::cerr << fmt::format("[{}][{}] {}\n", std::chrono::system_clock::now(), get_severity_string(severity), fmt::vformat(fmtstring, fmt::make_format_args(FWD(args)...)));
+    string s;
+    if constexpr (sizeof...(args) > 0) {
+        s = fmt::vformat(fmtstring, fmt::make_format_args(FWD(args)...));
+    } else {
+        s += fmtstring;
+    }
+    std::cerr << fmt::format("[{}][{}] {}\n"
+#ifdef _MSC_VER
+        , std::chrono::system_clock::now()
+#else
+        , "not impl"
+#endif
+        , get_severity_string(severity), s);
 }
 
 void log_fatal(auto &&fmtstring, auto &&...args) {

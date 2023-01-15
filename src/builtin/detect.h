@@ -212,6 +212,7 @@ struct cl_exe_rule {
             c.old_includes = msvc.vs_version < package_version{16, 7};
             // https://developercommunity.visualstudio.com/t/Enable-bigobj-by-default/1031214
             c += "-bigobj"; // we use this by default
+            //  -Wa,-mbig-obj
             c += "-FS"; // ForceSynchronousPDBWrites
             c += "-Zi"; // DebugInformationFormatType::ProgramDatabase
             tgt.bs.build_type.visit(

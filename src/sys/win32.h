@@ -123,7 +123,8 @@ struct pipe {
         return pipe_id++;
     }
     auto pipe_name() {
-        return format(L"\\\\.\\pipe\\swpipe.{}.{}", GetCurrentProcessId(), pipe_id());
+        path p = format("\\\\.\\pipe\\swpipe.{}.{}", GetCurrentProcessId(), pipe_id());
+        return p.wstring();
     }
     void init_read(bool inherit = false) {
         DWORD sz = 0;

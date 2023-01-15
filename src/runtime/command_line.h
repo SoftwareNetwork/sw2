@@ -129,7 +129,10 @@ struct command_line_parser {
         }
     };
     template <auto FlagName, auto ... Options> struct flag {
-        bool value{};
+        bool value;
+
+        // gcc issue
+        flag() : value{false} {}
 
         static bool is_option_flag(auto &&arg) {
             return FlagName.is_option_flag(arg);

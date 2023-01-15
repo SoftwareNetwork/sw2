@@ -1038,7 +1038,7 @@ if [ $E -ne 0 ]; then echo "Error code: $E"; fi
             }
             return true;
         }
-        auto explain_r = [](auto &&r) {
+        auto explain_r = [](auto &&r) -> string {
             return visit(
                 r,
                 [](command_storage::not_outdated) {

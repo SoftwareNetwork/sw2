@@ -338,7 +338,7 @@ int main1(int argc, char *argv[]) {
             pch_ep.source_dir = pch_tmp;
             pch_ep.binary_dir = pch_tmp;
             pch_ep.f = [pch](solution &s) {
-                auto &t = s.add<native_static_library_target>("sw_pch");
+                auto &t = s.add<native_target>("sw_pch");
                 t += precompiled_header{pch};
             };
         }
@@ -398,7 +398,7 @@ int main1(int argc, char *argv[]) {
         s.add_input(is);
         s.load_inputs();
         auto &&t = s.targets.find_first<executable>("sw");
-        auto &&pch = s.targets.find_first<native_static_library_target>("sw_pch");
+        auto &&pch = s.targets.find_first<native_target>("sw_pch");
         pch.make_pch();
         t.precompiled_header = pch.precompiled_header;
         t.precompiled_header.create = false;
