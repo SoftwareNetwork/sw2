@@ -40,7 +40,7 @@ void log(const char *compponent, int severity, auto &&fmtstring, auto &&...args)
     } else {
         s += fmtstring;
     }
-    std::cerr << fmt::format("[{}][{}] {}\n"
+    std::cerr << fmt::format("[{}] [{}] {}\n"
 #ifdef _MSC_VER
         , std::chrono::system_clock::now()
 #else

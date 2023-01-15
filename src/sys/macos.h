@@ -4,7 +4,7 @@
 #pragma once
 
 #ifdef __APPLE__
-#include "../helpers.h"
+#include "../helpers/common.h"
 
 #include <spawn.h>
 #include <sys/event.h>

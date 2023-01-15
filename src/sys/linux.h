@@ -4,7 +4,7 @@
 #pragma once
 
 #ifdef __linux__
-#include "../helpers.h"
+#include "../helpers/common.h"
 
 #include <fcntl.h>
 #include <signal.h>
