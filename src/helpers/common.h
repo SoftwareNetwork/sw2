@@ -165,7 +165,8 @@ static constexpr bool contains(Container<Types...> **) {
     return contains<T, Types...>();
 }
 
-[[nodiscard]] std::string replace(const std::string &str, const std::string &oldstr, const std::string &newstr,
+[[nodiscard]]
+inline std::string replace(const std::string &str, const std::string &oldstr, const std::string &newstr,
                                   int count = -1) {
     int sofar = 0;
     int cursor = 0;
