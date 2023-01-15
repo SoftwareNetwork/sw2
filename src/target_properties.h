@@ -61,7 +61,7 @@ struct include_directory {
     include_directory(const path &p) : dir{p} {}
     operator auto() const { return dir; }
 };
-auto operator""_idir(const char *s, size_t len) {
+inline auto operator""_idir(const char *s, size_t len) {
     return include_directory{std::string{s,len}};
 }
 
@@ -69,7 +69,7 @@ struct compile_option {
     string value;
     operator auto() const { return value; }
 };
-auto operator""_copt(const char *s, size_t len) {
+inline auto operator""_copt(const char *s, size_t len) {
     return compile_option{std::string{s, len}};
 }
 
@@ -88,7 +88,7 @@ struct system_link_library {
         return p;
     }
 };
-auto operator""_slib(const char *s, size_t len) {
+inline auto operator""_slib(const char *s, size_t len) {
     return system_link_library{std::string{s, len}};
 }
 
@@ -98,7 +98,7 @@ struct force_include {
         return p;
     }
 };
-auto operator""_fi(const char *s, size_t len) {
+inline auto operator""_fi(const char *s, size_t len) {
     return force_include{std::string{s, len}};
 }
 
@@ -122,7 +122,7 @@ struct precompiled_header {
         return p;
     }
 };
-auto operator""_pch(const char *s, size_t len) {
+inline auto operator""_pch(const char *s, size_t len) {
     return precompiled_header{std::string{s, len}};
 }
 
@@ -224,16 +224,16 @@ struct file_regex {
     }
 };
 
-auto operator""_dir(const char *s, size_t len) {
+inline auto operator""_dir(const char *s, size_t len) {
     return file_regex(std::string{s,len} + "/.*",false);
 }
-auto operator""_rdir(const char *s, size_t len) {
+inline auto operator""_rdir(const char *s, size_t len) {
     return file_regex(std::string{s,len} + "/.*", true);
 }
-auto operator""_r(const char *s, size_t len) {
+inline auto operator""_r(const char *s, size_t len) {
     return file_regex(std::string{s,len},false);
 }
-auto operator""_rr(const char *s, size_t len) {
+inline auto operator""_rr(const char *s, size_t len) {
     return file_regex(std::string{s,len}, true);
 }
 
