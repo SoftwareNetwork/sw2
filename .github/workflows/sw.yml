@@ -31,7 +31,7 @@ jobs:
         sudo dnf -y install gcc g++ fmt-devel
     - name: stage1
       run: |
-        g++ -std=c++2b src/*.cpp -o sw
+        g++ -std=c++2b src/*.cpp -Isrc -o sw
     - name: stage2
       run: |
         ./sw build
@@ -49,7 +49,7 @@ jobs:
     - name: stage1
       run: |
         export PATH="/usr/local/opt/gcc/bin:$PATH"
-        g++-12 -std=c++2b src/*.cpp -I/usr/local/opt/fmt/include -o sw
+        g++-12 -std=c++2b src/*.cpp -Isrc -I/usr/local/opt/fmt/include -o sw
     - name: stage2
       run: |
         export PATH="/usr/local/opt/gcc/bin:$PATH"
