@@ -10,7 +10,6 @@
 #include "sys/mmap.h"
 #include "helpers/json.h"
 #include "sys/log.h"
-#include "runtime/command_line.h"
 
 namespace sw {
 
@@ -1614,34 +1613,12 @@ struct command_executor {
         }
         run_next(cl, sln);
         get_executor().run();
-
-        visit(
-            cl.c,
-            [&](command_line_parser::test &) {
-                generate_test_results(sln);
-            },
-            [&](auto &&) {
-                if (!errors.empty()) {
-                    string t;
-                    for (auto &&cmd : errors) {
-                        visit(*cmd, [&](auto &&c) {
-                            t += c.get_error_message() + "\n";
-                        });
-                    }
-                    t += "Total errors: " + std::to_string(errors.size());
-                    throw std::runtime_error{t};
-                }
-            });
     }
     void prepare(auto &&cl, auto &&sln) {
         visit_any(
             cl.c,
             [&](auto &b) requires requires {b.explain_outdated;} {
             explain_outdated = b.explain_outdated.value;
-        });
-        visit_any(
-            cl.c, [&](command_line_parser::test &){
-                ignore_errors = std::numeric_limits<decltype(ignore_errors)>::max();
         });
         if (cl.jobs) {
             maximum_running_commands = cl.jobs;
@@ -1678,34 +1655,6 @@ struct command_executor {
     }
     path get_saved_commands_dir(auto &&sln) {
         return sln.work_dir / "rsp";
-    }
-    void generate_test_results(auto &&sln) {
-        struct xml_emitter {
-            string s;
-
-            xml_emitter() {
-                add_line("<?xml version=\"1.0\"?>");
-            }
-            void add_line(auto &&l) {
-                s += l;
-                s += "\n";
-            }
-            auto tag(auto &&obj, auto &&name) {
-                using T = std::decay_t<decltype(obj)>;
-                struct tag {
-                    T &e;
-                };
-                return tag{obj};
-            }
-        };
-        struct junit_emitter : xml_emitter {
-        };
-
-        junit_emitter e;
-        auto testsuites = e.tag("testsuites");
-
-        auto resfn = sln.work_dir / "test" / "results.xml";
-        write_file(resfn, e.s);
     }
 
     void operator+=(std::vector<command> &commands) {

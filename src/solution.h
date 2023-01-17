@@ -3,6 +3,7 @@
 #include "rule_target.h"
 #include "input.h"
 #include "package_id.h"
+#include "helpers/xml.h"
 
 namespace sw {
 
@@ -313,6 +314,17 @@ struct solution {
             });
         }
         ce.run(cl, *this);
+
+        if (!ce.errors.empty()) {
+            string t;
+            for (auto &&cmd : ce.errors) {
+                visit(*cmd, [&](auto &&c) {
+                    t += c.get_error_message() + "\n";
+                });
+            }
+            t += "Total errors: " + std::to_string(ce.errors.size());
+            throw std::runtime_error{t};
+        }
     }
     void test(auto &&cl) {
         executor ex;
@@ -332,7 +344,43 @@ struct solution {
                 }
             });
         }
+        ce.ignore_errors = std::numeric_limits<decltype(ce.ignore_errors)>::max();
         ce.run(cl, *this);
+        generate_test_results();
+    }
+    void generate_test_results() {
+        junit_emitter e;
+        {
+            auto testsuites = e.tag("testsuites");
+            for (auto &&[id, t] : targets) {
+                visit(t, [&](auto &&vp) {
+                    auto &v = *vp;
+                    if constexpr (requires { v.tests; }) {
+                        if (v.tests.empty()) {
+                            return;
+                        }
+                        auto testsuite = testsuites.tag("testsuite");
+                        testsuite["name"] = (string)v.name;
+                        testsuite["package"] = (string)v.name;
+                        testsuite["config"] = std::to_string(v.bs.hash());
+                        testsuite["tests"] = std::to_string(v.tests.size());
+                        for (auto &&t : v.tests) {
+                            auto tc = testsuite.tag("testcase");
+                            visit(t, [&](auto &&c) {
+                                tc["name"] = c.name_;
+                            });
+                            // sw1 has "config" attribute here
+                            // error
+                            // failure
+                        }
+                        // errors
+                        // failures
+                    }
+                });
+            }
+        }
+        auto resfn = work_dir / "test" / "results.xml";
+        write_file(resfn, e.s);
     }
 };
 using Solution = solution; // v1 compat
