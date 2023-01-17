@@ -19,6 +19,7 @@
 using std::format;
 namespace fmt = std;
 #elif __has_include(<format.h>)
+#error "wrong branch"
 #define FMT_HEADER_ONLY
 #include <format.h>
 using fmt::format;
