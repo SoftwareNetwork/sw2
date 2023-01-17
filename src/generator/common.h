@@ -21,7 +21,11 @@ struct vs {
     static constexpr auto name = "vs"sv;
 };
 
-using generators = variant<sw,ninja,make,vs>;
+struct cmake {
+    static constexpr auto name = "cmake"sv;
+};
+
+using generators = variant<sw,ninja,make,vs,cmake>;
 
 } // namespace generator
 

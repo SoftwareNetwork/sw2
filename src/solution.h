@@ -298,7 +298,7 @@ struct solution {
             });
         }
     }
-    auto make_command_executor() {
+    auto make_command_executor(bool with_tests = false) {
         load_inputs();
         prepare();
 
@@ -307,6 +307,11 @@ struct solution {
             visit(t, [&](auto &&vp) {
                 auto &v = *vp;
                 ce += v.commands;
+                if (with_tests) {
+                    if constexpr (requires { v.tests; }) {
+                        ce += v.tests;
+                    }
+                }
             });
         }
         return ce;
@@ -336,7 +341,7 @@ struct solution {
         test(ex, cl);
     }
     void test(auto &&ex, auto &&cl) {
-        auto ce = make_command_executor();
+        auto ce = make_command_executor(true);
         ce.ex_external = &ex;
         ce.ignore_errors = std::numeric_limits<decltype(ce.ignore_errors)>::max();
         ce.run(cl, *this);
@@ -350,6 +355,7 @@ struct solution {
                 int failures{};
                 int errors{};
                 int skipped{};
+                io_command::clock::duration time{};
                 // time
 
                 void operator+=(const data &d) {
@@ -357,13 +363,19 @@ struct solution {
                     failures += d.failures;
                     errors += d.errors;
                     skipped += d.skipped;
+                    time += d.time;
                 }
             };
-            auto set_attrs = [](auto &&o, auto &&d) {
+            auto format_time = [&](auto &&t) {
+                auto f = std::chrono::duration_cast<std::chrono::duration<float>>(t).count();
+                return format("{}", f);
+            };
+            auto set_attrs = [&](auto &&o, auto &&d) {
                 o["tests"] = std::to_string(d.tests);
                 o["skipped"] = std::to_string(d.skipped);
                 o["errors"] = std::to_string(d.errors);
                 o["failures"] = std::to_string(d.failures);
+                o["time"] = format_time(d.time);
             };
             data dtestsuites;
             auto testsuites = e.tag("testsuites");
@@ -403,8 +415,12 @@ struct solution {
                                 } else if (!*c.exit_code) {
                                     auto e = tc.tag("failure");
                                     e["message"] = c.get_error_message();
+                                    e["time"] = format_time(c.end - c.start);
                                     ++dtestsuite.failures;
+                                    dtestsuite.time += c.end - c.start;
                                 } else {
+                                    e["time"] = format_time(c.end - c.start);
+                                    dtestsuite.time += c.end - c.start;
                                 }
                             });
                             // sw1 has "config" attribute here
