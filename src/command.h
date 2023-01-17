@@ -538,11 +538,11 @@ struct raw_command {
                 throw std::runtime_error{"error waitpid: " + std::to_string(errno)};
             }
             if (WIFSIGNALED(wstatus)) {
-                int exit_code = WTERMSIG(wstatus);
-                cb(exit_code);
+                this->exit_code = WTERMSIG(wstatus);
+                cb();
             } else if (WIFEXITED(wstatus)) {
-                int exit_code = WEXITSTATUS(wstatus);
-                cb(exit_code);
+                this->exit_code = WEXITSTATUS(wstatus);
+                cb();
             }
         });
 #endif
