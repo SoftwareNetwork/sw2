@@ -10,6 +10,7 @@
 #include "sys/mmap.h"
 #include "helpers/json.h"
 #include "sys/log.h"
+#include "runtime/command_line.h"
 
 namespace sw {
 
@@ -46,6 +47,12 @@ struct raw_command {
 
         process_data() {
             si.StartupInfo.cb = sizeof(si);
+        }
+        void close() {
+            //CloseHandle(si.StartupInfo.hStdInput);
+            //CloseHandle(si.StartupInfo.hStdOutput);
+            //CloseHandle(si.StartupInfo.hStdError);
+            *this = process_data{};
         }
     };
     process_data d;
@@ -136,7 +143,7 @@ struct raw_command {
             [&](path &fn) {
                 SECURITY_ATTRIBUTES sa = {0};
                 sa.bInheritHandle = TRUE;
-                d.si.StartupInfo.hStdInput = CreateFileW(fn.wstring().c_str(), GENERIC_READ, 0, &sa, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
+                d.si.StartupInfo.hStdInput = WINAPI_CALL_HANDLE(CreateFileW(fn.wstring().c_str(), GENERIC_READ, 0, &sa, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0));
             },
             [&](command_pointer_holder &ch) {
                 d.si.StartupInfo.hStdInput = ch.r->d.pout.r;
@@ -155,7 +162,7 @@ struct raw_command {
                 [&](path &fn) {
                     SECURITY_ATTRIBUTES sa = {0};
                     sa.bInheritHandle = TRUE;
-                    h = CreateFileW(fn.wstring().c_str(), GENERIC_WRITE, 0, &sa, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, 0);
+                    h = WINAPI_CALL_HANDLE(CreateFileW(fn.wstring().c_str(), GENERIC_WRITE, 0, &sa, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, 0));
                 },
                 [&](command_pointer_holder &) {
                     pipe.init_write_double();
@@ -174,11 +181,12 @@ struct raw_command {
         auto add_handle = [&](auto &&h) {
             if (h) {
                  // mingw uses same stdout and stderr, so if we pass two same handles they are give an error 87
-                if (mingw) {
+                //if (mingw) {
+                // we always check for same handles because it can happen not only on mingw
                     if (std::ranges::find(handles, h) != std::end(handles)) {
                         return;
                     }
-                }
+                //}
                 handles.push_back(h);
             }
         };
@@ -246,7 +254,7 @@ struct raw_command {
                 });*/
             },
             [&](path &fn) {
-                //CloseHandle(d.si.StartupInfo.hStdInput);
+                CloseHandle(d.si.StartupInfo.hStdInput);
             });
         auto post_setup_stream = [&](auto &&s, auto &&h, auto &&pipe) {
             visit(
@@ -280,7 +288,7 @@ struct raw_command {
                     });
                 },
                 [&](path &fn) {
-                    //CloseHandle(h);
+                    CloseHandle(h);
                 }
             );
         };
@@ -291,20 +299,19 @@ struct raw_command {
         // If main process is killed before register_process() call, created process
         // won't stop.
         ex.register_process(d.pi.hProcess, d.pi.dwProcessId, [this, cb]() {
-            if (d.pi.hProcess) {
-                DWORD exit_code;
+            DWORD exit_code;
+            WINAPI_CALL(GetExitCodeProcess(d.pi.hProcess, &exit_code));
+            while (exit_code == STILL_ACTIVE) {
                 WINAPI_CALL(GetExitCodeProcess(d.pi.hProcess, &exit_code));
-                while (exit_code == STILL_ACTIVE) {
-                    WINAPI_CALL(GetExitCodeProcess(d.pi.hProcess, &exit_code));
-                }
-                this->exit_code = exit_code;
-            } else {
-                return;
             }
-            scope_exit se{[&] {
-                //CloseHandle(pi.hProcess); // we may want to use h in the callback
-                d = decltype(d){};
-            }};
+            this->exit_code = exit_code;
+
+            //d.close_file_handles();
+
+            //scope_exit se{[&] {
+                //CloseHandle(pi.hProcess); // we may want to use h in the callback?
+                finish();
+            //}};
             cb();
         });
         visit(
@@ -614,9 +621,12 @@ struct raw_command {
         ex.run();
     }
 
+    void finish() {
+        d.close();
+    }
     void terminate() {
         TerminateProcess(d.pi.hProcess, 1);
-        d = decltype(d){};
+        finish();
     }
 
     void add(auto &&p) {
@@ -716,9 +726,9 @@ struct raw_command {
         } else if (!out_text.empty()) {
             t = out_text;
         }
-        if (!t.empty()) {
+        /*if (!t.empty()) {
             t = "\nerror:\n" + t;
-        }
+        }*/
         return format("{}\nerror:\n{}", get_error_code(), t);
     }
 };
@@ -947,6 +957,9 @@ struct command_storage {
     }
 };
 
+// number of jobs allowed
+using resource_pool = int;
+
 struct io_command : raw_command {
     using base = raw_command;
     using clock = command_storage::clock;
@@ -1007,14 +1020,15 @@ if [ $E -ne 0 ]; then echo "Error code: $E"; fi
     };
     using shell_type = variant<shell::cmd, shell::sh>;
 
-    bool always{false};
+    bool always{};
     std::set<path> inputs;
     std::set<path> outputs;
     std::set<path> implicit_inputs;
     mutable command_storage::hash_type h;
     command_storage::time_point start{}, end;
-    command_storage *cs{nullptr};
+    command_storage *cs{};
     string name_;
+    resource_pool *simultaneous_jobs{};
     //
     std::set<void*> dependencies;
     std::set<void*> dependents;
@@ -1431,7 +1445,33 @@ struct command_executor {
         }
     }
 
-    std::deque<command *> pending_commands;
+    struct pending_commands {
+        std::deque<command *> commands;
+
+        void push_back(command *cmd) {
+            commands.push_back(cmd);
+        }
+        bool empty() const {
+            return commands.empty() || std::ranges::all_of(commands, [](auto &&cmd) {
+                       return visit(*cmd, [&](auto &&c) {
+                           return c.simultaneous_jobs && c.simultaneous_jobs == 0;
+                       });
+                })
+                ;
+        }
+        command *next() {
+            auto it = std::ranges::find_if(commands, [](auto &&cmd) {
+                return visit(*cmd, [&](auto &&c) {
+                    return !c.simultaneous_jobs || c.simultaneous_jobs;
+                });
+            });
+            auto c = *it;
+            commands.erase(it);
+            return c;
+        }
+    };
+
+    pending_commands pending_commands_;
     int running_commands{0};
     size_t maximum_running_commands{std::thread::hardware_concurrency()};
     executor ex;
@@ -1476,7 +1516,7 @@ struct command_executor {
             for (auto &&d : c.dependents) {
                 visit(*(command *)d, [&](auto &&d1) {
                     if (!--d1.n_pending_dependencies) {
-                        pending_commands.push_back((command *)d);
+                        pending_commands_.push_back((command *)d);
                     }
                 });
             }
@@ -1484,15 +1524,22 @@ struct command_executor {
         if (!c.outdated(explain_outdated)) {
             return run_dependents();
         }
-        ++running_commands;
         log_info("[{}/{}] {}", command_id, number_of_commands, c.name());
         log_trace(c.print());
         try {
+            ++running_commands;
+            if (c.simultaneous_jobs) {
+                --(*c.simultaneous_jobs);
+            }
+
             // use GetProcessTimes or similar for time
             // or get times directly from OS
             c.start = std::decay_t<decltype(c)>::clock::now();
 
             c.run(get_executor(), [&, run_dependents, cmd]() {
+                if (c.simultaneous_jobs) {
+                    ++(*c.simultaneous_jobs);
+                }
                 --running_commands;
 
                 c.end = std::decay_t<decltype(c)>::clock::now();
@@ -1522,6 +1569,9 @@ struct command_executor {
             if (c.is_pipe_leader()) {
                 c.terminate_chain();
             }
+            if (c.simultaneous_jobs) {
+                ++(*c.simultaneous_jobs);
+            }
             --running_commands;
             errors.push_back(cmd);
             if (cl.save_executed_commands || cl.save_failed_commands) {
@@ -1531,9 +1581,8 @@ struct command_executor {
         }
     }
     void run_next(auto &&cl, auto &&sln) {
-        while (running_commands < maximum_running_commands && !pending_commands.empty() && !is_stopped()) {
-            auto cmd = pending_commands.front();
-            pending_commands.pop_front();
+        while (running_commands < maximum_running_commands && !pending_commands_.empty() && !is_stopped()) {
+            auto cmd = pending_commands_.next();
             visit(*cmd, [&](auto &&c) {
                 run_next_raw(cl, sln, cmd, c);
             });
@@ -1559,29 +1608,40 @@ struct command_executor {
         for (auto &&c : external_commands) {
             visit(*c, [&](auto &&c1) {
                 if (c1.dependencies.empty()) {
-                    pending_commands.push_back(c);
+                    pending_commands_.push_back(c);
                 }
             });
         }
         run_next(cl, sln);
         get_executor().run();
 
-        if (!errors.empty()) {
-            string t;
-            for (auto &&cmd : errors) {
-                visit(*cmd, [&](auto &&c) {
-                    t += c.get_error_message() + "\n";
-                });
-            }
-            t += "Total errors: " + std::to_string(errors.size());
-            throw std::runtime_error{t};
-        }
+        visit(
+            cl.c,
+            [&](command_line_parser::test &) {
+                generate_test_results(sln);
+            },
+            [&](auto &&) {
+                if (!errors.empty()) {
+                    string t;
+                    for (auto &&cmd : errors) {
+                        visit(*cmd, [&](auto &&c) {
+                            t += c.get_error_message() + "\n";
+                        });
+                    }
+                    t += "Total errors: " + std::to_string(errors.size());
+                    throw std::runtime_error{t};
+                }
+            });
     }
     void prepare(auto &&cl, auto &&sln) {
         visit_any(
             cl.c,
             [&](auto &b) requires requires {b.explain_outdated;} {
             explain_outdated = b.explain_outdated.value;
+        });
+        visit_any(
+            cl.c, [&](command_line_parser::test &){
+                ignore_errors = std::numeric_limits<decltype(ignore_errors)>::max();
         });
         if (cl.jobs) {
             maximum_running_commands = cl.jobs;
@@ -1618,6 +1678,34 @@ struct command_executor {
     }
     path get_saved_commands_dir(auto &&sln) {
         return sln.work_dir / "rsp";
+    }
+    void generate_test_results(auto &&sln) {
+        struct xml_emitter {
+            string s;
+
+            xml_emitter() {
+                add_line("<?xml version=\"1.0\"?>");
+            }
+            void add_line(auto &&l) {
+                s += l;
+                s += "\n";
+            }
+            auto tag(auto &&obj, auto &&name) {
+                using T = std::decay_t<decltype(obj)>;
+                struct tag {
+                    T &e;
+                };
+                return tag{obj};
+            }
+        };
+        struct junit_emitter : xml_emitter {
+        };
+
+        junit_emitter e;
+        auto testsuites = e.tag("testsuites");
+
+        auto resfn = sln.work_dir / "test" / "results.xml";
+        write_file(resfn, e.s);
     }
 
     void operator+=(std::vector<command> &commands) {

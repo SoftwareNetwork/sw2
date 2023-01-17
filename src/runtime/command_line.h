@@ -177,14 +177,14 @@ struct command_line_parser {
     struct override {
         static constexpr inline auto name = "override"sv;
 
-        input i; // inputs
+        //input i; // inputs
 
         /*auto option_list() {
             return std::tie();
         }*/
 
         void parse(const args &args) {
-            auto check_spec = [&](auto &&fn) {
+            /*auto check_spec = [&](auto &&fn) {
                 if (fs::exists(fn)) {
                     i = specification_file_input{fn};
                     return true;
@@ -195,7 +195,7 @@ struct command_line_parser {
                                                             //|| check_spec("sw2.cpp")
                                                             //|| (i = directory_input{"."}, true)
                 ;
-            parse1(*this, args);
+            parse1(*this, args);*/
         }
     };
     struct test : build_common {

@@ -111,6 +111,8 @@ struct rule_target {
         rule_target &t;
         Command &c;
         decltype(Command::inputs) &inputs{c.inputs};
+        decltype(Command::out) &out{c.out};
+        decltype(Command::err) &err{c.err};
 
         auto operator+=(auto &&arg) {
             return c += arg;
@@ -128,6 +130,19 @@ struct rule_target {
         }
         void operator|(const command_wrapper &w) {
             c | w.c;
+        }
+
+        /*
+        * // this one will confuse user
+        path std_out() const {
+            return std::get<path>(c.out);
+        }
+        path std_err() const {
+            return std::get<path>(c.err);
+        }*/
+
+        void set_resource_pool(resource_pool &p) {
+            c.simultaneous_jobs = &p;
         }
     };
 

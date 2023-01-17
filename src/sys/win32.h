@@ -13,6 +13,7 @@
 #include <windows.h>
 
 #define WINAPI_CALL(x) if (!(x)) {throw ::sw::win32::winapi_exception{#x};}
+#define WINAPI_CALL_HANDLE(x) ::sw::win32::handle{x,[]{throw ::sw::win32::winapi_exception{"bad handle from " #x};}}
 
 // we use this for easy command line building/bootstrapping
 #pragma comment(lib, "advapi32.lib")
@@ -70,7 +71,8 @@ struct handle {
         reset();
     }
 
-    operator HANDLE() { return h; }
+    operator HANDLE() & { return h; }
+    operator HANDLE() && { return release(); }
     operator HANDLE*() { return &h; }
 
     void reset() {
@@ -129,20 +131,20 @@ struct pipe {
     void init_read(bool inherit = false) {
         DWORD sz = 0;
         auto s = pipe_name();
-        r = CreateNamedPipeW(s.c_str(), PIPE_ACCESS_OUTBOUND | FILE_FLAG_OVERLAPPED, 0, 1, sz, sz, 0, 0);
+        r = WINAPI_CALL_HANDLE(CreateNamedPipeW(s.c_str(), PIPE_ACCESS_OUTBOUND | FILE_FLAG_OVERLAPPED, 0, 1, sz, sz, 0, 0));
 
         SECURITY_ATTRIBUTES sa = {0};
         sa.bInheritHandle = !!inherit;
-        w = CreateFileW(s.c_str(), GENERIC_READ, 0, &sa, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED, 0);
+        w = WINAPI_CALL_HANDLE(CreateFileW(s.c_str(), GENERIC_READ, 0, &sa, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED, 0));
     }
     void init_write(bool inherit = false) {
         DWORD sz = 0;
         auto s = pipe_name();
-        r = CreateNamedPipeW(s.c_str(), PIPE_ACCESS_INBOUND | FILE_FLAG_OVERLAPPED, 0, 1, sz, sz, 0, 0);
+        r = WINAPI_CALL_HANDLE(CreateNamedPipeW(s.c_str(), PIPE_ACCESS_INBOUND | FILE_FLAG_OVERLAPPED, 0, 1, sz, sz, 0, 0));
 
         SECURITY_ATTRIBUTES sa = {0};
         sa.bInheritHandle = !!inherit;
-        w = CreateFileW(s.c_str(), GENERIC_WRITE, 0, &sa, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED, 0);
+        w = WINAPI_CALL_HANDLE(CreateFileW(s.c_str(), GENERIC_WRITE, 0, &sa, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED, 0));
     }
     void init_write_double() {
         SECURITY_ATTRIBUTES sa = {0};
@@ -150,8 +152,8 @@ struct pipe {
 
         DWORD sz = 0;
         auto s = pipe_name();
-        r = CreateNamedPipeW(s.c_str(), PIPE_ACCESS_INBOUND, 0, 1, sz, sz, 0, &sa);
-        w = CreateFileW(s.c_str(), GENERIC_WRITE, 0, &sa, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
+        r = WINAPI_CALL_HANDLE(CreateNamedPipeW(s.c_str(), PIPE_ACCESS_INBOUND, 0, 1, sz, sz, 0, &sa));
+        w = WINAPI_CALL_HANDLE(CreateFileW(s.c_str(), GENERIC_WRITE, 0, &sa, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0));
     }
 };
 
