@@ -609,7 +609,7 @@ struct raw_command {
     }
     void run(auto &&ex) {
         run(ex, [&]() {
-            if (!exit_code || *exit_code) {
+            if (!ok()) {
                 throw std::runtime_error{get_error_message()};
             }
         });
@@ -1587,21 +1587,8 @@ struct command_executor {
             });
         }
     }
-    void run(auto &&tgt) {
-        command_storage cs{tgt.binary_dir};
-        for (auto &&c : tgt.commands) {
-            c.cs = &cs;
-        }
-        external_commands.clear();
-        *this += tgt.commands;
-        SW_UNIMPLEMENTED;
-        //run();
-    }
     void run(auto &&cl, auto &&sln) {
         prepare(cl, sln);
-        create_output_dirs(external_commands);
-        make_dependencies(external_commands);
-        check_dag(external_commands);
 
         // initial set of commands
         for (auto &&c : external_commands) {
@@ -1615,6 +1602,12 @@ struct command_executor {
         get_executor().run();
     }
     void prepare(auto &&cl, auto &&sln) {
+        prepare1(cl, sln);
+        create_output_dirs(external_commands);
+        make_dependencies(external_commands);
+        check_dag(external_commands);
+    }
+    void prepare1(auto &&cl, auto &&sln) {
         visit_any(
             cl.c,
             [&](auto &b) requires requires {b.explain_outdated;} {

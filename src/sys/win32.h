@@ -159,8 +159,8 @@ struct pipe {
 
 struct executor {
     handle port;
-    std::atomic_bool stopped{false};
-    std::atomic_int jobs{0};
+    bool stopped{false}; // atomic for MT?
+    int jobs{0}; // atomic for MT?
     std::map<DWORD, std::move_only_function<void()>> process_callbacks;
     handle job;
 

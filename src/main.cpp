@@ -6,6 +6,7 @@
 #include "builtin/detect.h"
 #include "runtime/main.h"
 #include "sys/log.h"
+#include "generator/common.h"
 
 auto &get_msvc_detector() {
     static msvc_detector d;
@@ -125,6 +126,7 @@ void sw1(auto &cl) {
         [&](auto &b) requires (false
             || std::same_as<std::decay_t<decltype(b)>, command_line_parser::build>
             || std::same_as<std::decay_t<decltype(b)>, command_line_parser::test>
+            || std::same_as<std::decay_t<decltype(b)>, command_line_parser::generate>
             ) {
             auto s = make_solution();
             std::vector<entry_point> entry_points;
@@ -271,6 +273,11 @@ void sw1(auto &cl) {
             if constexpr (std::same_as<std::decay_t<decltype(b)>, command_line_parser::test>) {
                 s.test(cl);
             }
+            if constexpr (std::same_as<std::decay_t<decltype(b)>, command_line_parser::generate>) {
+                auto ce = s.make_command_executor();
+                ce.prepare(cl, s);
+                b.generator;
+            }
         },
         [](auto &&) {
             SW_UNIMPLEMENTED;
@@ -316,6 +323,7 @@ int main1(int argc, char *argv[]) {
     visit_any(cl.c, [&](auto &b) requires (false
         || std::same_as<std::decay_t<decltype(b)>, command_line_parser::build>
         || std::same_as<std::decay_t<decltype(b)>, command_line_parser::test>
+        || std::same_as<std::decay_t<decltype(b)>, command_line_parser::generate>
         ) {
         auto s = make_solution();
         auto cfg_dir = s.binary_dir / "cfg";

@@ -8,6 +8,8 @@ template <typename T>
 struct xml_tag {
     T *parent{};
     string name;
+    int depth{};
+    //
     string s;
     std::map<string,string> attributes;
 
@@ -21,17 +23,19 @@ struct xml_tag {
         }
         if (!s.empty()) {
             parent->add_line(format("<{}{}>", name, a));
-            parent->add_line(format("{}</{}>", s, name));
+            parent->s += s;
+            parent->add_line(format("</{}>", name));
         } else {
             parent->add_line(format("<{}{} />", name, a));
         }
     }
     void add_line(auto &&l) {
+        s += string(depth, '\t');
         s += l;
         s += "\n";
     }
     auto tag(auto &&obj, auto &&name) {
-        return xml_tag<xml_tag<T>>{obj, name};
+        return xml_tag<xml_tag<T>>{obj, name, depth+1};
     }
     auto tag(auto &&name) {
         return tag(this, name);

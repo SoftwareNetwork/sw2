@@ -298,21 +298,26 @@ struct solution {
             });
         }
     }
-    void build(auto &&cl) {
-        executor ex;
-        build(ex, cl);
-    }
-    void build(auto &&ex, auto &&cl) {
+    auto make_command_executor() {
         load_inputs();
         prepare();
 
-        command_executor ce{ex};
-        for (auto &&[id,t] : targets) {
+        command_executor ce;
+        for (auto &&[id, t] : targets) {
             visit(t, [&](auto &&vp) {
                 auto &v = *vp;
                 ce += v.commands;
             });
         }
+        return ce;
+    }
+    void build(auto &&cl) {
+        executor ex;
+        build(ex, cl);
+    }
+    void build(auto &&ex, auto &&cl) {
+        auto ce = make_command_executor();
+        ce.ex_external = &ex;
         ce.run(cl, *this);
 
         if (!ce.errors.empty()) {
@@ -331,19 +336,8 @@ struct solution {
         test(ex, cl);
     }
     void test(auto &&ex, auto &&cl) {
-        load_inputs();
-        prepare();
-
-        command_executor ce{ex};
-        for (auto &&[id, t] : targets) {
-            visit(t, [&](auto &&vp) {
-                auto &v = *vp;
-                ce += v.commands;
-                if constexpr (requires { v.tests; }) {
-                    ce += v.tests;
-                }
-            });
-        }
+        auto ce = make_command_executor();
+        ce.ex_external = &ex;
         ce.ignore_errors = std::numeric_limits<decltype(ce.ignore_errors)>::max();
         ce.run(cl, *this);
         generate_test_results();
@@ -351,6 +345,27 @@ struct solution {
     void generate_test_results() {
         junit_emitter e;
         {
+            struct data {
+                int tests{};
+                int failures{};
+                int errors{};
+                int skipped{};
+                // time
+
+                void operator+=(const data &d) {
+                    tests += d.tests;
+                    failures += d.failures;
+                    errors += d.errors;
+                    skipped += d.skipped;
+                }
+            };
+            auto set_attrs = [](auto &&o, auto &&d) {
+                o["tests"] = std::to_string(d.tests);
+                o["skipped"] = std::to_string(d.skipped);
+                o["errors"] = std::to_string(d.errors);
+                o["failures"] = std::to_string(d.failures);
+            };
+            data dtestsuites;
             auto testsuites = e.tag("testsuites");
             for (auto &&[id, t] : targets) {
                 visit(t, [&](auto &&vp) {
@@ -359,25 +374,47 @@ struct solution {
                         if (v.tests.empty()) {
                             return;
                         }
+                        data dtestsuite;
                         auto testsuite = testsuites.tag("testsuite");
                         testsuite["name"] = (string)v.name;
                         testsuite["package"] = (string)v.name;
                         testsuite["config"] = std::to_string(v.bs.hash());
-                        testsuite["tests"] = std::to_string(v.tests.size());
                         for (auto &&t : v.tests) {
+                            ++dtestsuite.tests;
                             auto tc = testsuite.tag("testcase");
                             visit(t, [&](auto &&c) {
-                                tc["name"] = c.name_;
+                                auto p = c.name_.rfind('[');
+                                if (p == -1) {
+                                    tc["name"] = c.name_;
+                                } else {
+                                    ++p;
+                                    tc["name"] = c.name_.substr(p, c.name_.rfind(']') - p);
+                                }
+                                bool time_not_set = c.start == decltype(c.start){};
+                                if (time_not_set) {
+                                    ++dtestsuite.skipped;
+                                    tc.tag("skipped");
+                                    return;
+                                }
+                                if (!c.exit_code) {
+                                    auto e = tc.tag("error");
+                                    e["message"] = "test was not executed";
+                                    ++dtestsuite.errors;
+                                } else if (!*c.exit_code) {
+                                    auto e = tc.tag("failure");
+                                    e["message"] = c.get_error_message();
+                                    ++dtestsuite.failures;
+                                } else {
+                                }
                             });
                             // sw1 has "config" attribute here
-                            // error
-                            // failure
                         }
-                        // errors
-                        // failures
+                        set_attrs(testsuite, dtestsuite);
+                        dtestsuites += dtestsuite;
                     }
                 });
             }
+            set_attrs(testsuites, dtestsuites);
         }
         auto resfn = work_dir / "test" / "results.xml";
         write_file(resfn, e.s);

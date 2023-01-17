@@ -201,10 +201,13 @@ struct command_line_parser {
     struct test : build_common {
         static constexpr inline auto name = "test"sv;
     };
-    struct generate {
+    struct generate : build_common {
         static constexpr inline auto name = "generate"sv;
 
-        void parse(auto &&args) {
+        argument<string, options::flag<"-g"_s>{}> generator;
+
+        auto option_list() {
+            return std::tie(generator);
         }
     };
     using command_types = types<build, generate, test>;
