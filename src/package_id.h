@@ -4,6 +4,7 @@
 #pragma once
 
 #include "package.h"
+#include "builtin/build_settings.h"
 
 namespace sw {
 

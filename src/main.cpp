@@ -276,7 +276,24 @@ void sw1(auto &cl) {
             if constexpr (std::same_as<std::decay_t<decltype(b)>, command_line_parser::generate>) {
                 auto ce = s.make_command_executor();
                 ce.prepare(cl, s);
-                b.generator;
+                if (!b.generator) {
+#ifdef _WIN32
+                    b.generator.value = "vs";
+#endif
+                }
+                if (!b.generator) {
+                    throw std::runtime_error{"specify generator with -g"};
+                }
+                auto g = [&]<typename ... Types>(variant<Types...>**){
+                    generators g;
+                    if (!((Types::name == *b.generator.value && (g = Types{}, true)) || ... || false)) {
+                        throw std::runtime_error{"unknown generator: "s + *b.generator.value};
+                    }
+                    return g;
+                }((generators**)nullptr);
+                visit(g, [&](auto &&g) {
+                    g.generate(s, ce);
+                });
             }
         },
         [](auto &&) {
