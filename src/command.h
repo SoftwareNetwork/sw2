@@ -1028,6 +1028,7 @@ if [ $E -ne 0 ]; then echo "Error code: $E"; fi
     command_storage *cs{};
     string name_;
     resource_pool *simultaneous_jobs{};
+    bool processed{};
     //
     std::set<void*> dependencies;
     std::set<void*> dependents;
@@ -1520,6 +1521,7 @@ struct command_executor {
                 });
             }
         };
+        c.processed = true;
         if (!c.outdated(explain_outdated)) {
             return run_dependents();
         }

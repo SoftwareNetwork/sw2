@@ -12,8 +12,6 @@ void build(solution &s) {
         tgt += "/opt/homebrew/include"_idir; // brew
     }
     if (tgt.is<cpp_compiler::msvc>()) {
-        // for now
-        tgt += "/bigobj"_copt;
     }
     {
         //s.add<test>();

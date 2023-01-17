@@ -403,24 +403,33 @@ struct solution {
                                     tc["name"] = c.name_.substr(p, c.name_.rfind(']') - p);
                                 }
                                 bool time_not_set = c.start == decltype(c.start){};
-                                if (time_not_set) {
+                                if (time_not_set && c.processed) {
                                     ++dtestsuite.skipped;
                                     tc.tag("skipped");
                                     return;
                                 }
-                                if (!c.exit_code) {
+                                auto testdir = std::get<path>(c.err).parent_path();
+                                if (!c.exit_code || !c.processed) {
                                     auto e = tc.tag("error");
-                                    e["message"] = "test was not executed";
+                                    if (c.processed) {
+                                        e["message"] = "test was not executed";
+                                    } else {
+                                        e["message"] = "test dependencies failed";
+                                    }
                                     ++dtestsuite.errors;
-                                } else if (!*c.exit_code) {
+                                } else if (*c.exit_code) {
                                     auto e = tc.tag("failure");
                                     e["message"] = c.get_error_message();
-                                    e["time"] = format_time(c.end - c.start);
+                                    tc["time"] = format_time(c.end - c.start);
                                     ++dtestsuite.failures;
                                     dtestsuite.time += c.end - c.start;
+                                    write_file(testdir / "exit_code.txt", format("{}", *c.exit_code));
+                                    write_file(testdir / "time.txt", format_time(c.end - c.start));
                                 } else {
-                                    e["time"] = format_time(c.end - c.start);
+                                    tc["time"] = format_time(c.end - c.start);
                                     dtestsuite.time += c.end - c.start;
+                                    write_file(testdir / "exit_code.txt", format("{}", *c.exit_code));
+                                    write_file(testdir / "time.txt", format_time(c.end - c.start));
                                 }
                             });
                             // sw1 has "config" attribute here

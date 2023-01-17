@@ -254,9 +254,6 @@ struct rule_target {
         // no txt?
         c.out = path{testdir / "stdout.txt"};
         c.err = path{testdir / "stderr.txt"};
-        // todo
-        //write_file(testdir / "exit_code.txt");
-        //write_file(testdir / "time.txt"); // e.g. 5.1671528
         command_wrapper<T> w{*this,c};
         return w;
     }
