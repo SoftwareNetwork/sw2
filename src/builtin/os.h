@@ -4,7 +4,7 @@
 #pragma once
 
 #include "os_base.h"
-#include "package.h"
+#include "../package.h"
 
 namespace sw {
 

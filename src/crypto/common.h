@@ -1,6 +1,6 @@
 #pragma once
 
-#include "crypto/sha3.h"
+#include "sha3.h"
 
 #include <string>
 

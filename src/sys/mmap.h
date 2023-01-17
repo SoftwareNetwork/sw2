@@ -73,6 +73,9 @@ struct mmap_file {
     void open(auto mode) {
         sz = !fs::exists(fn) ? 0 : fs::file_size(fn) / sizeof(T);
         if (sz == 0) {
+            /*if (!fs::exists(fn)) {
+                throw std::runtime_error{"cannot open file (file does not exist): " + fn.string()};
+            }*/
             return;
         }
 #ifdef _WIN32

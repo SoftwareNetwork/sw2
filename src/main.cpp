@@ -334,6 +334,7 @@ int main1(int argc, char *argv[]) {
         entry_point pch_ep;
         {
             cpp_emitter e;
+            e += "#pragma once";
             e += "#include <vector>";
             e += "namespace sw { struct entry_point; }";
             e += "#define SW1_BUILD";
@@ -348,6 +349,10 @@ int main1(int argc, char *argv[]) {
             pch_ep.f = [pch](solution &s) {
                 auto &t = s.add<native_target>("sw_pch");
                 t += precompiled_header{pch};
+#ifdef __APPLE__
+                t += "/usr/local/opt/fmt/include"_idir; // github ci
+                t += "/opt/homebrew/include"_idir; // brew
+#endif
             };
         }
         cpp_emitter e;
@@ -402,14 +407,18 @@ int main1(int argc, char *argv[]) {
         dbs.build_type = build_type::debug{};
         is.settings.insert(dbs);
         s.add_input(is);
+//#ifdef _WIN32
         is.ep = pch_ep;
         s.add_input(is);
+//#endif
         s.load_inputs();
         auto &&t = s.targets.find_first<executable>("sw");
+//#ifdef _WIN32
         auto &&pch = s.targets.find_first<native_target>("sw_pch");
         pch.make_pch();
         t.precompiled_header = pch.precompiled_header;
         t.precompiled_header.create = false;
+//#endif
         s.build(cl);
 
         if (!fs::exists(t.executable)) {

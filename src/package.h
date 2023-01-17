@@ -7,6 +7,7 @@
 
 namespace sw {
 
+#if defined(_WIN32) && 0
 struct istring : string {
     using string::string;
     using string::operator=;
@@ -31,6 +32,9 @@ struct istring : string {
         return std::hash<string>()(v);
     }
 };
+#else
+using istring = string;
+#endif
 
 struct package_path {
     std::vector<istring> elements;
@@ -54,7 +58,8 @@ struct package_path {
     auto hash() const {
         size_t h = 0;
         for (auto &&e : elements) {
-            h ^= e.hash();
+            //h ^= e.hash();
+            h ^= std::hash<string>{}(e);
         }
         return h;
     }

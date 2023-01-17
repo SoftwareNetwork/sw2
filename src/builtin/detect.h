@@ -46,22 +46,10 @@ struct gcc_compile_rule {
                 }
         );
 
-        for (auto &&[f, rules] : tgt.processed_files) {
-            if (rules.contains(this) || !(is_c_file(f) || is_cpp_file(f))) {
-                continue;
-            }
-            if (cpp != is_cpp_file(f)) {
-                continue;
-            }
-            auto base = tgt.binary_dir / "obj" / f.filename();
-            auto out = path{base} += objext;
-            gcc_command c;
-            c.deps_file = path{base} += ".d";
-            c.name_ = format_log_record(tgt, "/"s + normalize_path(f.lexically_relative(tgt.source_dir).string()));
-            c += compiler.executable, "-c";
+        auto add_flags = [&](auto &c, auto &&f) {
             if (is_c_file(f)) {
                 c += "-std=c17";
-            } else if (is_cpp_file(f)) {
+            } else { //if (is_cpp_file(f)) {
                 c += "-std=c++2b";
             }
             if (clang) {
@@ -76,7 +64,7 @@ struct gcc_compile_rule {
                 });
                 c += t;
             }
-            c += f, "-MD", "-o", out;
+            c += "-MD";
             tgt.bs.build_type.visit(
                     [&](build_type::debug) {
                         c += "-g", "-O0";
@@ -85,6 +73,54 @@ struct gcc_compile_rule {
                         c += "-O3";
                     });
             add_compile_options(tgt.merge_object(), c);
+        };
+
+        if constexpr (requires { tgt.precompiled_header; }) {
+            if (!tgt.precompiled_header.header.empty()) {
+                /*if (tgt.precompiled_header.create) {
+                    auto &r = tgt.processed_files[tgt.precompiled_header.header];
+                    if (!r.contains(this)) {
+                        auto f = tgt.precompiled_header.header;
+                        gcc_command c;
+                        c.working_directory = tgt.binary_dir / "obj";
+                        c += compiler.executable, "-c", f;
+                        c.inputs.insert(compiler.executable);
+                        auto base = tgt.binary_dir / "obj" / tgt.precompiled_header.header.stem();
+                        c.deps_file = path{base} += ".d";
+                        auto out = tgt.precompiled_header.pch = path{tgt.precompiled_header.header} += ".gch";
+                        c.name_ = format_log_record(tgt, "/[pch]");
+                        c += "-include" + tgt.precompiled_header.header.string();
+                        add_flags(c, f);
+                        c.inputs.insert(f);
+                        c.outputs.insert(out);
+                        tgt.commands.emplace_back(std::move(c));
+                        r.insert(this);
+                    }
+                }*/
+            }
+        }
+        for (auto &&[f, rules] : tgt.processed_files) {
+            if (rules.contains(this) || !(is_c_file(f) || is_cpp_file(f))) {
+                continue;
+            }
+            if (cpp != is_cpp_file(f)) {
+                continue;
+            }
+            auto base = tgt.binary_dir / "obj" / f.filename();
+            auto out = path{base} += objext;
+            gcc_command c;
+            c.deps_file = path{base} += ".d";
+            c.name_ = format_log_record(tgt, "/"s + normalize_path(f.lexically_relative(tgt.source_dir).string()));
+            c += compiler.executable, "-c";
+            add_flags(c, f);
+            if constexpr (requires { tgt.precompiled_header; }) {
+                if (!tgt.precompiled_header.header.empty() && tgt.precompiled_header.use) {
+                    c += "-include" + tgt.precompiled_header.header.string();
+                    c.inputs.insert(tgt.precompiled_header.header);
+                    //c.inputs.insert(path{tgt.precompiled_header.header} += ".gch");
+                }
+            }
+            c += f, "-o", out;
             c.inputs.insert(f);
             c.outputs.insert(out);
             tgt.commands.emplace_back(std::move(c));
@@ -123,7 +159,6 @@ struct gcc_link_rule {
             c += "-o", tgt.library.string();
             c.outputs.insert(tgt.library);
         } else {
-            SW_UNIMPLEMENTED;
         }
         auto has_files = false;
         for (auto &&[f, rules] : tgt.processed_files) {
@@ -378,7 +413,6 @@ struct link_exe_rule {
             c += "-OUT:" + tgt.library.string();
             c.outputs.insert(tgt.library);
         } else {
-            SW_UNIMPLEMENTED;
         }
         bool has_files{};
         for (auto &&[f, rules] : tgt.processed_files) {

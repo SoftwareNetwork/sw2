@@ -633,7 +633,9 @@ struct raw_command {
     }
 
     void add(auto &&p) {
-        if constexpr (requires {arguments.push_back(p);}) {
+        if constexpr (requires {std::to_string(p);}) {
+            add(std::to_string(p));
+        } else if constexpr (requires {arguments.push_back(p);}) {
             arguments.push_back(p);
         } else {
             for (auto &&a : p) {
@@ -643,10 +645,6 @@ struct raw_command {
     }
     void add(const char *p) {
         arguments.push_back(string{p});
-    }
-    // TODO: exclude bools, chars
-    void add(std::integral auto v) {
-        add(std::to_string(v));
     }
     auto operator+=(auto &&arg) {
         add(arg);
@@ -1353,10 +1351,13 @@ struct gcc_command : io_command {
         };
 
         mmap_file<char> f{deps_file};
+        if (f.sz == 0) {
+            throw std::runtime_error{format("cannot open deps file: {}", deps_file)};
+        }
         string_view sv{f.p, f.sz};
         auto p = sv.find(": ");
         if (p == -1) {
-            SW_UNIMPLEMENTED;
+            throw std::runtime_error{"bad deps file"};
         }
         //auto outputs = sv.substr(0, p);
         auto inputs = sv.substr(p + 2);
