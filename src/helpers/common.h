@@ -42,6 +42,12 @@ using fmt::format;
 #include <unordered_set>
 #include <variant>
 
+#ifndef _WIN32
+#include <unistd.h>
+#include <sys/types.h>
+#include <pwd.h>
+#endif
+
 #if defined(_MSC_VER)
 #if _MSC_VER < 1934
 #error "use VS 17.4 or later"

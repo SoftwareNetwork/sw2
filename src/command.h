@@ -576,17 +576,17 @@ struct raw_command {
             throw std::runtime_error{"can't posix_spawn: "s + std::to_string(errno)};
         }
 
-        ex.register_process(pid, [pid, cb](){
+        ex.register_process(pid, [this, pid, cb](){
             int wstatus;
             if (waitpid(pid, &wstatus, 0) == -1) {
                 throw std::runtime_error{"error waitpid: " + std::to_string(errno)};
             }
             if (WIFSIGNALED(wstatus)) {
-                int exit_code = WTERMSIG(wstatus);
-                cb(exit_code);
+                exit_code = WTERMSIG(wstatus);
+                cb();
             } else if (WIFEXITED(wstatus)) {
-                int exit_code = WEXITSTATUS(wstatus);
-                cb(exit_code);
+                exit_code = WEXITSTATUS(wstatus);
+                cb();
             }
         });
 #endif
@@ -621,10 +621,14 @@ struct raw_command {
     }
 
     void finish() {
+#ifdef _WIN32
         d.close();
+#endif
     }
     void terminate() {
+#ifdef _WIN32
         TerminateProcess(d.pi.hProcess, 1);
+#endif
         finish();
     }
 
@@ -688,10 +692,12 @@ struct raw_command {
     }
     void terminate_chain() {
         if (is_pipe_leader()) {
+#ifdef _WIN32
             if (d.pi.hProcess) {
                 //SW_UNIMPLEMENTED;
                 terminate();
             }
+#endif
         } else {
             auto ch = std::get_if<command_pointer_holder>(&in);
             ch->r->terminate_chain();
@@ -1474,7 +1480,6 @@ struct command_executor {
     pending_commands pending_commands_;
     int running_commands{0};
     size_t maximum_running_commands{std::thread::hardware_concurrency()};
-    executor ex;
     executor *ex_external{nullptr};
     std::vector<command*> external_commands;
     // this number differs with external_commands.size() because we have:
@@ -1490,10 +1495,6 @@ struct command_executor {
     command_executor() {
         init();
     }
-    command_executor(executor &ex) : ex_external{&ex} {
-        init();
-    }
-
     void init() {
 #ifdef _WIN32
         // always create top level job and associate self with it
@@ -1502,7 +1503,10 @@ struct command_executor {
     }
 
     auto &get_executor() {
-        return ex_external ? *ex_external : ex;
+        if (!ex_external) {
+            throw std::logic_error{"no executor set"};
+        }
+        return *ex_external;
     }
     bool is_stopped() const {
         return ignore_errors < errors.size();
