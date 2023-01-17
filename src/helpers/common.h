@@ -25,6 +25,7 @@ using fmt::format;
 #else
 #define FMT_HEADER_ONLY
 #include <fmt/format.h>
+#include <fmt/chrono.h>
 using fmt::format;
 #endif
 #include <fstream>

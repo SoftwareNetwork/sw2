@@ -41,12 +41,8 @@ void log(const char *compponent, int severity, auto &&fmtstring, auto &&...args)
         s += fmtstring;
     }
     std::cerr << fmt::format("[{}] [{}] {}\n"
-#ifdef _MSC_VER
-        , std::chrono::system_clock::now()
-#else
-        , "not impl"
-#endif
-        , get_severity_string(severity), s);
+                             , std::chrono::system_clock::now()
+                             , get_severity_string(severity), s);
 }
 
 void log_fatal(auto &&fmtstring, auto &&...args) {
