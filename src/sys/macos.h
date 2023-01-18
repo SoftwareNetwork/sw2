@@ -10,6 +10,7 @@
 #include <sys/event.h>
 #include <unistd.h>
 #include <sys/sysctl.h>
+#include <signal.h>
 
 extern char **environ;
 
