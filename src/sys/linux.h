@@ -69,6 +69,9 @@ struct executor {
             if (errno == EINTR) {
                 return;
             }
+            if (errno == EINVAL) {
+                return;
+            }
             //throw std::runtime_error{"error epoll_wait"};
             perror("error epoll_wait");
             exit(1);
