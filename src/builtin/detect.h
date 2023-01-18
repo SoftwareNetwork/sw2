@@ -90,7 +90,7 @@ struct gcc_compile_rule {
                         c += "-MF", c.deps_file;
                         auto out = tgt.precompiled_header.pch = path{tgt.precompiled_header.header} += ".gch";
                         c.name_ = format_log_record(tgt, "/[pch]");
-                        c += "-include" + tgt.precompiled_header.header.string();
+                        //c += "-include" + tgt.precompiled_header.header.string();
                         add_flags(c, f);
                         c.inputs.insert(f);
                         c.outputs.insert(out);
