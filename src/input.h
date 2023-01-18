@@ -15,7 +15,6 @@ struct entry_point {
     path binary_dir;
 
     void operator()(auto &sln, const auto &bs) {
-        sln.bs = &bs;
         swap_and_restore sr{sln.source_dir};
         if (!source_dir.empty()) {
             sln.source_dir = source_dir;
@@ -24,6 +23,7 @@ struct entry_point {
         if (!binary_dir.empty()) {
             sln.binary_dir = binary_dir;
         }
+        swap_and_restore sr3{sln.bs, &bs};
         f(sln);
     }
 };
