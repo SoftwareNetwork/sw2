@@ -440,6 +440,19 @@ struct solution {
                 });
             }
             set_attrs(testsuites, dtestsuites);
+
+            log_info(R"(
+Test results:
+TOTAL:   {}
+PASSED:  {}
+FAILED:  {}
+SKIPPED: {})",
+                     dtestsuites.tests,
+                     dtestsuites.tests - (dtestsuites.failures + dtestsuites.errors),
+                     dtestsuites.failures + dtestsuites.errors,
+                     dtestsuites.skipped
+            );
+            // List of skipped tests:
         }
         auto resfn = work_dir / "test" / "results.xml";
         write_file(resfn, e.s);
