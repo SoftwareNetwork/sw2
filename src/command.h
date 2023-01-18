@@ -88,11 +88,13 @@ struct command_stream {
     }*/
 
     auto pre_create_command(auto os_handle, auto &&ex) {
+#ifndef _WIN32
         auto mkpipe = [&]() {
             if (pipe2(pipe.p, 0) == -1) {
                 fprintf(stderr, "Error creating pipe\n");
             }
         };
+#endif
 
         visit(
             s,
@@ -287,9 +289,12 @@ struct command_stream {
                     // empty
                 },
                 [&](close_) {
+#ifndef _WIN32
                     close(fd);
+#endif
                 },
-                [&](auto &) {
+            [&](auto &) {
+#ifndef _WIN32
                     if constexpr (Input) {
                         // while ((dup2(pipe[1], STDERR_FILENO) == -1) && (errno == EINTR)) {}
                         if (dup2(pipe.r, fd) == -1) {
@@ -305,6 +310,7 @@ struct command_stream {
                     }
                     close(pipe.r);
                     close(pipe.w);
+#endif
                 });
     }
     void post_exit_command(auto &&ex) {
@@ -320,6 +326,7 @@ struct command_stream {
                     // nothing
                 },
                 [&](auto &) {
+#ifndef _WIN32
                     if constexpr (Input) {
                         close(pipe.w);
                         SW_UNIMPLEMENTED;
@@ -328,6 +335,7 @@ struct command_stream {
                         close(pipe.r);
                         ex.unregister_read_handle(pipe.r);
                     }
+#endif
                 }
         );
     }
