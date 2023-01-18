@@ -337,6 +337,7 @@ int main1(int argc, char *argv[]) {
 #ifdef SW1_BUILD
     return 0;
 #endif
+    cl.rebuild_all.value = false; // not for config builds
     visit_any(cl.c, [&](auto &b) requires (false
         || std::same_as<std::decay_t<decltype(b)>, command_line_parser::build>
         || std::same_as<std::decay_t<decltype(b)>, command_line_parser::test>
