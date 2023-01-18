@@ -10,7 +10,7 @@ jobs:
     - uses: ilammy/msvc-dev-cmd@v1
     - name: stage1
       run: |
-        cl -nologo -std:c++latest -EHsc src/*.cpp -link -OUT:sw.exe
+        cl -nologo -std:c++latest -EHsc -bigobj src/*.cpp -link -OUT:sw.exe
     - name: stage2
       run: |
         .\sw.exe build
