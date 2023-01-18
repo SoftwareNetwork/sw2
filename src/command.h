@@ -457,6 +457,9 @@ struct raw_command {
                 [&](path &) {
                     // nothing
                 },
+                [&](command_pointer_holder &) {
+                    SW_UNIMPLEMENTED;
+                },
                 [&](string &s) {
                     close(pin[0]);
                     SW_UNIMPLEMENTED;
@@ -480,6 +483,9 @@ struct raw_command {
                 },
                 [&](path &) {
                     // nothing
+                },
+                [&](command_pointer_holder &) {
+                    SW_UNIMPLEMENTED;
                 },
                 [&](string &s) {
                     close(pipe[1]);
