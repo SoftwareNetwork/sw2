@@ -11,3 +11,4 @@ cmake-*
 *.txt
 *.bin*
 *.json
+a.out
