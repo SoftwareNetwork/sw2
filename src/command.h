@@ -28,30 +28,52 @@ struct command_stream {
     using second_end_of_pipe = command_stream<!Output>*;
     using stream_callback = std::function<void(string_view)>;
     struct inherit {};
-    struct close {};
+    struct close_ {};
     // default mode is inheritance
-    using stream = variant<inherit, close, string, stream_callback, path, second_end_of_pipe>;
+    using stream = variant<inherit, close_, string, stream_callback, path, second_end_of_pipe>;
 
     stream s;
 #ifdef _WIN32
     HANDLE h = 0;
     win32::pipe pipe;
 #else
+    struct pipe_type {
+        int p[2]{-1,-1};
+        int &r{p[0]};
+        int &w{p[1]};
+    };
+    //int fd{-1};
+    pipe_type pipe;
 #endif
 
     command_stream() = default;
     command_stream(command_stream &&rhs) {
         s = rhs.s;
+#ifdef _WIN32
         h = rhs.h;
+#else
+        this->pipe.p[0] = rhs.pipe.p[0];
+        this->pipe.p[1] = rhs.pipe.p[1];
+#endif
     }
-    command_stream &operator=(command_stream &&s) {
-        this->s = s.s;
-        this->h = s.h;
+    command_stream &operator=(command_stream &&rhs) {
+        this->s = rhs.s;
+#ifdef _WIN32
+        this->h = rhs.h;
+#else
+        this->pipe.p[0] = rhs.pipe.p[0];
+        this->pipe.p[1] = rhs.pipe.p[1];
+#endif
         return *this;
     }
-    command_stream &operator=(const command_stream &s) {
-        this->s = s.s;
-        this->h = s.h;
+    command_stream &operator=(const command_stream &rhs) {
+        this->s = rhs.s;
+#ifdef _WIN32
+        this->h = rhs.h;
+#else
+        this->pipe.p[0] = rhs.pipe.p[0];
+        this->pipe.p[1] = rhs.pipe.p[1];
+#endif
         return *this;
     }
     command_stream &operator=(const stream &s) {
@@ -66,31 +88,64 @@ struct command_stream {
     }*/
 
     auto pre_create_command(auto os_handle, auto &&ex) {
+        auto mkpipe = [&]() {
+            if (pipe2(pipe.p, 0) == -1) {
+                fprintf(stderr, "Error creating pipe\n");
+            }
+        };
+
         visit(
             s,
             [&](inherit) {
+#ifdef _WIN32
                 h = GetStdHandle(os_handle);
+#else
+                // nothing, inheritance is by default?
+#endif
             },
-            [&](close) {
+            [&](close_) {
                 // empty
             },
             [&](path &fn) {
+#ifdef _WIN32
                 SECURITY_ATTRIBUTES sa = {0};
                 sa.bInheritHandle = TRUE;
                 h = WINAPI_CALL_HANDLE(
                     CreateFileW(fn.wstring().c_str(),
                         Output ? GENERIC_WRITE : GENERIC_READ, 0, &sa,
                         Output ? CREATE_ALWAYS : OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0));
+#else
+                if constexpr (Input) {
+                    pipe.r = open(fn.string().c_str(), O_RDONLY);
+                    if (pipe.r == -1) {
+                        throw std::runtime_error(format("cannot open file for reading: {}", fn.string()));
+                    }
+                } else {
+                    pipe.w = open(fn.string().c_str(), O_CREAT | O_WRONLY | O_TRUNC);
+                    if (pipe.w == -1) {
+                        throw std::runtime_error(format("cannot open file for writing: {}", fn.string()));
+                    }
+                }
+#endif
             },
             [&](second_end_of_pipe &e) {
+                SW_UNIMPLEMENTED;
+                // ok, but verify
                 if constexpr (Input) {
+#ifdef _WIN32
                     h = e->pipe.r;
+#else
+#endif
                 } else {
+#ifdef _WIN32
                     pipe.init_double(true);
                     h = pipe.w;
+#else
+#endif
                 }
             },
             [&](auto &) {
+#ifdef _WIN32
                 pipe.init(true);
                 if constexpr (Input) {
                     ex.register_handle(pipe.w);
@@ -99,8 +154,14 @@ struct command_stream {
                     ex.register_handle(pipe.r);
                     h = pipe.w;
                 }
+#else
+                mkpipe();
+#endif
             });
+#ifdef _WIN32
         return h;
+#else
+#endif
     }
     void post_create_command(auto &&ex) {
         visit(
@@ -108,10 +169,11 @@ struct command_stream {
             [&](inherit) {
                 // empty
             },
-            [&](close) {
+            [&](close_) {
                 // empty
             },
             [&](string &s) {
+#ifdef _WIN32
                 if constexpr (Input) {
                     SW_UNIMPLEMENTED;
                     /*pipe.r.reset();
@@ -130,16 +192,37 @@ struct command_stream {
                         }
                     });
                 }
+#else
+                if constexpr (Input) {
+                    close(pipe.r);
+                    pipe.r = -1;
+                    SW_UNIMPLEMENTED;
+                    //ex.register_write_handle(pin[1], [&s](auto &&buf, auto count) {
+                    //s.append(buf, count);
+                    //});
+                } else {
+                    close(pipe.w);
+                    pipe.w = -1;
+                    ex.register_read_handle(pipe.r, [&s](auto &&buf, auto count) {
+                        s.append(buf, count);
+                    });
+                }
+#endif
             },
             [&](second_end_of_pipe &) {
                 SW_UNIMPLEMENTED;
+#ifdef _WIN32
                 if constexpr (Input) {
                     //CloseHandle(d.si.StartupInfo.hStdInput);
                 } else {
                    //CloseHandle(h);
                 }
+#else
+                SW_UNIMPLEMENTED;
+#endif
             },
             [&](stream_callback &cb) {
+#ifdef _WIN32
                 if constexpr (Input) {
                     SW_UNIMPLEMENTED;
                     /*pipe.r.reset();
@@ -168,15 +251,94 @@ struct command_stream {
                         }
                     });
                 }
+#else
+                if constexpr (Input) {
+                    close(pipe.r);
+                    pipe.r = -1;
+                    SW_UNIMPLEMENTED;
+                    //ex.register_write_handle(pin[1], [&cb](auto &&buf, auto count) {
+                    //cb(string_view{buf, count});
+                    //});
+                } else {
+                    close(pipe.w);
+                    pipe.w = -1;
+                    ex.register_read_handle(pipe.r, [&cb](auto &&buf, auto count) {
+                        cb(string_view{buf, count});
+                    });
+                }
+#endif
             },
             [&](path &fn) {
+#ifdef _WIN32
                 CloseHandle(h);
+#else
+                if constexpr (Input) {
+                    close(pipe.w);
+                } else {
+                    close(pipe.r);
+                }
+#endif
             });
     }
-    void inside_fork() {}
-    void post_exit_command() {}
+    void inside_fork(int fd) {
+        visit(
+                s,
+                [&](inherit) {
+                    // empty
+                },
+                [&](close_) {
+                    close(fd);
+                },
+                [&](auto &) {
+                    if constexpr (Input) {
+                        // while ((dup2(pipe[1], STDERR_FILENO) == -1) && (errno == EINTR)) {}
+                        if (dup2(pipe.r, fd) == -1) {
+                            std::cerr << "dup2 r error: " << errno << "\n";
+                            exit(1);
+                        }
+                    } else {
+                        // while ((dup2(pipe[1], STDERR_FILENO) == -1) && (errno == EINTR)) {}
+                        if (dup2(pipe.w, fd) == -1) {
+                            std::cerr << "dup2 w error: " << errno << "\n";
+                            exit(1);
+                        }
+                    }
+                    close(pipe.r);
+                    close(pipe.w);
+                });
+    }
+    void post_exit_command(auto &&ex) {
+        visit(
+                s,
+                [&](inherit) {
+                    // nothing, we close child by default
+                },
+                [&](close_) {
+                    // nothing
+                },
+                [&](path &) {
+                    // nothing
+                },
+                [&](auto &) {
+                    if constexpr (Input) {
+                        close(pipe.w);
+                        SW_UNIMPLEMENTED;
+                        //ex.unregister_write_handle(pipe);
+                    } else {
+                        close(pipe.r);
+                        ex.unregister_read_handle(pipe.r);
+                    }
+                }
+        );
+    }
     void finish() {
+#ifdef _WIN32
         pipe = decltype(pipe){};
+#else
+        // we close in post_exit()
+        //close(pipe.r);
+        //close(pipe.w);
+#endif
     }
 
     template <typename T>
@@ -404,60 +566,9 @@ struct raw_command {
         }
         args2.push_back(0);
 
-        auto mkpipe = [](int my_pipe[2]) {
-            if (pipe2(my_pipe, 0) == -1) {
-                fprintf(stderr, "Error creating pipe\n");
-            }
-            return my_pipe;
-        };
-        int pin[2] = {-1,-1};
-        int pout[2] = {-1,-1};
-        int perr[2] = {-1,-1};
-
-        visit(
-                in,
-                [&](inherit) {
-                    // nothing, inheritance is by default?
-                },
-                [&](path &fn) {
-                    mkpipe(pin);
-                    auto fd = open(fn.string().c_str(), O_RDONLY);
-                    if (fd == -1) {
-                        throw std::runtime_error(format("cannot open file for reading: {}", fn.string()));
-                    }
-                    if (dup2(pin[1], fd) == -1) {
-                        std::cerr << "dup2 error: " << errno << "\n";
-                        exit(1);
-                    }
-                    close(pin[1]);
-                },
-                [&](auto &) {
-                    mkpipe(pin);
-                });
-        auto setup_stream = [&](auto &&s, auto &&pipe) {
-            visit(
-                    s,
-                    [&](inherit) {
-                        // nothing, inheritance is by default
-                    },
-                    [&](path &fn) {
-                        mkpipe(pipe);
-                        auto fd = open(fn.string().c_str(), O_CREAT | O_WRONLY | O_TRUNC);
-                        if (fd == -1) {
-                            throw std::runtime_error(format("cannot open file for writing: {}", fn.string()));
-                        }
-                        if (dup2(fd, pipe[0]) == -1) {
-                            std::cerr << "dup2 error: " << errno << "\n";
-                            exit(1);
-                        }
-                        close(fd);
-                    },
-                    [&](auto &) {
-                        mkpipe(pipe);
-                    });
-        };
-        setup_stream(out, pout);
-        setup_stream(err, perr);
+        in.pre_create_command(STDIN_FILENO, ex);
+        out.pre_create_command(STDOUT_FILENO, ex);
+        err.pre_create_command(STDERR_FILENO, ex);
 
         clone_args cargs{};
         cargs.flags |= CLONE_PIDFD;
@@ -470,132 +581,23 @@ struct raw_command {
             throw std::runtime_error{"can't clone3: "s + std::to_string(errno)};
         }
         if (pid == 0) {
-            visit(
-                    in,
-                    [&](inherit) {
-                        // we should close this only for io commands
-                        close(STDIN_FILENO);
-                    },
-                    [&](auto &) {
-                        // while ((dup2(pipe[1], STDERR_FILENO) == -1) && (errno == EINTR)) {}
-                        if (dup2(pin[0], STDIN_FILENO) == -1) {
-                            std::cerr << "dup2 error: " << errno << "\n";
-                            exit(1);
-                        }
-                        close(pin[0]);
-                        close(pin[1]);
-                    });
-            auto postsetup_pipe = [&](auto &&s, auto &&pipe, auto fd) {
-                visit(
-                    s,
-                    [&](inherit) {
-                        // nothing, inheritance is by default
-                    },
-                    [&](auto &) {
-                        // while ((dup2(pipe[1], STDERR_FILENO) == -1) && (errno == EINTR)) {}
-                        if (dup2(pipe[1], fd) == -1) {
-                            std::cerr << "dup2 error: " << errno << "\n";
-                            exit(1);
-                        }
-                        close(pipe[0]);
-                        close(pipe[1]);
-                    });
-            };
-            postsetup_pipe(out, pout, STDOUT_FILENO);
-            postsetup_pipe(err, perr, STDERR_FILENO);
+            in.inside_fork(STDIN_FILENO);
+            out.inside_fork(STDOUT_FILENO);
+            err.inside_fork(STDERR_FILENO);
             // child
             if (execve(args2[0], args2.data(), environ) == -1) {
                 std::cerr << "execve error: " << errno << "\n";
                 exit(1);
             }
         }
-        visit(
-                in,
-                [&](inherit) {
-                    // nothing, we close child by default
-                },
-                [&](path &) {
-                    // nothing
-                },
-                [&](command_pointer_holder &) {
-                    SW_UNIMPLEMENTED;
-                },
-                [&](string &s) {
-                    close(pin[0]);
-                    SW_UNIMPLEMENTED;
-                    /*ex.register_write_handle(pin[1], [&s](auto &&buf, auto count) {
-                        s.append(buf, count);
-                    });*/
-                },
-                [&](stream_callback &cb) {
-                    close(pin[0]);
-                    SW_UNIMPLEMENTED;
-                    /*ex.register_write_handle(pin[1], [&cb](auto &&buf, auto count) {
-                        cb(string_view{buf, count});
-                    });*/
-                }
-        );
-        auto postsetup_pipe = [&](auto &&s, auto &&pipe) {
-            visit(
-                s,
-                [&](inherit) {
-                    // nothing, inheritance is by default
-                },
-                [&](path &) {
-                    // nothing
-                },
-                [&](command_pointer_holder &) {
-                    SW_UNIMPLEMENTED;
-                },
-                [&](string &s) {
-                    close(pipe[1]);
-                    ex.register_read_handle(pipe[0], [&s](auto &&buf, auto count) {
-                        s.append(buf, count);
-                    });
-                },
-                [&](stream_callback &cb) {
-                    close(pipe[1]);
-                    ex.register_read_handle(pipe[0], [&cb](auto &&buf, auto count) {
-                        cb(string_view{buf, count});
-                    });
-                }
-            );
-        };
-        postsetup_pipe(out, pout);
-        postsetup_pipe(err, perr);
-        ex.register_process(pidfd, [&, pidfd, pin = pin[1], pout = pout[0], perr = perr[0], cb]() {
+        in.post_create_command(ex);
+        out.post_create_command(ex);
+        err.post_create_command(ex);
+        ex.register_process(pidfd, [&, pidfd, cb]() {
             scope_exit se{[&] {
-                visit(
-                        in,
-                        [&](inherit) {
-                            // nothing, we close child by default
-                        },
-                        [&](path &) {
-                            close(pin);
-                        },
-                        [&](auto &) {
-                            close(pin);
-                            SW_UNIMPLEMENTED;
-                            //ex.unregister_write_handle(pipe);
-                        }
-                );
-                auto postsetup_pipe = [&](auto &&s, auto &&pipe) {
-                    visit(
-                        s,
-                        [&](inherit) {
-                            // nothing, inheritance is by default
-                        },
-                        [&](path &) {
-                            close(pipe);
-                        },
-                        [&](auto &) {
-                            close(pipe);
-                            ex.unregister_read_handle(pipe);
-                        }
-                    );
-                };
-                postsetup_pipe(out, pout);
-                postsetup_pipe(err, perr);
+                in.post_exit_command(ex);
+                out.post_exit_command(ex);
+                err.post_exit_command(ex);
                 close(pidfd);
             }};
 
