@@ -347,7 +347,6 @@ int main1(int argc, char *argv[]) {
         s.binary_dir = cfg_dir;
         auto fn = cfg_dir / "src" / "main.cpp";
         fs::create_directories(fn.parent_path());
-        auto swdir = fs::absolute(path{std::source_location::current().file_name()}.parent_path());
         entry_point pch_ep;
         {
             cpp_emitter e;
@@ -356,7 +355,13 @@ int main1(int argc, char *argv[]) {
             e += "namespace sw { struct entry_point; }";
             e += "#define SW1_BUILD";
             e += "std::vector<sw::entry_point> sw1_load_inputs();";
-            e.include(swdir / "main.cpp");
+            path p = __FILE__;
+            if (p.is_absolute()) {
+                e.include(p);
+            } else {
+                auto swdir = fs::absolute(path{std::source_location::current().file_name()}.parent_path());
+                e.include(swdir / "main.cpp");
+            }
             //
             auto pch_tmp = fs::temp_directory_path() / "sw" / "pch";
             auto pch = pch_tmp / "sw.h";

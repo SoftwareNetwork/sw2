@@ -56,6 +56,7 @@ struct executor {
         }
     }
     ~executor() {
+        log_info("closing epoll");
         close(efd);
     }
     void run() {
@@ -70,7 +71,8 @@ struct executor {
                 return;
             }
             if (errno == EINVAL) {
-                return;
+                log_info("epoll_wait");
+                //return;
             }
             //throw std::runtime_error{"error epoll_wait"};
             perror("error epoll_wait");
