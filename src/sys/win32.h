@@ -128,16 +128,7 @@ struct pipe {
         path p = format("\\\\.\\pipe\\swpipe.{}.{}", GetCurrentProcessId(), pipe_id());
         return p.wstring();
     }
-    void init_read(bool inherit = false) {
-        DWORD sz = 0;
-        auto s = pipe_name();
-        r = WINAPI_CALL_HANDLE(CreateNamedPipeW(s.c_str(), PIPE_ACCESS_OUTBOUND | FILE_FLAG_OVERLAPPED, 0, 1, sz, sz, 0, 0));
-
-        SECURITY_ATTRIBUTES sa = {0};
-        sa.bInheritHandle = !!inherit;
-        w = WINAPI_CALL_HANDLE(CreateFileW(s.c_str(), GENERIC_READ, 0, &sa, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED, 0));
-    }
-    void init_write(bool inherit = false) {
+    void init(bool inherit = false) {
         DWORD sz = 0;
         auto s = pipe_name();
         r = WINAPI_CALL_HANDLE(CreateNamedPipeW(s.c_str(), PIPE_ACCESS_INBOUND | FILE_FLAG_OVERLAPPED, 0, 1, sz, sz, 0, 0));
@@ -146,9 +137,9 @@ struct pipe {
         sa.bInheritHandle = !!inherit;
         w = WINAPI_CALL_HANDLE(CreateFileW(s.c_str(), GENERIC_WRITE, 0, &sa, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED, 0));
     }
-    void init_write_double() {
+    void init_double(bool inherit = false) {
         SECURITY_ATTRIBUTES sa = {0};
-        sa.bInheritHandle = true;
+        sa.bInheritHandle = !!inherit;
 
         DWORD sz = 0;
         auto s = pipe_name();

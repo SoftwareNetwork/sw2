@@ -21,6 +21,174 @@ struct command_pointer_holder {
     io_command *io;
 };
 
+template <bool Output>
+struct command_stream {
+    static constexpr auto Input = !Output;
+
+    using second_end_of_pipe = command_stream<!Output>*;
+    using stream_callback = std::function<void(string_view)>;
+    struct inherit {};
+    struct close {};
+    // default mode is inheritance
+    using stream = variant<inherit, close, string, stream_callback, path, second_end_of_pipe>;
+
+    stream s;
+#ifdef _WIN32
+    HANDLE h = 0;
+    win32::pipe pipe;
+#else
+#endif
+
+    command_stream() = default;
+    command_stream(command_stream &&rhs) {
+        s = rhs.s;
+        h = rhs.h;
+    }
+    command_stream &operator=(command_stream &&s) {
+        this->s = s.s;
+        this->h = s.h;
+        return *this;
+    }
+    command_stream &operator=(const command_stream &s) {
+        this->s = s.s;
+        this->h = s.h;
+        return *this;
+    }
+    command_stream &operator=(const stream &s) {
+        this->s = s;
+        return *this;
+    }
+    /*operator stream &() {
+        return s;
+    }
+    operator stream *() {
+        return &s;
+    }*/
+
+    auto pre_create_command(auto os_handle, auto &&ex) {
+        visit(
+            s,
+            [&](inherit) {
+                h = GetStdHandle(os_handle);
+            },
+            [&](close) {
+                // empty
+            },
+            [&](path &fn) {
+                SECURITY_ATTRIBUTES sa = {0};
+                sa.bInheritHandle = TRUE;
+                h = WINAPI_CALL_HANDLE(
+                    CreateFileW(fn.wstring().c_str(),
+                        Output ? GENERIC_WRITE : GENERIC_READ, 0, &sa,
+                        Output ? CREATE_ALWAYS : OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0));
+            },
+            [&](second_end_of_pipe &e) {
+                if constexpr (Input) {
+                    h = e->pipe.r;
+                } else {
+                    pipe.init_double(true);
+                    h = pipe.w;
+                }
+            },
+            [&](auto &) {
+                pipe.init(true);
+                if constexpr (Input) {
+                    ex.register_handle(pipe.w);
+                    h = pipe.r;
+                } else {
+                    ex.register_handle(pipe.r);
+                    h = pipe.w;
+                }
+            });
+        return h;
+    }
+    void post_create_command(auto &&ex) {
+        visit(
+            s,
+            [&](inherit) {
+                // empty
+            },
+            [&](close) {
+                // empty
+            },
+            [&](string &s) {
+                if constexpr (Input) {
+                    SW_UNIMPLEMENTED;
+                    /*pipe.r.reset();
+                    ex.write_async(pipe.w, [&](auto &&f, auto &&buf, auto &&ec) mutable {
+                        if (!ec) {
+                            s += buf;
+                            ex.write_async(pipe.w, std::move(f));
+                        }
+                    });*/
+                } else {
+                    pipe.w.reset();
+                    ex.read_async(pipe.r, [&](auto &&f, auto &&buf, auto &&ec) mutable {
+                        if (!ec) {
+                            s += buf;
+                            ex.read_async(pipe.r, std::move(f));
+                        }
+                    });
+                }
+            },
+            [&](second_end_of_pipe &) {
+                SW_UNIMPLEMENTED;
+                if constexpr (Input) {
+                    //CloseHandle(d.si.StartupInfo.hStdInput);
+                } else {
+                   //CloseHandle(h);
+                }
+            },
+            [&](stream_callback &cb) {
+                if constexpr (Input) {
+                    SW_UNIMPLEMENTED;
+                    /*pipe.r.reset();
+                    ex.write_async(pipe.w, [&, cb, s = string{}](auto &&f, auto &&buf, auto &&ec) mutable {
+                        if (!ec) {
+                            s += buf;
+                            if (auto p = s.find_first_of("\r\n"); p != -1) {
+                                cb(string_view(s.data(), p));
+                                p = s.find("\n", p);
+                                s = s.substr(p + 1);
+                            }
+                            ex.write_async(pipe.w, std::move(f));
+                        }
+                    });*/
+                } else {
+                    pipe.w.reset();
+                    ex.read_async(pipe.r, [&, cb, s = string{}](auto &&f, auto &&buf, auto &&ec) mutable {
+                        if (!ec) {
+                            s += buf;
+                            if (auto p = s.find_first_of("\r\n"); p != -1) {
+                                cb(string_view(s.data(), p));
+                                p = s.find("\n", p);
+                                s = s.substr(p + 1);
+                            }
+                            ex.read_async(pipe.r, std::move(f));
+                        }
+                    });
+                }
+            },
+            [&](path &fn) {
+                CloseHandle(h);
+            });
+    }
+    void inside_fork() {}
+    void post_exit_command() {}
+    void finish() {
+        pipe = decltype(pipe){};
+    }
+
+    template <typename T>
+    T &get() {
+        return std::get<T>(s);
+    }
+    template <typename T>
+    operator T &() {
+        return std::get<std::decay_t<T>>(s);
+    }
+};
+
 struct raw_command {
     using argument = variant<string,string_view,path>;
     std::vector<argument> arguments;
@@ -30,26 +198,19 @@ struct raw_command {
     //bool started{}; // state?
     std::optional<int> exit_code;
 
-    // stdin,stdout,stderr
-    using stream_callback = std::function<void(string_view)>;
-    struct inherit {};
-    using stream = variant<inherit, string, stream_callback, path, command_pointer_holder>;
-    stream in, out, err;
+    command_stream<false> in;
+    command_stream<true> out, err;
     string out_text; // filtered, workaround
 #ifdef _WIN32
     struct process_data {
         STARTUPINFOEXW si = {0};
         PROCESS_INFORMATION pi = {0};
         win32::handle thread, process;
-        win32::pipe pin, pout, perr;
 
         process_data() {
             si.StartupInfo.cb = sizeof(si);
         }
         void close() {
-            //CloseHandle(si.StartupInfo.hStdInput);
-            //CloseHandle(si.StartupInfo.hStdOutput);
-            //CloseHandle(si.StartupInfo.hStdError);
             *this = process_data{};
         }
     };
@@ -60,7 +221,12 @@ struct raw_command {
 
     // sync()
     // async()
-    bool started() const { return pid != -1; }
+    /*bool started() const {
+#ifdef _WIN32
+#else
+        return pid != -1;
+#endif
+    }*/
     auto printw() const {
         std::wstring p;
         std::wstring s;
@@ -134,61 +300,24 @@ struct raw_command {
 
         d.si.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
 
-        visit(
-            in,
-            [&](inherit) {
-                // we should copy this only for raw commands
-                //si.StartupInfo.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
-            },
-            [&](path &fn) {
-                SECURITY_ATTRIBUTES sa = {0};
-                sa.bInheritHandle = TRUE;
-                d.si.StartupInfo.hStdInput = WINAPI_CALL_HANDLE(CreateFileW(fn.wstring().c_str(), GENERIC_READ, 0, &sa, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0));
-            },
-            [&](command_pointer_holder &ch) {
-                d.si.StartupInfo.hStdInput = ch.r->d.pout.r;
-            },
-            [&](auto &) {
-                d.pin.init_read(true);
-                ex.register_handle(d.pin.w);
-                d.si.StartupInfo.hStdInput = d.pin.r;
-            });
-        auto setup_stream = [&](auto &&s, auto &&h, auto &&stdh, auto &&pipe) {
-            visit(
-                s,
-                [&](inherit) {
-                    h = GetStdHandle(stdh);
-                },
-                [&](path &fn) {
-                    SECURITY_ATTRIBUTES sa = {0};
-                    sa.bInheritHandle = TRUE;
-                    h = WINAPI_CALL_HANDLE(CreateFileW(fn.wstring().c_str(), GENERIC_WRITE, 0, &sa, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, 0));
-                },
-                [&](command_pointer_holder &) {
-                    pipe.init_write_double();
-                    h = pipe.w;
-                },
-                [&](auto &) {
-                    pipe.init_write(true);
-                    ex.register_handle(pipe.r);
-                    h = pipe.w;
-                });
-        };
-        setup_stream(out, d.si.StartupInfo.hStdOutput, STD_OUTPUT_HANDLE, d.pout);
-        setup_stream(err, d.si.StartupInfo.hStdError, STD_ERROR_HANDLE, d.perr);
+        // pre command
+        d.si.StartupInfo.hStdInput = in.pre_create_command(STD_INPUT_HANDLE, ex);
+        d.si.StartupInfo.hStdOutput = out.pre_create_command(STD_OUTPUT_HANDLE, ex);
+        d.si.StartupInfo.hStdError = err.pre_create_command(STD_ERROR_HANDLE, ex);
 
         auto mingw = is_mingw_shell();
         auto add_handle = [&](auto &&h) {
-            if (h) {
-                 // mingw uses same stdout and stderr, so if we pass two same handles they are give an error 87
-                //if (mingw) {
-                // we always check for same handles because it can happen not only on mingw
-                    if (std::ranges::find(handles, h) != std::end(handles)) {
-                        return;
-                    }
-                //}
-                handles.push_back(h);
+            if (!h) {
+                return;
             }
+                // mingw uses same stdout and stderr, so if we pass two same handles they are give an error 87
+            //if (mingw) {
+            // we always check for same handles because it can happen not only on mingw
+                if (std::ranges::find(handles, h) != std::end(handles)) {
+                    return;
+                }
+            //}
+            handles.push_back(h);
         };
         add_handle(d.si.StartupInfo.hStdInput);
         add_handle(d.si.StartupInfo.hStdOutput);
@@ -221,79 +350,9 @@ struct raw_command {
         d.thread = d.pi.hThread;
         d.process = d.pi.hProcess;
 
-        visit(
-            in,
-            [&](inherit) {
-            },
-            [&](string &s) {
-                SW_UNIMPLEMENTED;
-                /*pin.r.reset();
-                ex.write_async(pin.w, [&](auto &&f, auto &&buf, auto &&ec) mutable {
-                    if (!ec) {
-                        s += buf;
-                        ex.write_async(pin.w, std::move(f));
-                    }
-                });*/
-            },
-            [&](command_pointer_holder &) {
-                //CloseHandle(d.si.StartupInfo.hStdInput);
-            },
-            [&](stream_callback &cb) {
-                SW_UNIMPLEMENTED;
-                /*pin.r.reset();
-                ex.write_async(pin.w, [&, cb, s = string{}](auto &&f, auto &&buf, auto &&ec) mutable {
-                    if (!ec) {
-                        s += buf;
-                        if (auto p = s.find_first_of("\r\n"); p != -1) {
-                            cb(string_view(s.data(), p));
-                            p = s.find("\n", p);
-                            s = s.substr(p + 1);
-                        }
-                        ex.write_async(pin.w, std::move(f));
-                    }
-                });*/
-            },
-            [&](path &fn) {
-                CloseHandle(d.si.StartupInfo.hStdInput);
-            });
-        auto post_setup_stream = [&](auto &&s, auto &&h, auto &&pipe) {
-            visit(
-                s,
-                [&](inherit) {
-                },
-                [&](string &s) {
-                    pipe.w.reset();
-                    ex.read_async(pipe.r, [&](auto &&f, auto &&buf, auto &&ec) mutable {
-                        if (!ec) {
-                            s += buf;
-                            ex.read_async(pipe.r, std::move(f));
-                        }
-                    });
-                },
-                [&](command_pointer_holder &) {
-                   //CloseHandle(h);
-                },
-                [&](stream_callback &cb) {
-                    pipe.w.reset();
-                    ex.read_async(pipe.r, [&, cb, s = string{}](auto &&f, auto &&buf, auto &&ec) mutable {
-                        if (!ec) {
-                            s += buf;
-                            if (auto p = s.find_first_of("\r\n"); p != -1) {
-                                cb(string_view(s.data(), p));
-                                p = s.find("\n", p);
-                                s = s.substr(p + 1);
-                            }
-                            ex.read_async(pipe.r, std::move(f));
-                        }
-                    });
-                },
-                [&](path &fn) {
-                    CloseHandle(h);
-                }
-            );
-        };
-        post_setup_stream(out, d.si.StartupInfo.hStdOutput, d.pout);
-        post_setup_stream(err, d.si.StartupInfo.hStdError, d.perr);
+        in.post_create_command(ex);
+        out.post_create_command(ex);
+        err.post_create_command(ex);
 
         // If we do not create default job for main process, we have a race here.
         // If main process is killed before register_process() call, created process
@@ -314,13 +373,13 @@ struct raw_command {
             //}};
             cb();
         });
-        visit(
-            out,
+        /*visit(
+            out.s,
             [&](command_pointer_holder &ch) {
                 ch.r->run(ex, cb);
             },
             [&](auto &) {
-            });
+            });*/
 #endif
     }
     void run_linux(auto &&ex, auto &&cb) {
@@ -627,6 +686,9 @@ struct raw_command {
     }
 
     void finish() {
+        in.finish();
+        out.finish();
+        err.finish();
 #ifdef _WIN32
         d.close();
 #endif
@@ -666,7 +728,8 @@ struct raw_command {
         out = p;
     }
     void operator|(auto &c) {
-        {
+        SW_UNIMPLEMENTED;
+        /*{
             command_pointer_holder ch;
             ch.r = &c;
             out = ch;
@@ -675,26 +738,31 @@ struct raw_command {
             command_pointer_holder ch;
             ch.r = this;
             c.in = ch;
-        }
+        }*/
     }
     bool is_pipe_child() const {
-        auto p = std::get_if<command_pointer_holder>(&in);
-        return p;
+        return false;
+        SW_UNIMPLEMENTED;
+        //auto p = std::get_if<command_pointer_holder>(&in.s);
+        //return p;
     }
     bool is_pipe_leader() const {
-        auto p = std::get_if<command_pointer_holder>(&out);
-        return p && !is_pipe_child();
+        return false;
+        SW_UNIMPLEMENTED;
+        //auto p = std::get_if<command_pointer_holder>(&out.s);
+        //return p && !is_pipe_child();
     }
     void pipe_iterate(auto &&in) {
-        auto f = [&](auto f, auto c) -> void {
-            if (auto p = std::get_if<command_pointer_holder>(&c->out)) {
+        SW_UNIMPLEMENTED;
+        /*auto f = [&](auto f, auto c) -> void {
+            if (auto p = std::get_if<command_pointer_holder>(&c->out.s)) {
                 in(*p);
                 f(f,p->r);
             }
         };
-        if (auto p = std::get_if<command_pointer_holder>(&out)) {
+        if (auto p = std::get_if<command_pointer_holder>(&out.s)) {
             f(f,p->r);
-        }
+        }*/
     }
     void terminate_chain() {
         if (is_pipe_leader()) {
@@ -705,8 +773,9 @@ struct raw_command {
             }
 #endif
         } else {
-            auto ch = std::get_if<command_pointer_holder>(&in);
-            ch->r->terminate_chain();
+            SW_UNIMPLEMENTED;
+            //auto ch = std::get_if<command_pointer_holder>(&in.s);
+            //ch->r->terminate_chain();
         }
     }
     void operator||(const raw_command &c) {
@@ -730,9 +799,9 @@ struct raw_command {
             return {};
         }
         string t;
-        if (auto e = std::get_if<string>(&err); e && !e->empty()) {
+        if (auto e = std::get_if<string>(&err.s); e && !e->empty()) {
             t = *e;
-        } else if (auto e = std::get_if<string>(&out); e && !e->empty()) {
+        } else if (auto e = std::get_if<string>(&out.s); e && !e->empty()) {
             t = *e;
         } else if (!out_text.empty()) {
             t = out_text;
@@ -765,13 +834,13 @@ struct command_hash {
             h ^= std::hash<string>()(k);
             h ^= std::hash<string>()(v);
         }
-        if (auto p = std::get_if<path>(&cmd.in)) {
+        if (auto p = std::get_if<path>(&cmd.in.s)) {
             h ^= std::hash<path>()(*p);
         }
-        if (auto p = std::get_if<path>(&cmd.out)) {
+        if (auto p = std::get_if<path>(&cmd.out.s)) {
             h ^= std::hash<path>()(*p);
         }
-        if (auto p = std::get_if<path>(&cmd.err)) {
+        if (auto p = std::get_if<path>(&cmd.err.s)) {
             h ^= std::hash<path>()(*p);
         }
     }
@@ -1094,9 +1163,9 @@ if [ $E -ne 0 ]; then echo "Error code: $E"; fi
             if (explain) {
                 log_info("outdated: {}" , explain_r(r));
             }
-            if (auto ch = std::get_if<command_pointer_holder>(&out)) {
-                return ch->io->outdated(explain);
-            }
+            //if (auto ch = std::get_if<command_pointer_holder>(&out.s)) {
+                //return ch->io->outdated(explain);
+            //}
             return true;
         }
         return false;
@@ -1238,7 +1307,7 @@ struct cl_exe_command : io_command {
 
                     c.run();
 
-                    auto &str = std::get<string>(c.out).empty() ? std::get<string>(c.err) : std::get<string>(c.out);
+                    auto &str = std::get<string>(c.out.s).empty() ? std::get<string>(c.err.s) : std::get<string>(c.out.s);
                     if (auto p1 = str.find("\n"); p1 != -1) {
                         while (0
                             || str[p1] == '\n'
@@ -1318,7 +1387,7 @@ struct cl_exe_command : io_command {
                         return;
                     }
 
-                    auto &s = std::get<string>(out);
+                    auto &s = std::get<string>(out.s);
                     auto pos = s.find('\n');
                     add_deps(s.data() + pos + 1);
                 });
@@ -1645,13 +1714,13 @@ struct command_executor {
                 if (!c.is_pipe_child()) {
                     ++number_of_commands;
                 }
-                if (auto p = std::get_if<path>(&c.in)) {
+                if (auto p = std::get_if<path>(&c.in.s)) {
                     c.inputs.insert(*p);
                 }
-                if (auto p = std::get_if<path>(&c.out)) {
+                if (auto p = std::get_if<path>(&c.out.s)) {
                     c.outputs.insert(*p);
                 }
-                if (auto p = std::get_if<path>(&c.err)) {
+                if (auto p = std::get_if<path>(&c.err.s)) {
                     c.outputs.insert(*p);
                 }
             });

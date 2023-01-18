@@ -408,7 +408,7 @@ struct solution {
                                     tc.tag("skipped");
                                     return;
                                 }
-                                auto testdir = std::get<path>(c.err).parent_path();
+                                auto testdir = std::get<path>(c.err.s).parent_path();
                                 if (!c.exit_code || !c.processed) {
                                     auto e = tc.tag("error");
                                     if (c.processed) {
