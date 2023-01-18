@@ -5,6 +5,7 @@
 
 #ifdef __linux__
 #include "../helpers/common.h"
+#include "../sys/log.h"
 
 #include <fcntl.h>
 #include <signal.h>

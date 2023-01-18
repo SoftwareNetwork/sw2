@@ -1356,6 +1356,10 @@ struct gcc_command : io_command {
             implicit_inputs.insert(p);
         };
 
+        if (deps_file.empty()) {
+            return;
+        }
+
         mmap_file<char> f{deps_file};
         if (f.sz == 0) {
             throw std::runtime_error{format("cannot open deps file: {}", deps_file)};
@@ -1549,12 +1553,17 @@ struct command_executor {
             c.start = std::decay_t<decltype(c)>::clock::now();
 
             c.run(get_executor(), [&, run_dependents, cmd]() {
+                c.end = std::decay_t<decltype(c)>::clock::now();
+
                 if (c.simultaneous_jobs) {
                     ++(*c.simultaneous_jobs);
                 }
                 --running_commands;
 
-                c.end = std::decay_t<decltype(c)>::clock::now();
+                if (cl.save_executed_commands || cl.save_failed_commands && !c.ok()) {
+                    c.save(get_saved_commands_dir(sln));
+                }
+
                 if (!c.ok()) {
                     errors.push_back(cmd);
                 } else {
@@ -1566,9 +1575,6 @@ struct command_executor {
                         c.cs->add(c);
                     }
                     run_dependents();
-                }
-                if (cl.save_executed_commands || cl.save_failed_commands && !c.ok()) {
-                    c.save(get_saved_commands_dir(sln));
                 }
                 run_next(cl, sln);
             });

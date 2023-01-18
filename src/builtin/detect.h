@@ -77,7 +77,7 @@ struct gcc_compile_rule {
 
         if constexpr (requires { tgt.precompiled_header; }) {
             if (!tgt.precompiled_header.header.empty()) {
-                /*if (tgt.precompiled_header.create) {
+                if (tgt.precompiled_header.create) {
                     auto &r = tgt.processed_files[tgt.precompiled_header.header];
                     if (!r.contains(this)) {
                         auto f = tgt.precompiled_header.header;
@@ -87,6 +87,7 @@ struct gcc_compile_rule {
                         c.inputs.insert(compiler.executable);
                         auto base = tgt.binary_dir / "obj" / tgt.precompiled_header.header.stem();
                         c.deps_file = path{base} += ".d";
+                        c += "-MF", c.deps_file;
                         auto out = tgt.precompiled_header.pch = path{tgt.precompiled_header.header} += ".gch";
                         c.name_ = format_log_record(tgt, "/[pch]");
                         c += "-include" + tgt.precompiled_header.header.string();
@@ -96,7 +97,7 @@ struct gcc_compile_rule {
                         tgt.commands.emplace_back(std::move(c));
                         r.insert(this);
                     }
-                }*/
+                }
             }
         }
         for (auto &&[f, rules] : tgt.processed_files) {
@@ -112,12 +113,13 @@ struct gcc_compile_rule {
             c.deps_file = path{base} += ".d";
             c.name_ = format_log_record(tgt, "/"s + normalize_path(f.lexically_relative(tgt.source_dir).string()));
             c += compiler.executable, "-c";
+            c += "-MF", c.deps_file;
             add_flags(c, f);
             if constexpr (requires { tgt.precompiled_header; }) {
                 if (!tgt.precompiled_header.header.empty() && tgt.precompiled_header.use) {
                     c += "-include" + tgt.precompiled_header.header.string();
                     c.inputs.insert(tgt.precompiled_header.header);
-                    //c.inputs.insert(path{tgt.precompiled_header.header} += ".gch");
+                    c.inputs.insert(path{tgt.precompiled_header.header} += ".gch");
                 }
             }
             c += f, "-o", out;
