@@ -90,7 +90,7 @@ struct command_stream {
     auto pre_create_command(auto os_handle, auto &&ex) {
 #ifndef _WIN32
         auto mkpipe = [&]() {
-            if (pipe2(pipe.p, 0) == -1) {
+            if (::pipe(pipe.p) == -1) {
                 fprintf(stderr, "Error creating pipe\n");
             }
         };
@@ -645,13 +645,42 @@ struct raw_command {
         }
         args2.push_back(0);
 
+        in.pre_create_command(STDIN_FILENO, ex);
+        out.pre_create_command(STDOUT_FILENO, ex);
+        err.pre_create_command(STDERR_FILENO, ex);
+
         // use simple posix_spawn atm
-        auto r = posix_spawn(&pid, args2[0], 0, 0, args2.data(), environ);
+        /*auto r = posix_spawn(&pid, args2[0], 0, 0, args2.data(), environ);
         if (r) {
             throw std::runtime_error{"can't posix_spawn: "s + std::to_string(errno)};
-        }
+        }*/
 
-        ex.register_process(pid, [this, cb](){
+        // do we have a race here?
+        pid = fork();
+        if (pid == -1) {
+            throw std::runtime_error{"can't clone3: "s + std::to_string(errno)};
+        }
+        if (pid == 0) {
+            in.inside_fork(STDIN_FILENO);
+            out.inside_fork(STDOUT_FILENO);
+            err.inside_fork(STDERR_FILENO);
+            // child
+            if (execve(args2[0], args2.data(), environ) == -1) {
+                std::cerr << "execve error: " << errno << "\n";
+                exit(1);
+            }
+        }
+        in.post_create_command(ex);
+        out.post_create_command(ex);
+        err.post_create_command(ex);
+        ex.register_process(pid, [this, &ex, cb]() {
+            scope_exit se{[&] {
+                in.post_exit_command(ex);
+                out.post_exit_command(ex);
+                err.post_exit_command(ex);
+                //close(pidfd);
+            }};
+
             int wstatus;
             if (waitpid(pid, &wstatus, 0) == -1) {
                 throw std::runtime_error{"error waitpid: " + std::to_string(errno)};

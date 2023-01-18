@@ -20,6 +20,7 @@ struct executor {
     int kfd;
     std::atomic_bool stopped{false};
     std::atomic_int jobs{0};
+    std::map<int, std::move_only_function<void(char*,size_t)>> read_callbacks;
     std::map<int, std::move_only_function<void()>> process_callbacks;
 
     executor() {
@@ -46,31 +47,36 @@ struct executor {
             process_callbacks.erase(it);
             return;
         }
+        auto it = read_callbacks.find(ev.ident);
         char buffer[4096];
         while (1) {
             auto count = read(ev.ident, buffer, sizeof(buffer));
-            if (count == -1) {
+            if (count <= -1) {
                 if (errno == EINTR) {
                     continue;
-                } else {
-                    perror("read");
-                    exit(1);
                 }
+                //perror("read");
+                //exit(1);
+                break;
             } else if (count == 0) {
                 break;
-            } else {
-                //handle_child_process_output(buffer, count);
-                int a = 5;
-                a++;
+            }
+            if (it != read_callbacks.end()) {
+                it->second(buffer, count);
             }
         }
     }
 
-    void register_read_handle(auto &&fd) {
+    void register_read_handle(auto &&fd, auto &&f) {
         struct kevent ev{};
+        EV_SET(&ev, fd, EVFILT_READ, EV_ADD | EV_ENABLE, 0, 0, 0);
         if (kevent(kfd, &ev, 1, 0, 0, 0) == -1) {
             throw std::runtime_error{"error kevent queue"};
         }
+        read_callbacks.emplace(fd, std::move(f));
+    }
+    void unregister_read_handle(auto &&fd) {
+        read_callbacks.erase(fd);
     }
     void register_process(auto &&pid, auto &&f) {
         struct kevent ev{};

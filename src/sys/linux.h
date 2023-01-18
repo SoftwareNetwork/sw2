@@ -104,14 +104,13 @@ struct executor {
         }
     }
     void register_read_handle(auto &&fd, auto &&f) {
-        read_callbacks.emplace(fd, std::move(f));
-
         epoll_event ev{};
         ev.events = EPOLLIN;
         ev.data.fd = fd;
         if (epoll_ctl(efd, EPOLL_CTL_ADD, fd, &ev) == -1) {
             throw std::runtime_error{"error epoll_ctl: " + std::to_string(errno)};
         }
+        read_callbacks.emplace(fd, std::move(f));
     }
     void unregister_read_handle(auto &&fd) {
         read_callbacks.erase(fd);
