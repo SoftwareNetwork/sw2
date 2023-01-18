@@ -27,9 +27,8 @@ struct raw_command {
     path working_directory;
     std::map<string, string> environment;
 
-    bool started{}; // state?
+    //bool started{}; // state?
     std::optional<int> exit_code;
-    // pid, pidfd
 
     // stdin,stdout,stderr
     using stream_callback = std::function<void(string_view)>;
@@ -55,11 +54,13 @@ struct raw_command {
         }
     };
     process_data d;
+#else
+    pid_t pid{-1};
 #endif
 
     // sync()
     // async()
-
+    bool started() const { return pid != -1; }
     auto printw() const {
         std::wstring p;
         std::wstring s;
@@ -405,7 +406,7 @@ struct raw_command {
         //cargs.exit_signal = SIGCHLD;
         int pidfd;
         cargs.pidfd = &pidfd;
-        auto pid = clone3(&cargs, sizeof(cargs));
+        pid = clone3(&cargs, sizeof(cargs));
         if (pid == -1) {
             throw std::runtime_error{"can't clone3: "s + std::to_string(errno)};
         }
@@ -503,7 +504,7 @@ struct raw_command {
         };
         postsetup_pipe(out, pout);
         postsetup_pipe(err, perr);
-        ex.register_process(pidfd, [&, pid, pidfd, pin = pin[1], pout = pout[0], perr = perr[0], cb]() {
+        ex.register_process(pidfd, [&, pidfd, pin = pin[1], pout = pout[0], perr = perr[0], cb]() {
             scope_exit se{[&] {
                 visit(
                         in,
@@ -576,13 +577,12 @@ struct raw_command {
         args2.push_back(0);
 
         // use simple posix_spawn atm
-        pid_t pid;
         auto r = posix_spawn(&pid, args2[0], 0, 0, args2.data(), environ);
         if (r) {
             throw std::runtime_error{"can't posix_spawn: "s + std::to_string(errno)};
         }
 
-        ex.register_process(pid, [this, pid, cb](){
+        ex.register_process(pid, [this, cb](){
             int wstatus;
             if (waitpid(pid, &wstatus, 0) == -1) {
                 throw std::runtime_error{"error waitpid: " + std::to_string(errno)};
@@ -634,6 +634,8 @@ struct raw_command {
     void terminate() {
 #ifdef _WIN32
         TerminateProcess(d.pi.hProcess, 1);
+#else
+        kill(pid, SIGKILL);
 #endif
         finish();
     }
