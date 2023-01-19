@@ -351,13 +351,15 @@ int main1(int argc, char *argv[]) {
         s.binary_dir = fs::temp_directory_path() / ".sw";
 
         direct_build_input direct_build;
-        for (auto &&bi : *b.inputs.value) {
-            path p{bi};
-            if (fs::exists(p) && fs::is_regular_file(p)) {
-                direct_build.fns.insert(p);
-            } else {
-                direct_build.fns.clear();
-                break;
+        if (b.inputs) {
+            for (auto &&bi : *b.inputs.value) {
+                path p{bi};
+                if (fs::exists(p) && fs::is_regular_file(p)) {
+                    direct_build.fns.insert(p);
+                } else {
+                    direct_build.fns.clear();
+                    break;
+                }
             }
         }
         if (!direct_build.fns.empty()) {
