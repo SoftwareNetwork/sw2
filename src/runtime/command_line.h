@@ -75,7 +75,14 @@ struct command_line_parser {
 
     template <typename T, auto ... Options>
     struct argument {
-        static inline constexpr bool is_single_val = is_single_val1<Options...>();
+        template <typename T> static constexpr bool is() {
+            auto f = [&](auto &&v) {
+                return std::same_as<T, std::decay_t<decltype(v)>>;
+            };
+            return (f(Options) || ... || false);
+        }
+
+        static inline constexpr bool is_single_val = is_single_val1<Options...>() && !is<options::consume_after>();
         using value_type = std::conditional_t<is_single_val, T, std::vector<T>>;
 
         std::optional<value_type> value;
@@ -86,12 +93,6 @@ struct command_line_parser {
                     return v.is_option_flag(arg);
                 }
                 return false;
-            };
-            return (f(Options) || ... || false);
-        }
-        static bool is_positional() {
-            auto f = [&](auto &&v) {
-                return std::same_as<options::positional, std::decay_t<decltype(v)>>;
             };
             return (f(Options) || ... || false);
         }
@@ -116,7 +117,16 @@ struct command_line_parser {
             a.consumed = true;
         }
         void parse(auto &&args, auto &&cur) requires (!is_single_val) {
+            auto consume_after = is<options::consume_after>();
             for (auto &&a : args.active()) {
+                if (consume_after) {
+                    if (!value) {
+                        value = value_type{};
+                    }
+                    value->push_back(a.str());
+                    a.consumed = true;
+                    continue;
+                }
                 if (a.value[0] == '-') {
                     break;
                 }
@@ -141,7 +151,8 @@ struct command_line_parser {
         static bool is_option_flag(auto &&arg) {
             return FlagName.is_option_flag(arg);
         }
-        static bool is_positional() {
+        template <typename T>
+        static bool is() {
             return false;
         }
         explicit operator bool() const {
@@ -204,6 +215,12 @@ struct command_line_parser {
     };
     struct test : build_common {
         static constexpr inline auto name = "test"sv;
+
+        argument<string, options::flag<"-f"_s>{}> format{"junit"};
+
+        auto option_list() {
+            return build_common::option_list(format);
+        }
     };
     struct generate : build_common {
         static constexpr inline auto name = "generate"sv;
@@ -211,17 +228,17 @@ struct command_line_parser {
         argument<string, options::flag<"-g"_s>{}> generator;
 
         auto option_list() {
-            return std::tie(generator);
+            return build_common::option_list(generator);
         }
     };
     struct run : build_common {
         static constexpr inline auto name = "run"sv;
 
-        //argument<string, options::flag<"--"_s>{}, options::consume_after{}> arguments;
+        argument<string, options::flag<"--"_s>{}, options::consume_after{}> arguments;
         flag<options::flag<"-exec"_s>{}> exec;
 
         auto option_list() {
-            return build_common::option_list(/*arguments, */exec);
+            return build_common::option_list(arguments, exec);
         }
     };
     using command_types = types<build, generate, test, run>;
@@ -304,7 +321,7 @@ struct command_line_parser {
                                 a.consumed = true;
                                 opt.parse(args, a);
                                 parsed = true;
-                            } else if (a.value[0] != '-' && opt.is_positional()) {
+                            } else if (a.value[0] != '-' && opt.template is<options::positional>()) {
                                 opt.parse(args, a);
                                 parsed = true;
                             }
@@ -334,7 +351,7 @@ struct command_line_parser {
                                 a.consumed = true;
                                 opt.parse(args, a);
                                 parsed = true;
-                            } else if (a.value[0] != '-' && opt.is_positional()) {
+                            } else if (a.value[0] != '-' && opt.template is<options::positional>()) {
                                 opt.parse(args, a);
                                 parsed = true;
                             }

@@ -382,6 +382,11 @@ int main1(int argc, char *argv[]) {
                 raw_command c;
                 c.working_directory = fs::current_path();
                 c += t.executable;
+                if (b.arguments) {
+                    for (auto &&o : *b.arguments.value) {
+                        c += o;
+                    }
+                }
                 if (r.exec) {
                     c.exec = true;
                 }
