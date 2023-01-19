@@ -120,6 +120,122 @@ struct cpp_emitter {
     }
 };
 
+auto make_settings(auto &b) {
+    std::vector<build_settings> settings{default_build_settings()};
+    //
+    auto static_shared_product = [&](auto &&v1, auto &v2, auto &&f) {
+        if (v1 || v2) {
+            if (v1 && v2) {
+                for (auto &&s : settings) {
+                    f(s, library_type::static_{});
+                }
+                auto s2 = settings;
+                for (auto &&s : s2) {
+                    f(s, library_type::shared{});
+                    settings.push_back(s);
+                }
+            } else {
+                if (v1) {
+                    for (auto &&s : settings) {
+                        f(s, library_type::static_{});
+                    }
+                }
+                if (v2) {
+                    for (auto &&s : settings) {
+                        f(s, library_type::shared{});
+                    }
+                }
+            }
+        }
+    };
+    static_shared_product(b.static_, b.shared, [](auto &&s, auto &&v) {
+        s.library_type = v;
+    });
+    //
+    if (b.c_static_runtime) {
+        for (auto &&s : settings) {
+            s.c.runtime = library_type::static_{};
+        }
+    }
+    if (b.cpp_static_runtime) {
+        for (auto &&s : settings) {
+            s.cpp.runtime = library_type::static_{};
+        }
+    }
+    static_shared_product(b.c_and_cpp_static_runtime, b.c_and_cpp_dynamic_runtime, [](auto &&s, auto &&v) {
+        s.c.runtime = v;
+        s.cpp.runtime = v;
+    });
+    /*static_shared_product(b.c_and_cpp_static_runtime, b.c_and_cpp_dynamic_runtime, [](auto &&s, auto &&v) {
+        s.cpp.runtime = v;
+    });*/
+
+    //
+    auto cfg_product = [&](auto &&v1, auto &&f) {
+        if (!v1) {
+            return;
+        }
+        auto values = (string)v1;
+        auto r = values | std::views::split(',') | std::views::transform([](auto &&word) {
+                        return std::string_view{word.begin(), word.end()};
+                    });
+        auto s2 = settings;
+        for (int i = 0; auto &&value : r) {
+            bool set{};
+            if (i++) {
+                for (auto &&s : s2) {
+                    set |= f(s, value);
+                    settings.push_back(s);
+                }
+            } else {
+                for (auto &&s : settings) {
+                    set |= f(s, value);
+                }
+            }
+            if (!set) {
+                string s(value.begin(), value.end());
+                throw std::runtime_error{"unknown value: "s + s};
+            }
+        }
+    };
+    auto check_and_set = [](auto &&s, auto &&v) {
+        auto v2 = v.substr(0, v.find("-"));
+        bool set{};
+        s.for_each([&](auto &&a) {
+            using T = std::decay_t<decltype(a)>;
+            if (T::is(v2)) {
+                T t{};
+                if (v != v2) {
+                    if constexpr (requires {t.package;}) {
+                        t.package.range = v.substr(v.find("-") + 1);
+                    }
+                }
+                s = t;
+                set = true;
+            }
+        });
+        return set;
+    };
+    cfg_product(b.arch, [&](auto &&s, auto &&v) {
+        return check_and_set(s.arch, v);
+    });
+    cfg_product(b.config, [&](auto &&s, auto &&v) {
+        return check_and_set(s.build_type, v);
+    });
+    cfg_product(b.compiler, [&](auto &&s, auto &&v) {
+        return 1
+        && check_and_set(s.c.compiler, v)
+        && check_and_set(s.cpp.compiler, v)
+        //&& check_and_set(s.linker, v)?
+        ;
+    });
+    cfg_product(b.os, [&](auto &&s, auto &&v) {
+        return check_and_set(s.os, v);
+    });
+    //
+    return settings;
+}
+
 void sw1(auto &cl) {
     visit(
         cl.c,
@@ -136,8 +252,8 @@ void sw1(auto &cl) {
             throw std::runtime_error{"no entry function was specified"};
 #endif
 
-            std::vector<build_settings> settings{default_build_settings()};
             {
+                std::vector<build_settings> settings{default_build_settings()};
                 swap_and_restore sr{s.dry_run, true};
                 for (auto &&ep : entry_points) {
                     input_with_settings is;
@@ -147,120 +263,7 @@ void sw1(auto &cl) {
                 }
             }
 
-            auto apply = [&]() {
-            };
-            //
-            auto static_shared_product = [&](auto &&v1, auto &v2, auto &&f) {
-                if (v1 || v2) {
-                    if (v1 && v2) {
-                        for (auto &&s : settings) {
-                            f(s, library_type::static_{});
-                        }
-                        auto s2 = settings;
-                        for (auto &&s : s2) {
-                            f(s, library_type::shared{});
-                            settings.push_back(s);
-                        }
-                    } else {
-                        if (v1) {
-                            for (auto &&s : settings) {
-                                f(s, library_type::static_{});
-                            }
-                        }
-                        if (v2) {
-                            for (auto &&s : settings) {
-                                f(s, library_type::shared{});
-                            }
-                        }
-                    }
-                }
-            };
-            static_shared_product(b.static_, b.shared, [](auto &&s, auto &&v) {
-                s.library_type = v;
-            });
-            //
-            if (b.c_static_runtime) {
-                for (auto &&s : settings) {
-                    s.c.runtime = library_type::static_{};
-                }
-            }
-            if (b.cpp_static_runtime) {
-                for (auto &&s : settings) {
-                    s.cpp.runtime = library_type::static_{};
-                }
-            }
-            static_shared_product(b.c_and_cpp_static_runtime, b.c_and_cpp_dynamic_runtime, [](auto &&s, auto &&v) {
-                s.c.runtime = v;
-                s.cpp.runtime = v;
-            });
-            /*static_shared_product(b.c_and_cpp_static_runtime, b.c_and_cpp_dynamic_runtime, [](auto &&s, auto &&v) {
-                s.cpp.runtime = v;
-            });*/
-
-            //
-            auto cfg_product = [&](auto &&v1, auto &&f) {
-                if (!v1) {
-                    return;
-                }
-                auto values = (string)v1;
-                auto r = values | std::views::split(',') | std::views::transform([](auto &&word) {
-                             return std::string_view{word.begin(), word.end()};
-                         });
-                auto s2 = settings;
-                for (int i = 0; auto &&value : r) {
-                    bool set{};
-                    if (i++) {
-                        for (auto &&s : s2) {
-                            set |= f(s, value);
-                            settings.push_back(s);
-                        }
-                    } else {
-                        for (auto &&s : settings) {
-                            set |= f(s, value);
-                        }
-                    }
-                    if (!set) {
-                        string s(value.begin(), value.end());
-                        throw std::runtime_error{"unknown value: "s + s};
-                    }
-                }
-            };
-            auto check_and_set = [](auto &&s, auto &&v) {
-                auto v2 = v.substr(0, v.find("-"));
-                bool set{};
-                s.for_each([&](auto &&a) {
-                    using T = std::decay_t<decltype(a)>;
-                    if (T::is(v2)) {
-                        T t{};
-                        if (v != v2) {
-                            if constexpr (requires {t.package;}) {
-                                t.package.range = v.substr(v.find("-") + 1);
-                            }
-                        }
-                        s = t;
-                        set = true;
-                    }
-                });
-                return set;
-            };
-            cfg_product(b.arch, [&](auto &&s, auto &&v) {
-                return check_and_set(s.arch, v);
-            });
-            cfg_product(b.config, [&](auto &&s, auto &&v) {
-                return check_and_set(s.build_type, v);
-            });
-            cfg_product(b.compiler, [&](auto &&s, auto &&v) {
-                return 1
-                && check_and_set(s.c.compiler, v)
-                && check_and_set(s.cpp.compiler, v)
-                //&& check_and_set(s.linker, v)?
-                ;
-            });
-            cfg_product(b.os, [&](auto &&s, auto &&v) {
-                return check_and_set(s.os, v);
-            });
-            //
-
+            auto settings = make_settings(b);
             for (auto &&ep : entry_points) {
                 input_with_settings is;
                 is.ep = entry_point{ep.f, ep.source_dir};
@@ -342,8 +345,47 @@ int main1(int argc, char *argv[]) {
         || std::same_as<std::decay_t<decltype(b)>, command_line_parser::build>
         || std::same_as<std::decay_t<decltype(b)>, command_line_parser::test>
         || std::same_as<std::decay_t<decltype(b)>, command_line_parser::generate>
+        || std::same_as<std::decay_t<decltype(b)>, command_line_parser::run>
         ) {
         auto s = make_solution();
+        s.binary_dir = fs::temp_directory_path() / ".sw";
+
+        direct_build_input direct_build;
+        for (auto &&bi : *b.inputs.value) {
+            path p{bi};
+            if (fs::exists(p) && fs::is_regular_file(p)) {
+                direct_build.fns.insert(p);
+            } else {
+                direct_build.fns.clear();
+                break;
+            }
+        }
+        if (!direct_build.fns.empty()) {
+            using ttype = executable;
+            auto tname = direct_build.fns.begin()->stem().string();
+            auto ep = [&](solution &s) {
+                auto &t = s.add<ttype>(tname);
+                for (auto &&f : direct_build.fns) {
+                    t += f;
+                }
+            };
+            input_with_settings is{entry_point{ep, fs::current_path()}};
+            auto settings = make_settings(b);
+            is.settings.insert(settings.begin(), settings.end());
+            s.add_input(is);
+            s.build(cl);
+            auto &&t = s.targets.find_first<ttype>(tname);
+            raw_command c;
+            c.working_directory = fs::current_path();
+            c += t.executable;
+            c.run();
+            return;
+        }
+        if constexpr (std::same_as<std::decay_t<decltype(b)>, command_line_parser::run>) {
+            log_error("running only direct files is supported currently");
+            return;
+        }
+
         auto cfg_dir = s.binary_dir / "cfg";
         s.binary_dir = cfg_dir;
         auto fn = cfg_dir / "src" / "main.cpp";

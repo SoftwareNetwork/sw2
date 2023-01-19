@@ -28,6 +28,10 @@ struct entry_point {
     }
 };
 
+struct direct_build_input {
+    std::set<path> fns;
+};
+
 struct specification_file_input {
     path fn;
 };
@@ -40,7 +44,7 @@ struct directory_input {
 /// only try to find spec file
 struct directory_specification_file_input {};
 
-using input = variant<specification_file_input, directory_input>;
+using input = variant<specification_file_input, directory_input, direct_build_input>;
 
 struct input_with_settings {
     entry_point ep;

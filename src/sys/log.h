@@ -40,9 +40,10 @@ void log(const char *compponent, int severity, auto &&fmtstring, auto &&...args)
     } else {
         s += fmtstring;
     }
-    std::cerr << fmt::format("[{}] [{}] {}\n"
+    /*std::cerr << fmt::format("[{}] [{}] {}\n"
                              , std::chrono::system_clock::now()
-                             , get_severity_string(severity), s);
+                             , get_severity_string(severity), s);*/
+    std::cerr << fmt::format("{}\n", s); // simple for now
 }
 
 void log_fatal(auto &&fmtstring, auto &&...args) {

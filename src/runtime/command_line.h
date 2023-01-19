@@ -89,7 +89,10 @@ struct command_line_parser {
             return (f(Options) || ... || false);
         }
         static bool is_positional() {
-            return false;
+            auto f = [&](auto &&v) {
+                return std::same_as<options::positional, std::decay_t<decltype(v)>>;
+            };
+            return (f(Options) || ... || false);
         }
 
         explicit operator bool() const {
@@ -210,7 +213,16 @@ struct command_line_parser {
             return std::tie(generator);
         }
     };
-    using command_types = types<build, generate, test>;
+    struct run : build_common {
+        static constexpr inline auto name = "run"sv;
+
+        argument<string, options::flag<"--"_s>{}, options::zero_or_more{}> arguments;
+
+        /*auto option_list() {
+            return std::tie(arguments);
+        }*/
+    };
+    using command_types = types<build, generate, test, run>;
     using command = command_types::variant_type;
 
     command c;
