@@ -123,7 +123,7 @@ struct command_stream {
                         throw std::runtime_error(format("cannot open file for reading: {}", fn.string()));
                     }
                 } else {
-                    pipe.w = open(fn.string().c_str(), O_CREAT | O_WRONLY | O_TRUNC);
+                    pipe.w = open(fn.string().c_str(), O_CREAT | O_WRONLY | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP);
                     if (pipe.w == -1) {
                         throw std::runtime_error(format("cannot open file for writing: {}", fn.string()));
                     }
@@ -838,10 +838,15 @@ struct raw_command {
             return {};
         }
         string t;
-        if (auto e = std::get_if<string>(&err.s); e && !e->empty()) {
+        if (0) {
+        } else if (auto e = std::get_if<string>(&err.s); e && !e->empty()) {
             t = *e;
+        } else if (auto e = std::get_if<path>(&err.s); e && !e->empty()) {
+            t = read_file(*e);
         } else if (auto e = std::get_if<string>(&out.s); e && !e->empty()) {
             t = *e;
+        } else if (auto e = std::get_if<path>(&out.s); e && !e->empty()) {
+            t = read_file(*e);
         } else if (!out_text.empty()) {
             t = out_text;
         }
