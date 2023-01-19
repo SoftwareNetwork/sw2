@@ -341,7 +341,7 @@ int main1(int argc, char *argv[]) {
     return 0;
 #endif
     cl.rebuild_all.value = false; // not for config builds
-    visit_any(cl.c, [&](auto &b) requires (false
+    return visit_any(cl.c, [&](auto &b) requires (false
         || std::same_as<std::decay_t<decltype(b)>, command_line_parser::build>
         || std::same_as<std::decay_t<decltype(b)>, command_line_parser::test>
         || std::same_as<std::decay_t<decltype(b)>, command_line_parser::generate>
@@ -374,16 +374,26 @@ int main1(int argc, char *argv[]) {
             is.settings.insert(settings.begin(), settings.end());
             s.add_input(is);
             s.build(cl);
-            auto &&t = s.targets.find_first<ttype>(tname);
-            raw_command c;
-            c.working_directory = fs::current_path();
-            c += t.executable;
-            c.run();
-            return;
+            if constexpr (std::same_as<std::decay_t<decltype(b)>, command_line_parser::run>) {
+                auto &r = std::get<command_line_parser::run>(cl.c);
+                auto &&t = s.targets.find_first<ttype>(tname);
+                raw_command c;
+                c.working_directory = fs::current_path();
+                c += t.executable;
+                if (r.exec) {
+                    c.exec = true;
+                }
+                try {
+                    return c.run();
+                } catch (std::exception &) {
+                    // supress exception message
+                    return *c.exit_code;
+                }
+            }
+            return 0;
         }
         if constexpr (std::same_as<std::decay_t<decltype(b)>, command_line_parser::run>) {
-            log_error("running only direct files is supported currently");
-            return;
+            throw std::runtime_error{"running only direct files is supported currently"};
         }
 
         auto cfg_dir = s.binary_dir / "cfg";
@@ -503,7 +513,6 @@ int main1(int argc, char *argv[]) {
             c += (const char *)argv[i];
         }
         log_debug("sw1");
-        c.run();
+        return c.run();
     });
-    return 0;
 }

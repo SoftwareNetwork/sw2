@@ -26,6 +26,7 @@ struct command_line_parser {
                 return (string_view)Name == arg || (((string_view)Aliases == arg) || ... || false);
             }
         };
+        struct consume_after {};
         struct positional {};
         struct comma_separated_value {};
         template <auto Min, auto Max>
@@ -169,9 +170,9 @@ struct command_line_parser {
         argument<string, options::flag<"-compiler"_s>{}, options::comma_separated_value{}> compiler;
         argument<string, options::flag<"-os"_s>{}, options::comma_separated_value{}> os;
 
-        auto option_list() {
+        auto option_list(auto && ... args) {
             return std::tie(inputs, explain_outdated, static_, shared, c_static_runtime, cpp_static_runtime, c_and_cpp_static_runtime,
-                            c_and_cpp_dynamic_runtime, arch, config, compiler, os);
+                            c_and_cpp_dynamic_runtime, arch, config, compiler, os, FWD(args)...);
         }
     };
     struct build : build_common {
@@ -216,11 +217,12 @@ struct command_line_parser {
     struct run : build_common {
         static constexpr inline auto name = "run"sv;
 
-        argument<string, options::flag<"--"_s>{}, options::zero_or_more{}> arguments;
+        //argument<string, options::flag<"--"_s>{}, options::consume_after{}> arguments;
+        flag<options::flag<"-exec"_s>{}> exec;
 
-        /*auto option_list() {
-            return std::tie(arguments);
-        }*/
+        auto option_list() {
+            return build_common::option_list(/*arguments, */exec);
+        }
     };
     using command_types = types<build, generate, test, run>;
     using command = command_types::variant_type;

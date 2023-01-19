@@ -388,6 +388,8 @@ struct raw_command {
 #else
     pid_t pid{-1};
 #endif
+    //
+    bool exec{};
 
     // sync()
     // async()
@@ -584,7 +586,7 @@ struct raw_command {
         //cargs.exit_signal = SIGCHLD;
         int pidfd;
         cargs.pidfd = &pidfd;
-        pid = clone3(&cargs, sizeof(cargs));
+        pid = exec ? 0 : clone3(&cargs, sizeof(cargs));
         if (pid == -1) {
             throw std::runtime_error{"can't clone3: "s + std::to_string(errno)};
         }
@@ -656,7 +658,7 @@ struct raw_command {
         }*/
 
         // do we have a race here?
-        pid = fork();
+        pid = exec ? 0 : fork();
         if (pid == -1) {
             throw std::runtime_error{"can't clone3: "s + std::to_string(errno)};
         }
@@ -718,10 +720,11 @@ struct raw_command {
             }
         });
     }
-    void run() {
+    auto run() {
         executor ex;
         run(ex);
         ex.run();
+        return *exit_code;
     }
 
     void finish() {
