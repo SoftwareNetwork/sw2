@@ -18,6 +18,14 @@ static consteval bool is_single_val1() {
     return r;
 }
 
+// also gcc issue, cant be used inside argument class
+template <typename U, auto ... Options> static constexpr bool is() {
+    auto f = [&](auto &&v) {
+        return std::same_as<U, std::decay_t<decltype(v)>>;
+    };
+    return (f(Options) || ... || false);
+}
+
 struct command_line_parser {
     struct options {
         template <auto Name, auto ... Aliases>
@@ -75,13 +83,6 @@ struct command_line_parser {
 
     template <typename T, auto ... Options>
     struct argument {
-        template <typename T> static constexpr bool is() {
-            auto f = [&](auto &&v) {
-                return std::same_as<T, std::decay_t<decltype(v)>>;
-            };
-            return (f(Options) || ... || false);
-        }
-
         static inline constexpr bool is_single_val = is_single_val1<Options...>() && !is<options::consume_after>();
         using value_type = std::conditional_t<is_single_val, T, std::vector<T>>;
 
@@ -95,6 +96,9 @@ struct command_line_parser {
                 return false;
             };
             return (f(Options) || ... || false);
+        }
+        static bool is_positional() {
+            return is<options::positional>();
         }
 
         explicit operator bool() const {
@@ -153,6 +157,9 @@ struct command_line_parser {
         }
         template <typename T>
         static bool is() {
+            return false;
+        }
+        static bool is_positional() {
             return false;
         }
         explicit operator bool() const {
@@ -321,7 +328,7 @@ struct command_line_parser {
                                 a.consumed = true;
                                 opt.parse(args, a);
                                 parsed = true;
-                            } else if (a.value[0] != '-' && opt.template is<options::positional>()) {
+                            } else if (a.value[0] != '-' && opt.is_positional()) {
                                 opt.parse(args, a);
                                 parsed = true;
                             }
@@ -351,7 +358,7 @@ struct command_line_parser {
                                 a.consumed = true;
                                 opt.parse(args, a);
                                 parsed = true;
-                            } else if (a.value[0] != '-' && opt.template is<options::positional>()) {
+                            } else if (a.value[0] != '-' && opt.is_positional()) {
                                 opt.parse(args, a);
                                 parsed = true;
                             }
