@@ -512,7 +512,25 @@ int main1(int argc, char *argv[]) {
                 auto orig = fs::absolute(*b.arguments.value->begin());
                 auto fn = temp_sw_directory_path() / "exec" / std::to_string(std::hash<path>{}(orig)) += ".cpp";
                 auto s = read_file(orig);
-                write_file_if_different(fn, format("#line 2 \"{}\"\n{}", *b.arguments.value->begin(), s.substr(s.find('\n'))));
+                // we are trying to detect env, by default shebang is in .sh scripts
+                auto unix = fs::exists("/bin/sh") || true;
+                string out;
+                // 1. pch?
+                // 2. add useful functions library... like read_file write_file etc.
+                if (unix) {
+                    out += R"(#include <bits/stdc++.h>
+
+using namespace std;
+using namespace std::literals;
+namespace fs = std::filesystem;
+using namespace fs;
+)";
+                } else {
+                    //out += "#include <bits/stdc++.h>\n"; // msvc_public_headers.hpp
+                    SW_UNIMPLEMENTED;
+                }
+                out += format("#line 2 \"{}\"\n{}", *b.arguments.value->begin(), s.substr(s.find('\n')));
+                write_file_if_different(fn, out);
                 *b.arguments.value->begin() = fn.string();
             }
                          auto ep = [&](solution &s) {
@@ -552,10 +570,13 @@ int main1(int argc, char *argv[]) {
                      },
                      [&](command_line_parser::setup &)
         {
+            // name sw interpreter as 'swi'?
             if (fs::exists("/bin/sh")) {
-                write_file_if_different("/bin/sw", format(R"(#!/bin/sh
+                auto fn = "/bin/sw";
+                write_file_if_different(fn, format(R"(#!/bin/sh
 exec {} exec -remove-shebang "$@"
-)", "sw2")); // write argv[0] instead of sw?
+)", argv[0])); // write argv[0] instead of sw?
+                fs::permissions(fn, (fs::perms)0755);
             }
             return 0;
         });
