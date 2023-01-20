@@ -505,6 +505,13 @@ int main1(int argc, char *argv[]) {
                          auto it = std::ranges::find(*b.arguments.value, "--"sv);
                          using ttype = executable;
                          auto tname = path{*b.arguments.value->begin()}.stem().string();
+            if (b.remove_shebang) {
+                auto orig = fs::absolute(*b.arguments.value->begin());
+                auto fn = fs::temp_directory_path() / "sw" / "exec" / std::to_string(std::hash<path>{}(orig)) += ".cpp";
+                auto s = read_file(orig);
+                write_file_if_different(fn, format("#line 2 \"{}\"\n{}", *b.arguments.value->begin(), s.substr(s.find('\n'))));
+                *b.arguments.value->begin() = fn.string();
+            }
                          auto ep = [&](solution &s) {
                              auto &t = s.add<ttype>(tname);
                              for (auto &&f : std::ranges::subrange(b.arguments.value->begin(), it)) {
