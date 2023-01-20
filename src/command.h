@@ -1696,25 +1696,27 @@ struct command_executor {
                 }
                 run_next(cl, sln);
             });
+            return;
         } catch (std::exception &e) {
             c.out_text = e.what();
-            if (c.is_pipe_child()) {
-                c.terminate_chain();
-                return;
-            }
-            if (c.is_pipe_leader()) {
-                c.terminate_chain();
-            }
-            if (c.simultaneous_jobs) {
-                ++(*c.simultaneous_jobs);
-            }
-            --running_commands;
-            errors.push_back(cmd);
-            if (cl.save_executed_commands || cl.save_failed_commands) {
-                // c.save(get_saved_commands_dir(sln));//save not started commands?
-            }
-            run_next(cl, sln);
         }
+        // error path, prevent exception recursion
+        if (c.is_pipe_child()) {
+            c.terminate_chain();
+            return;
+        }
+        if (c.is_pipe_leader()) {
+            c.terminate_chain();
+        }
+        if (c.simultaneous_jobs) {
+            ++(*c.simultaneous_jobs);
+        }
+        --running_commands;
+        errors.push_back(cmd);
+        if (cl.save_executed_commands || cl.save_failed_commands) {
+            // c.save(get_saved_commands_dir(sln));//save not started commands?
+        }
+        run_next(cl, sln);
     }
     void run_next(auto &&cl, auto &&sln) {
         while (running_commands < maximum_running_commands && !pending_commands_.empty() && !is_stopped()) {

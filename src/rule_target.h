@@ -241,6 +241,18 @@ struct rule_target {
     //auto visit()
 
     template <typename T = io_command>
+    auto add_command(std::string name = {}) {
+        commands.push_back(T{});
+        auto &c = std::get<T>(commands.back());
+        //auto n = !name.empty() ? name : format("{}", tests.size());
+        //c.name_ = format_log_record(*this, "/[test]/["s + n + "]");
+        // set default? check in sw1? sdir? bdir?
+        // move into some subdir?
+        //c.working_directory = binary_dir;
+        command_wrapper<T> w{*this, c};
+        return w;
+    }
+    template <typename T = io_command>
     auto add_test(std::string name = {}) {
         tests.reserve(50); // todo: implement normal non relocating vector finally
         tests.push_back(T{});
@@ -929,6 +941,13 @@ struct executable_target : native_target {
         // make rule?
     }
 
+    template <typename T = io_command>
+    auto add_command(std::string name = {}) {
+        auto c = native_target::add_test<T>(name);
+        c += executable;
+        c.inputs.insert(executable);
+        return c;
+    }
     template <typename T = io_command>
     auto add_test(std::string name = {}) {
         auto c = native_target::add_test<T>(name);
