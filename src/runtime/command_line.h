@@ -291,7 +291,10 @@ struct command_line_parser {
     struct exec : run_common {
         static constexpr inline auto name = "exec"sv;
     };
-    using command_types = types<build, generate, test, run, exec>;
+    struct setup {
+        static constexpr inline auto name = "setup"sv;
+    };
+    using command_types = types<build, generate, test, run, exec, setup>;
     using command = command_types::variant_type;
 
     command c;

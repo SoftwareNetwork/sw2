@@ -546,5 +546,14 @@ int main1(int argc, char *argv[]) {
                              return !c.exit_code ? 1 : *c.exit_code;
                          }
                          return 0;
-                     });
+                     },
+                     [&](command_line_parser::setup &)
+        {
+            if (fs::exists("/bin/sh")) {
+                write_file_if_different("/bin/sw", format(R"(#!/bin/sh
+exec {} exec -remove-shebang "$@"
+)", "sw2")); // write argv[0] instead of sw?
+            }
+            return 0;
+        });
 }
