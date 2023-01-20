@@ -1755,6 +1755,13 @@ struct command_executor {
         if (cl.jobs) {
             maximum_running_commands = cl.jobs;
         }
+        visit(cl.c, [&](auto &&c) {
+            if constexpr (requires {c.ignore_errors;}) {
+                if (c.ignore_errors) {
+                    ignore_errors = c.ignore_errors;
+                }
+            }
+        });
         for (auto &&c : external_commands) {
             visit(*c, [&](auto &&c) {
                 if (cl.rebuild_all) {

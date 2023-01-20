@@ -187,10 +187,11 @@ struct command_line_parser {
         argument<string, options::flag<"-config"_s>{}, options::comma_separated_value{}> config;
         argument<string, options::flag<"-compiler"_s>{}, options::comma_separated_value{}> compiler;
         argument<string, options::flag<"-os"_s>{}, options::comma_separated_value{}> os;
+        argument<int, options::flag<"-k"_s>{}> ignore_errors;
 
         auto option_list(auto && ... args) {
             return std::tie(inputs, explain_outdated, static_, shared, c_static_runtime, cpp_static_runtime, c_and_cpp_static_runtime,
-                            c_and_cpp_dynamic_runtime, arch, config, compiler, os, FWD(args)...);
+                            c_and_cpp_dynamic_runtime, arch, config, compiler, os, ignore_errors, FWD(args)...);
         }
     };
     struct build : build_common {
