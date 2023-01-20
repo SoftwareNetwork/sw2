@@ -503,6 +503,9 @@ int main1(int argc, char *argv[]) {
                          s.binary_dir = temp_sw_directory_path() / ".sw";
 
                          auto it = std::ranges::find(*b.arguments.value, "--"sv);
+                         if (it == b.arguments.value->end()) {
+                             it = b.arguments.value->begin() + 1;
+                         }
                          using ttype = executable;
                          auto tname = path{*b.arguments.value->begin()}.stem().string();
             if (b.remove_shebang) {
