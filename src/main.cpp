@@ -340,194 +340,204 @@ int main1(int argc, char *argv[]) {
 #ifdef SW1_BUILD
     return 0;
 #endif
-    cl.rebuild_all.value = false; // not for config builds
-    return visit_any(cl.c, [&](auto &b) requires (false
-        || std::same_as<std::decay_t<decltype(b)>, command_line_parser::build>
-        || std::same_as<std::decay_t<decltype(b)>, command_line_parser::test>
-        || std::same_as<std::decay_t<decltype(b)>, command_line_parser::generate>
-        || std::same_as<std::decay_t<decltype(b)>, command_line_parser::run>
-        || std::same_as<std::decay_t<decltype(b)>, command_line_parser::exec>
-        ) {
-        auto s = make_solution();
-        s.binary_dir = fs::temp_directory_path() / ".sw";
+    cl.rebuild_all.value = false; // not for config/run builds
+    return visit_any(
+        cl.c,
+        [&](auto &b) requires(false || std::same_as<std::decay_t<decltype(b)>, command_line_parser::build> ||
+                              std::same_as<std::decay_t<decltype(b)>, command_line_parser::test> ||
+                              std::same_as<std::decay_t<decltype(b)>, command_line_parser::generate>) {
+                         auto s = make_solution();
+                         s.binary_dir = fs::temp_directory_path() / ".sw";
 
-        direct_build_input direct_build;
-        if (b.inputs) {
-            for (auto &&bi : *b.inputs.value) {
-                path p{bi};
-                if (fs::exists(p) && fs::is_regular_file(p)) {
-                    direct_build.fns.insert(p);
-                } else {
-                    direct_build.fns.clear();
-                    break;
-                }
-            }
-        }
-        if (!direct_build.fns.empty()) {
-            using ttype = executable;
-            auto tname = direct_build.fns.begin()->stem().string();
-            auto ep = [&](solution &s) {
-                auto &t = s.add<ttype>(tname);
-                for (auto &&f : direct_build.fns) {
-                    t += f;
-                }
-            };
-            input_with_settings is{entry_point{ep, fs::current_path()}};
-            auto settings = make_settings(b);
-            is.settings.insert(settings.begin(), settings.end());
-            s.add_input(is);
-            s.build(cl);
-            if constexpr (false
-                    || std::same_as<std::decay_t<decltype(b)>, command_line_parser::run>
-                    || std::same_as<std::decay_t<decltype(b)>, command_line_parser::exec>
-                            ) {
-                auto &&t = s.targets.find_first<ttype>(tname);
-                raw_command c;
-                c.working_directory = fs::current_path();
-                c += t.executable;
-                if (b.arguments) {
-                    for (auto &&o : *b.arguments.value) {
-                        c += o;
-                    }
-                }
-                if constexpr (std::same_as<std::decay_t<decltype(b)>, command_line_parser::exec>) {
-                    c.exec = true;
-                } else {
-                    auto &r = std::get<command_line_parser::run>(cl.c);
-                    if (r.exec) {
-                        c.exec = true;
-                    }
-                }
-                try {
-                    return c.run();
-                } catch (std::exception &) {
-                    // supress exception message
-                    return *c.exit_code;
-                }
-            }
-            return 0;
-        }
-        if constexpr (std::same_as<std::decay_t<decltype(b)>, command_line_parser::run>) {
-            throw std::runtime_error{"running only direct files is supported currently"};
-        }
-
-        auto cfg_dir = s.binary_dir / "cfg";
-        s.binary_dir = cfg_dir;
-        auto fn = cfg_dir / "src" / "main.cpp";
-        fs::create_directories(fn.parent_path());
-        entry_point pch_ep;
-        {
-            cpp_emitter e;
-            e += "#pragma once";
-            e += "#include <vector>";
-            e += "namespace sw { struct entry_point; }";
-            e += "#define SW1_BUILD";
-            e += "std::vector<sw::entry_point> sw1_load_inputs();";
-            path p = __FILE__;
-            if (p.is_absolute()) {
-                e.include(p);
-            } else {
-                auto swdir = fs::absolute(path{std::source_location::current().file_name()}.parent_path());
-                e.include(swdir / "main.cpp");
-            }
-            //
-            auto pch_tmp = fs::temp_directory_path() / "sw" / "pch";
-            auto pch = pch_tmp / "sw.h";
-            write_file_if_different(pch, e.s);
-            pch_ep.source_dir = pch_tmp;
-            pch_ep.binary_dir = pch_tmp;
-            pch_ep.f = [pch](solution &s) {
-                auto &t = s.add<native_target>("sw_pch");
-                t += precompiled_header{pch};
+                         direct_build_input direct_build;
+                         if (b.inputs) {
+                             for (auto &&bi : *b.inputs.value) {
+                                 path p{bi};
+                                 if (fs::exists(p) && fs::is_regular_file(p)) {
+                                     direct_build.fns.insert(p);
+                                 } else {
+                                     direct_build.fns.clear();
+                                     break;
+                                 }
+                             }
+                         }
+                         if (!direct_build.fns.empty()) {
+                             using ttype = executable;
+                             auto tname = direct_build.fns.begin()->stem().string();
+                             auto ep = [&](solution &s) {
+                                 auto &t = s.add<ttype>(tname);
+                                 for (auto &&f : direct_build.fns) {
+                                     t += f;
+                                 }
+                             };
+                             input_with_settings is{entry_point{ep, fs::current_path()}};
+                             auto settings = make_settings(b);
+                             is.settings.insert(settings.begin(), settings.end());
+                             s.add_input(is);
+                             s.build(cl);
+                             return 0;
+                         }
+                         auto cfg_dir = s.binary_dir / "cfg";
+                         s.binary_dir = cfg_dir;
+                         auto fn = cfg_dir / "src" / "main.cpp";
+                         fs::create_directories(fn.parent_path());
+                         entry_point pch_ep;
+                         {
+                             cpp_emitter e;
+                             e += "#pragma once";
+                             e += "#include <vector>";
+                             e += "namespace sw { struct entry_point; }";
+                             e += "#define SW1_BUILD";
+                             e += "std::vector<sw::entry_point> sw1_load_inputs();";
+                             path p = __FILE__;
+                             if (p.is_absolute()) {
+                                 e.include(p);
+                             } else {
+                                 auto swdir =
+                                     fs::absolute(path{std::source_location::current().file_name()}.parent_path());
+                                 e.include(swdir / "main.cpp");
+                             }
+                             //
+                             auto pch_tmp = fs::temp_directory_path() / "sw" / "pch";
+                             auto pch = pch_tmp / "sw.h";
+                             write_file_if_different(pch, e.s);
+                             pch_ep.source_dir = pch_tmp;
+                             pch_ep.binary_dir = pch_tmp;
+                             pch_ep.f = [pch](solution &s) {
+                                 auto &t = s.add<native_target>("sw_pch");
+                                 t += precompiled_header{pch};
 #ifdef __APPLE__
-                t += "/usr/local/opt/fmt/include"_idir; // github ci
-                t += "/opt/homebrew/include"_idir; // brew
+                                 t += "/usr/local/opt/fmt/include"_idir; // github ci
+                                 t += "/opt/homebrew/include"_idir;      // brew
 #endif
-            };
-        }
-        cpp_emitter e;
-        string load_inputs = "    return {\n";
-        std::vector<input> inputs;
-        if (!b.inputs) {
-            b.inputs.value = std::vector<string>{"."};
-        }
-        for (auto &&bi : *b.inputs.value) {
-            input i;
-            auto check_spec = [&](auto &&fn) {
-                auto p = path{bi} / fn;
-                if (fs::exists(p)) {
-                    i = specification_file_input{p};
-                    return true;
-                }
-                return false;
-            };
-            if (0
-                || check_spec("sw.h")
-                || check_spec("sw.cpp") // old compat. After rewrite remove sw.h
-                //|| check_spec("sw2.cpp")
-                //|| (i = directory_input{"."}, true)
-                ) {
-                inputs.push_back(i);
-            } else {
-                throw std::runtime_error{"no inputs found/heuristics not implemented"};
-            }
-        }
-        for (auto &&i : inputs) {
-            visit_any(i, [&](specification_file_input &i) {
-                auto fn = fs::absolute(i.fn);
-                auto fns = normalize_path_and_drive(fn);
-                auto fnh = std::hash<string>{}(fns);
-                auto nsname = "sw_ns_" + std::to_string(fnh);
-                auto ns = e.namespace_(nsname);
-                e += "namespace this_namespace = ::" + nsname + ";";
-                // add inline ns?
-                e.include(fn);
-                load_inputs += "    {&" + nsname + "::build, \"" + normalize_path_and_drive(fn.parent_path()) + "\"},\n";
-            });
-            e += "";
-        }
-        load_inputs += "    };";
-        e += "std::vector<sw::entry_point> sw1_load_inputs() {";
-        e += load_inputs;
-        e += "}";
-        write_file_if_different(fn, e.s);
+                             };
+                         }
+                         cpp_emitter e;
+                         string load_inputs = "    return {\n";
+                         std::vector<input> inputs;
+                         if (!b.inputs) {
+                             b.inputs.value = std::vector<string>{"."};
+                         }
+                         for (auto &&bi : *b.inputs.value) {
+                             input i;
+                             auto check_spec = [&](auto &&fn) {
+                                 auto p = path{bi} / fn;
+                                 if (fs::exists(p)) {
+                                     i = specification_file_input{p};
+                                     return true;
+                                 }
+                                 return false;
+                             };
+                             if (0 || check_spec("sw.h") ||
+                                 check_spec("sw.cpp") // old compat. After rewrite remove sw.h
+                                 //|| check_spec("sw2.cpp")
+                                 //|| (i = directory_input{"."}, true)
+                             ) {
+                                 inputs.push_back(i);
+                             } else {
+                                 throw std::runtime_error{"no inputs found/heuristics not implemented"};
+                             }
+                         }
+                         for (auto &&i : inputs) {
+                             visit_any(i, [&](specification_file_input &i) {
+                                 auto fn = fs::absolute(i.fn);
+                                 auto fns = normalize_path_and_drive(fn);
+                                 auto fnh = std::hash<string>{}(fns);
+                                 auto nsname = "sw_ns_" + std::to_string(fnh);
+                                 auto ns = e.namespace_(nsname);
+                                 e += "namespace this_namespace = ::" + nsname + ";";
+                                 // add inline ns?
+                                 e.include(fn);
+                                 load_inputs += "    {&" + nsname + "::build, \"" +
+                                                normalize_path_and_drive(fn.parent_path()) + "\"},\n";
+                             });
+                             e += "";
+                         }
+                         load_inputs += "    };";
+                         e += "std::vector<sw::entry_point> sw1_load_inputs() {";
+                         e += load_inputs;
+                         e += "}";
+                         write_file_if_different(fn, e.s);
 
-        input_with_settings is{entry_point{&self_build::build,cfg_dir}};
-        auto dbs = default_build_settings();
-        dbs.build_type = build_type::debug{};
-        is.settings.insert(dbs);
-        s.add_input(is);
-//#ifdef _WIN32
-        is.ep = pch_ep;
-        s.add_input(is);
-//#endif
-        s.load_inputs();
-        auto &&t = s.targets.find_first<executable>("sw");
-//#ifdef _WIN32
-        auto &&pch = s.targets.find_first<native_target>("sw_pch");
-        pch.make_pch();
-        t.precompiled_header = pch.precompiled_header;
-        t.precompiled_header.create = false;
-//#endif
-        s.build(cl);
+                         input_with_settings is{entry_point{&self_build::build, cfg_dir}};
+                         auto dbs = default_build_settings();
+                         dbs.build_type = build_type::debug{};
+                         is.settings.insert(dbs);
+                         s.add_input(is);
+                         // #ifdef _WIN32
+                         is.ep = pch_ep;
+                         s.add_input(is);
+                         // #endif
+                         s.load_inputs();
+                         auto &&t = s.targets.find_first<executable>("sw");
+                         // #ifdef _WIN32
+                         auto &&pch = s.targets.find_first<native_target>("sw_pch");
+                         pch.make_pch();
+                         t.precompiled_header = pch.precompiled_header;
+                         t.precompiled_header.create = false;
+                         // #endif
+                         s.build(cl);
 
-        if (!fs::exists(t.executable)) {
-            throw std::runtime_error{format("missing sw1 file", t.executable)};
-        }
-        auto setup_path = [](auto &&in) {
-            auto s = normalize_path_and_drive(in);
-            if (is_mingw_shell()) {
-               //mingw_drive_letter(s);
-            }
-            return path{s};
-        };
-        raw_command c;
-        c.working_directory = setup_path(this_path);
-        c += setup_path(t.executable), "-sw1";
-        for (int i = 1; i < argc; ++i) {
-            c += (const char *)argv[i];
-        }
-        log_debug("sw1");
-        return c.run();
-    });
+                         if (!fs::exists(t.executable)) {
+                             throw std::runtime_error{format("missing sw1 file", t.executable)};
+                         }
+                         auto setup_path = [](auto &&in) {
+                             auto s = normalize_path_and_drive(in);
+                             if (is_mingw_shell()) {
+                                 // mingw_drive_letter(s);
+                             }
+                             return path{s};
+                         };
+                         raw_command c;
+                         c.working_directory = setup_path(this_path);
+                         c += setup_path(t.executable), "-sw1";
+                         for (int i = 1; i < argc; ++i) {
+                             c += (const char *)argv[i];
+                         }
+                         log_debug("sw1");
+                         return c.run();
+                     },
+        [&](auto &b) requires(false || std::same_as<std::decay_t<decltype(b)>, command_line_parser::run> ||
+                              std::same_as<std::decay_t<decltype(b)>, command_line_parser::exec>) {
+                         auto s = make_solution();
+                         s.binary_dir = fs::temp_directory_path() / ".sw";
+
+                         auto it = std::ranges::find(*b.arguments.value, "--"sv);
+                         using ttype = executable;
+                         auto tname = path{*b.arguments.value->begin()}.stem().string();
+                         auto ep = [&](solution &s) {
+                             auto &t = s.add<ttype>(tname);
+                             for (auto &&f : std::ranges::subrange(b.arguments.value->begin(), it)) {
+                                 t += f;
+                             }
+                         };
+                         input_with_settings is{entry_point{ep, fs::current_path()}};
+                         auto settings = make_settings(b);
+                         is.settings.insert(settings.begin(), settings.end());
+                         s.add_input(is);
+                         s.build(cl);
+
+                         auto &&t = s.targets.find_first<ttype>(tname);
+                         raw_command c;
+                         c.working_directory = fs::current_path();
+                         c += t.executable;
+                        for (auto &&o : std::ranges::subrange(it, b.arguments.value->end())) {
+                            c += o;
+                        }
+                         if constexpr (std::same_as<std::decay_t<decltype(b)>, command_line_parser::exec>) {
+                             c.exec = true;
+                         } else {
+                             auto &r = std::get<command_line_parser::run>(cl.c);
+                             if (r.exec) {
+                                 c.exec = true;
+                             }
+                         }
+                         try {
+                             return c.run();
+                         } catch (std::exception &) {
+                             // supress exception message
+                             return !c.exit_code ? 1 : *c.exit_code;
+                         }
+                         return 0;
+                     });
 }

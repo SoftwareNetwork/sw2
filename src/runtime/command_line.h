@@ -145,6 +145,26 @@ struct command_line_parser {
                 a.consumed = true;
             }
         }
+        template <auto Min, auto Max>
+        void check_nargs1(const options::nargs<Min,Max> &) {
+            if (Min > 0) {
+                if (!value || value->size() < Min) {
+                    throw std::runtime_error{"not enough args"};
+                }
+            }
+        }
+        void check_nargs1(const options::one_or_more &v) {
+            if (v.min() > 0) {
+                if (!value || value->size() < v.min()) {
+                    throw std::runtime_error{"not enough args"};
+                }
+            }
+        }
+        void check_nargs1(auto &&) {
+        }
+        void check() {
+            (check_nargs1(Options), ...);
+        }
     };
     template <auto FlagName, auto ... Options> struct flag {
         bool value;
@@ -168,14 +188,15 @@ struct command_line_parser {
         void parse(auto &&args, auto &&) {
             value = true;
         }
+        void check() {
+        }
     };
 
     // subcommands
 
-    struct build_common {
+    struct build_run_common {
         static constexpr inline auto name = "build"sv;
 
-        argument<string, options::positional{}, options::zero_or_more{}> inputs;
         flag<options::flag<"-explain-outdated"_s>{}> explain_outdated;
         flag<options::flag<"-static"_s>{}> static_;
         flag<options::flag<"-shared"_s>{}> shared;
@@ -189,9 +210,19 @@ struct command_line_parser {
         argument<string, options::flag<"-os"_s>{}, options::comma_separated_value{}> os;
         argument<int, options::flag<"-k"_s>{}> ignore_errors;
 
+        auto option_list(auto &&...args) {
+            return std::tie(explain_outdated, static_, shared, c_static_runtime, cpp_static_runtime,
+                            c_and_cpp_static_runtime, c_and_cpp_dynamic_runtime, arch, config, compiler, os,
+                            ignore_errors, FWD(args)...);
+        }
+    };
+    struct build_common : build_run_common {
+        static constexpr inline auto name = "build"sv;
+
+        argument<string, options::positional{}, options::zero_or_more{}> inputs;
+
         auto option_list(auto && ... args) {
-            return std::tie(inputs, explain_outdated, static_, shared, c_static_runtime, cpp_static_runtime, c_and_cpp_static_runtime,
-                            c_and_cpp_dynamic_runtime, arch, config, compiler, os, ignore_errors, FWD(args)...);
+            return build_run_common::option_list(inputs, FWD(args)...);
         }
     };
     struct build : build_common {
@@ -239,11 +270,11 @@ struct command_line_parser {
             return build_common::option_list(generator);
         }
     };
-    struct run_common : build_common {
-        argument<string, options::flag<"--"_s>{}, options::consume_after{}> arguments;
+    struct run_common : build_run_common {
+        argument<string, options::positional{}, options::one_or_more{}, options::consume_after{}> arguments;
 
         auto option_list(auto && ... args) {
-            return build_common::option_list(arguments, FWD(args)...);
+            return build_run_common::option_list(arguments, FWD(args)...);
         }
     };
     struct run : run_common {
@@ -387,6 +418,18 @@ struct command_line_parser {
             if (!command) {
                 throw std::runtime_error{format("unknown option: {}", a.value)};
             }
+        }
+
+        // do post check
+        if constexpr (requires { obj.option_list(); }) {
+            std::apply(
+                [&](auto &&...opts) {
+                    auto f = [&](auto &&opt) {
+                    opt.check();
+                    };
+                    (f(FWD(opts)),...);
+                },
+                obj.option_list());
         }
     }
 };
