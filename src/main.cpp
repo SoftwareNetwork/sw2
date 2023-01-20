@@ -347,7 +347,7 @@ int main1(int argc, char *argv[]) {
                               std::same_as<std::decay_t<decltype(b)>, command_line_parser::test> ||
                               std::same_as<std::decay_t<decltype(b)>, command_line_parser::generate>) {
                          auto s = make_solution();
-                         s.binary_dir = fs::temp_directory_path() / ".sw";
+                         s.binary_dir = temp_sw_directory_path();
 
                          direct_build_input direct_build;
                          if (b.inputs) {
@@ -398,7 +398,7 @@ int main1(int argc, char *argv[]) {
                                  e.include(swdir / "main.cpp");
                              }
                              //
-                             auto pch_tmp = fs::temp_directory_path() / "sw" / "pch";
+                             auto pch_tmp = temp_sw_directory_path() / "pch";
                              auto pch = pch_tmp / "sw.h";
                              write_file_if_different(pch, e.s);
                              pch_ep.source_dir = pch_tmp;
@@ -500,14 +500,14 @@ int main1(int argc, char *argv[]) {
         [&](auto &b) requires(false || std::same_as<std::decay_t<decltype(b)>, command_line_parser::run> ||
                               std::same_as<std::decay_t<decltype(b)>, command_line_parser::exec>) {
                          auto s = make_solution();
-                         s.binary_dir = fs::temp_directory_path() / ".sw";
+                         s.binary_dir = temp_sw_directory_path() / ".sw";
 
                          auto it = std::ranges::find(*b.arguments.value, "--"sv);
                          using ttype = executable;
                          auto tname = path{*b.arguments.value->begin()}.stem().string();
             if (b.remove_shebang) {
                 auto orig = fs::absolute(*b.arguments.value->begin());
-                auto fn = fs::temp_directory_path() / "sw" / "exec" / std::to_string(std::hash<path>{}(orig)) += ".cpp";
+                auto fn = temp_sw_directory_path() / "exec" / std::to_string(std::hash<path>{}(orig)) += ".cpp";
                 auto s = read_file(orig);
                 write_file_if_different(fn, format("#line 2 \"{}\"\n{}", *b.arguments.value->begin(), s.substr(s.find('\n'))));
                 *b.arguments.value->begin() = fn.string();

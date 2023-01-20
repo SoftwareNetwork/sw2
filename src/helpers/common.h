@@ -436,6 +436,10 @@ inline path get_home_directory() {
     return home;
 }
 
+inline path temp_sw_directory_path() {
+    return fs::temp_directory_path() / "sw";
+}
+
 } // namespace sw
 
 template <>
