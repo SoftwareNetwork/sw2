@@ -83,7 +83,7 @@ struct command_line_parser {
 
     template <typename T, auto ... Options>
     struct argument {
-        static inline constexpr bool is_single_val = is_single_val1<Options...>() && !is<options::consume_after>();
+        static inline constexpr bool is_single_val = is_single_val1<Options...>() && !is<options::consume_after, Options...>();
         using value_type = std::conditional_t<is_single_val, T, std::vector<T>>;
 
         std::optional<value_type> value;
@@ -97,8 +97,8 @@ struct command_line_parser {
             };
             return (f(Options) || ... || false);
         }
-        static bool is_positional() {
-            return is<options::positional>();
+        static constexpr bool is_positional() {
+            return is<options::positional, Options...>();
         }
 
         explicit operator bool() const {
@@ -238,17 +238,27 @@ struct command_line_parser {
             return build_common::option_list(generator);
         }
     };
-    struct run : build_common {
+    struct run_common : build_common {
+        argument<string, options::flag<"--"_s>{}, options::consume_after{}> arguments;
+
+        auto option_list(auto && ... args) {
+            return build_common::option_list(arguments, FWD(args)...);
+        }
+    };
+    struct run : run_common {
         static constexpr inline auto name = "run"sv;
 
-        argument<string, options::flag<"--"_s>{}, options::consume_after{}> arguments;
         flag<options::flag<"-exec"_s>{}> exec;
 
         auto option_list() {
-            return build_common::option_list(arguments, exec);
+            return run_common::option_list(exec);
         }
     };
-    using command_types = types<build, generate, test, run>;
+    // same as run, but exec always
+    struct exec : run_common {
+        static constexpr inline auto name = "exec"sv;
+    };
+    using command_types = types<build, generate, test, run, exec>;
     using command = command_types::variant_type;
 
     command c;

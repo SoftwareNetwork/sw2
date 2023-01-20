@@ -346,6 +346,7 @@ int main1(int argc, char *argv[]) {
         || std::same_as<std::decay_t<decltype(b)>, command_line_parser::test>
         || std::same_as<std::decay_t<decltype(b)>, command_line_parser::generate>
         || std::same_as<std::decay_t<decltype(b)>, command_line_parser::run>
+        || std::same_as<std::decay_t<decltype(b)>, command_line_parser::exec>
         ) {
         auto s = make_solution();
         s.binary_dir = fs::temp_directory_path() / ".sw";
@@ -376,8 +377,10 @@ int main1(int argc, char *argv[]) {
             is.settings.insert(settings.begin(), settings.end());
             s.add_input(is);
             s.build(cl);
-            if constexpr (std::same_as<std::decay_t<decltype(b)>, command_line_parser::run>) {
-                auto &r = std::get<command_line_parser::run>(cl.c);
+            if constexpr (false
+                    || std::same_as<std::decay_t<decltype(b)>, command_line_parser::run>
+                    || std::same_as<std::decay_t<decltype(b)>, command_line_parser::exec>
+                            ) {
                 auto &&t = s.targets.find_first<ttype>(tname);
                 raw_command c;
                 c.working_directory = fs::current_path();
@@ -387,8 +390,13 @@ int main1(int argc, char *argv[]) {
                         c += o;
                     }
                 }
-                if (r.exec) {
+                if constexpr (std::same_as<std::decay_t<decltype(b)>, command_line_parser::exec>) {
                     c.exec = true;
+                } else {
+                    auto &r = std::get<command_line_parser::run>(cl.c);
+                    if (r.exec) {
+                        c.exec = true;
+                    }
                 }
                 try {
                     return c.run();
