@@ -121,7 +121,7 @@ struct command_line_parser {
             a.consumed = true;
         }
         void parse(auto &&args, auto &&cur) requires (!is_single_val) {
-            auto consume_after = is<options::consume_after>();
+            constexpr auto consume_after = is<options::consume_after, Options...>();
             for (auto &&a : args.active()) {
                 if (consume_after) {
                     if (!value) {
