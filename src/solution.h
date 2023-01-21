@@ -345,9 +345,16 @@ struct solution {
         ce.ex_external = &ex;
         ce.ignore_errors = std::numeric_limits<decltype(ce.ignore_errors)>::max();
         ce.run(cl, *this);
-        generate_test_results();
+        generate_test_results(cl);
     }
-    void generate_test_results() {
+    void generate_test_results(auto &&cl) {
+        // https://llg.cubic.org/docs/junit/
+        struct junit_emitter : xml_emitter {
+            auto tag(auto &&name) {
+                return xml_emitter::tag(this, name);
+            }
+        };
+
         junit_emitter e;
         {
             struct data {

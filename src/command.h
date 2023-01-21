@@ -389,6 +389,7 @@ struct raw_command {
     pid_t pid{-1};
 #endif
     //
+    bool detach{};
     bool exec{};
 
     // sync()
@@ -471,6 +472,9 @@ struct raw_command {
         // flags |= CREATE_NO_WINDOW;
 
         d.si.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
+        if (detach) {
+            d.si.StartupInfo.dwFlags = DETACHED_PROCESS;
+        }
 
         // pre command
         d.si.StartupInfo.hStdInput = in.pre_create_command(STD_INPUT_HANDLE, ex);
@@ -521,6 +525,15 @@ struct raw_command {
             (LPSTARTUPINFOW)&d.si, &d.pi));
         d.thread = d.pi.hThread;
         d.process = d.pi.hProcess;
+
+        if (exec) {
+            _exit(0);
+        }
+        if (detach) {
+            finish();
+            exit_code = 0;
+            cb();
+        }
 
         in.post_create_command(ex);
         out.post_create_command(ex);

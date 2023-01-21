@@ -51,11 +51,4 @@ struct xml_emitter : xml_tag<xml_emitter> {
     }
 };
 
-// https://llg.cubic.org/docs/junit/
-struct junit_emitter : xml_emitter {
-    auto tag(auto &&name) {
-        return xml_emitter::tag(this,name);
-    }
-};
-
 } // namespace sw
