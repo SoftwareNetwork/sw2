@@ -82,6 +82,8 @@ struct gcc_compile_rule {
                     if (!r.contains(this)) {
                         auto f = tgt.precompiled_header.header;
                         gcc_command c;
+                        c.err = ""s;
+                        c.out = ""s;
                         c.working_directory = tgt.binary_dir / "obj";
                         c += compiler.executable, "-c", f;
                         c.inputs.insert(compiler.executable);
@@ -110,6 +112,8 @@ struct gcc_compile_rule {
             auto base = tgt.binary_dir / "obj" / f.filename();
             auto out = path{base} += objext;
             gcc_command c;
+            c.err = ""s;
+            c.out = ""s;
             c.deps_file = path{base} += ".d";
             c.name_ = format_log_record(tgt, "/"s + normalize_path(f.lexically_relative(tgt.source_dir).string()));
             c += compiler.executable, "-c";
@@ -145,6 +149,8 @@ struct gcc_link_rule {
 
     void operator()(auto &&tgt, auto &&linker) requires requires { tgt.link_libraries; } {
         io_command c;
+        c.err = ""s;
+        c.out = ""s;
         c += linker.executable;
         if constexpr (requires { tgt.executable; }) {
             c.name_ = format_log_record(tgt, "");
