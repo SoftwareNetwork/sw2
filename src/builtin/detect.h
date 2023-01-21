@@ -193,6 +193,9 @@ struct gcc_link_rule {
             for (auto &&d : v.system_link_libraries) {
                 c += d;
             }
+            for (auto &&d : v.link_options) {
+                c += d;
+            }
         };
         add(tgt.merge_object());
         tgt.commands.emplace_back(std::move(c));
@@ -229,6 +232,9 @@ struct lib_ar_rule {
                 c += d;
             }
             for (auto &&d : v.system_link_libraries) {
+                c += d;
+            }
+            for (auto &&d : v.link_options) {
                 c += d;
             }
         };
@@ -453,6 +459,9 @@ struct link_exe_rule {
                 c += d;
             }
             for (auto &&d : v.system_link_libraries) {
+                c += d;
+            }
+            for (auto &&d : v.link_options) {
                 c += d;
             }
         };

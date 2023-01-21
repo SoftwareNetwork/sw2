@@ -73,6 +73,14 @@ inline auto operator""_copt(const char *s, size_t len) {
     return compile_option{std::string{s, len}};
 }
 
+struct link_option {
+    string value;
+    operator auto() const { return value; }
+};
+inline auto operator""_lopt(const char *s, size_t len) {
+    return link_option{std::string{s, len}};
+}
+
 struct link_library {
     path p;
     link_library(const char *p) : p{p} {}
@@ -141,11 +149,13 @@ struct link_options_t {
     std::vector<path> link_directories;
     std::vector<link_library> link_libraries;
     std::vector<system_link_library> system_link_libraries;
+    std::vector<link_option> link_options;
 
     void merge(auto &&from) {
         append_vector(link_directories, from.link_directories);
         append_vector(link_libraries, from.link_libraries);
         append_vector(system_link_libraries, from.system_link_libraries);
+        append_vector(link_options, from.link_options);
     }
 };
 

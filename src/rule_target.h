@@ -372,6 +372,9 @@ struct target_data : compile_options_t,link_options_t {
     void add(const compile_option &d) {
         compile_options.push_back(d);
     }
+    void add(const link_option &d) {
+        link_options.push_back(d);
+    }
     void add(const link_library &l) {
         link_libraries.push_back(l);
     }
