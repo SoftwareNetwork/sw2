@@ -1602,7 +1602,7 @@ struct command_executor {
         bool empty() const {
             return commands.empty() || std::ranges::all_of(commands, [](auto &&cmd) {
                        return visit(*cmd, [&](auto &&c) {
-                           return c.simultaneous_jobs && c.simultaneous_jobs == 0;
+                           return c.simultaneous_jobs && *c.simultaneous_jobs == 0;
                        });
                 })
                 ;
@@ -1610,7 +1610,7 @@ struct command_executor {
         command *next() {
             auto it = std::ranges::find_if(commands, [](auto &&cmd) {
                 return visit(*cmd, [&](auto &&c) {
-                    return !c.simultaneous_jobs || c.simultaneous_jobs;
+                    return !c.simultaneous_jobs || *c.simultaneous_jobs != 0;
                 });
             });
             auto c = *it;
