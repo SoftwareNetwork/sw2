@@ -349,13 +349,7 @@ struct solution {
     }
     void generate_test_results(auto &&cl) {
         // https://llg.cubic.org/docs/junit/
-        struct junit_emitter : xml_emitter {
-            auto tag(auto &&name) {
-                return xml_emitter::tag(this, name);
-            }
-        };
-
-        junit_emitter e;
+        xml_emitter e;
         {
             struct data {
                 int tests{};
