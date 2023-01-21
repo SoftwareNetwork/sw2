@@ -335,128 +335,18 @@ struct solution {
             t += "Total errors: " + std::to_string(ce.errors.size());
             throw std::runtime_error{t};
         }
+        //return ce;
     }
     void test(auto &&cl) {
         executor ex;
         test(ex, cl);
     }
-    void test(auto &&ex, auto &&cl) {
+    auto test(auto &&ex, auto &&cl) {
         auto ce = make_command_executor(true);
         ce.ex_external = &ex;
         ce.ignore_errors = std::numeric_limits<decltype(ce.ignore_errors)>::max();
         ce.run(cl, *this);
-        generate_test_results(cl);
-    }
-    void generate_test_results(auto &&cl) {
-        // https://llg.cubic.org/docs/junit/
-        xml_emitter e;
-        {
-            struct data {
-                int tests{};
-                int failures{};
-                int errors{};
-                int skipped{};
-                io_command::clock::duration time{};
-                // time
-
-                void operator+=(const data &d) {
-                    tests += d.tests;
-                    failures += d.failures;
-                    errors += d.errors;
-                    skipped += d.skipped;
-                    time += d.time;
-                }
-            };
-            auto format_time = [&](auto &&t) {
-                auto f = std::chrono::duration_cast<std::chrono::duration<float>>(t).count();
-                return format("{}", f);
-            };
-            auto set_attrs = [&](auto &&o, auto &&d) {
-                o["tests"] = std::to_string(d.tests);
-                o["skipped"] = std::to_string(d.skipped);
-                o["errors"] = std::to_string(d.errors);
-                o["failures"] = std::to_string(d.failures);
-                o["time"] = format_time(d.time);
-            };
-            data dtestsuites;
-            auto testsuites = e.tag("testsuites");
-            for (auto &&[id, t] : targets) {
-                visit(t, [&](auto &&vp) {
-                    auto &v = *vp;
-                    if constexpr (requires { v.tests; }) {
-                        if (v.tests.empty()) {
-                            return;
-                        }
-                        data dtestsuite;
-                        auto testsuite = testsuites.tag("testsuite");
-                        testsuite["name"] = (string)v.name;
-                        testsuite["package"] = (string)v.name;
-                        testsuite["config"] = std::to_string(v.bs.hash());
-                        for (auto &&t : v.tests) {
-                            ++dtestsuite.tests;
-                            auto tc = testsuite.tag("testcase");
-                            visit(t, [&](auto &&c) {
-                                auto p = c.name_.rfind('[');
-                                if (p == -1) {
-                                    tc["name"] = c.name_;
-                                } else {
-                                    ++p;
-                                    tc["name"] = c.name_.substr(p, c.name_.rfind(']') - p);
-                                }
-                                bool time_not_set = c.start == decltype(c.start){};
-                                if (time_not_set && c.processed) {
-                                    ++dtestsuite.skipped;
-                                    tc.tag("skipped");
-                                    return;
-                                }
-                                auto testdir = std::get<path>(c.err.s).parent_path();
-                                if (!c.exit_code || !c.processed) {
-                                    auto e = tc.tag("error");
-                                    if (c.processed) {
-                                        e["message"] = "test was not executed";
-                                    } else {
-                                        e["message"] = "test dependencies failed";
-                                    }
-                                    ++dtestsuite.errors;
-                                } else if (*c.exit_code) {
-                                    auto e = tc.tag("failure");
-                                    e["message"] = c.get_error_message();
-                                    tc["time"] = format_time(c.end - c.start);
-                                    ++dtestsuite.failures;
-                                    dtestsuite.time += c.end - c.start;
-                                    write_file(testdir / "exit_code.txt", format("{}", *c.exit_code));
-                                    write_file(testdir / "time.txt", format_time(c.end - c.start));
-                                } else {
-                                    tc["time"] = format_time(c.end - c.start);
-                                    dtestsuite.time += c.end - c.start;
-                                    write_file(testdir / "exit_code.txt", format("{}", *c.exit_code));
-                                    write_file(testdir / "time.txt", format_time(c.end - c.start));
-                                }
-                            });
-                            // sw1 has "config" attribute here
-                        }
-                        set_attrs(testsuite, dtestsuite);
-                        dtestsuites += dtestsuite;
-                    }
-                });
-            }
-            set_attrs(testsuites, dtestsuites);
-
-            log_info(R"(
-Test results:
-TOTAL:   {}
-PASSED:  {}
-FAILED:  {}
-SKIPPED: {})",
-                     dtestsuites.tests,
-                     dtestsuites.tests - (dtestsuites.failures + dtestsuites.errors),
-                     dtestsuites.failures + dtestsuites.errors,
-                     dtestsuites.skipped
-            );
-            // List of skipped tests:
-        }
-        auto resfn = work_dir / "test" / "results.xml";
-        write_file(resfn, e.s);
+        return ce;
     }
 };
 using Solution = solution; // v1 compat
