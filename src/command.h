@@ -391,6 +391,7 @@ struct raw_command {
     //
     bool detach{};
     bool exec{};
+    std::chrono::seconds time_limit{};
 
     // sync()
     // async()
@@ -539,10 +540,27 @@ struct raw_command {
         out.post_create_command(ex);
         err.post_create_command(ex);
 
+        win32::handle process_job;
+        if (time_limit.count() != 0) {
+            process_job = win32::create_job_object();
+
+            JOBOBJECT_BASIC_LIMIT_INFORMATION li{};
+            // number of 100ns
+            li.PerProcessUserTimeLimit.QuadPart = time_limit.count() * 10 * 1'000'000;
+            li.LimitFlags |= JOB_OBJECT_LIMIT_PROCESS_TIME;
+            WINAPI_CALL(SetInformationJobObject(process_job, JobObjectBasicLimitInformation, &li, sizeof(li)));
+
+            ex.register_job(process_job);
+            WINAPI_CALL(AssignProcessToJobObject(process_job, d.process));
+        }
+
         // If we do not create default job for main process, we have a race here.
         // If main process is killed before register_process() call, created process
         // won't stop.
-        ex.register_process(d.pi.hProcess, d.pi.dwProcessId, [this, cb]() {
+        ex.register_process(d.pi.hProcess, d.pi.dwProcessId, [this, cb, process_job = std::move(process_job)](bool time_limit_hit) {
+            if (time_limit_hit) {
+                TerminateProcess(d.pi.hProcess, 1);
+            }
             DWORD exit_code;
             WINAPI_CALL(GetExitCodeProcess(d.pi.hProcess, &exit_code));
             while (exit_code == STILL_ACTIVE) {
@@ -556,6 +574,13 @@ struct raw_command {
                 //CloseHandle(pi.hProcess); // we may want to use h in the callback?
                 finish();
             //}};
+            if (time_limit_hit) {
+                if (auto p = std::get_if<path>(&err.s)) {
+                    write_file(*p, format("time limit hit: {}", time_limit));
+                } else {
+                    err = format("time limit hit: {}", time_limit);
+                }
+            }
             cb();
         });
         /*visit(

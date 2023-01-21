@@ -152,7 +152,7 @@ struct executor {
     handle port;
     std::atomic_bool stopped{false};
     std::atomic_int jobs{0};
-    std::map<DWORD, std::move_only_function<void()>> process_callbacks;
+    std::map<DWORD, std::move_only_function<void(bool)>> process_callbacks;
     handle job;
 
     executor() {
@@ -194,13 +194,19 @@ struct executor {
                 (uint64_t &)o = process_callbacks.begin()->first;
             case JOB_OBJECT_MSG_EXIT_PROCESS:
                 if (auto it = process_callbacks.find(static_cast<DWORD>((uint64_t)o)); it != process_callbacks.end()) {
-                    it->second();
+                    it->second(false);
                     process_callbacks.erase(it);
                 }
                 break;
             case JOB_OBJECT_MSG_ABNORMAL_EXIT_PROCESS:
                 if (auto it = process_callbacks.find(static_cast<DWORD>((uint64_t)o)); it != process_callbacks.end()) {
-                    it->second();
+                    it->second(false);
+                    process_callbacks.erase(it);
+                }
+                break;
+            case JOB_OBJECT_MSG_END_OF_PROCESS_TIME:
+                if (auto it = process_callbacks.find(static_cast<DWORD>((uint64_t)o)); it != process_callbacks.end()) {
+                    it->second(true);
                     process_callbacks.erase(it);
                 }
                 break;
