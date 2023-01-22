@@ -347,7 +347,7 @@ path get_this_file_dir() {
         return swdir;
     }
 }
-path get_main_cpp_dir() {
+path get_sw_dir() {
     path p = get_this_file_dir();
     return p.parent_path().parent_path();
 }
@@ -437,7 +437,7 @@ int main1(int argc, char *argv[]) {
                              e += "namespace sw { struct entry_point; }";
                              e += "#define SW1_BUILD";
                              e += "std::vector<sw::entry_point> sw1_load_inputs();";
-                             e.include(get_main_cpp_dir() / "main.cpp");
+                             e.include(get_this_file_dir() / "main.cpp");
                              //
                              auto pch_tmp = temp_sw_directory_path() / "pch";
                              auto pch = pch_tmp / "sw.h";
@@ -549,6 +549,9 @@ int main1(int argc, char *argv[]) {
                          }
                          using ttype = executable;
                          auto tname = path{*b.arguments.value->begin()}.stem().string();
+                         if (tname == "sw"sv) {
+                             tname = "sw1";
+                         }
 
                          auto orig = fs::absolute(*b.arguments.value->begin());
                          auto s = read_file(orig);
@@ -599,15 +602,14 @@ using namespace fs;
                                  // add deps here!
                                  //command_line_parser::run_common r;
                                  //command_line_parser::parse1(r, );
-                                 t += include_directory{get_main_cpp_dir()};
-                                 //t += force_include{get_main_cpp_dir() / "sw.h"};
-                                 auto &&sw = sln.targets.find_first<native_library_target>("sw.lib");
-                                 t += sw;
+                                 t += "sw.lib"_dep;
                              }
                          };
-                         input_with_settings is{entry_point{ep, fs::current_path()}};
+                         input_with_settings is{entry_point{&self_build::build, get_sw_dir()}};
                          auto settings = make_settings(b);
                          is.settings.insert(settings.begin(), settings.end());
+                         sln.add_input(is);
+                         is.ep = entry_point{ep, fs::current_path()};
                          sln.add_input(is);
                          sln.build(cl);
 

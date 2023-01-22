@@ -129,7 +129,7 @@ struct target_map {
                 }
             }
         }
-        throw std::runtime_error{"target was not loaded with provided settings"};
+        throw std::runtime_error{"target was not loaded with provided settings: "s + (string)pkg};
     }
 
     struct end_sentinel{};

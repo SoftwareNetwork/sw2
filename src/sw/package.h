@@ -203,6 +203,7 @@ struct version_range {
         using base = std::pair<package_version::number_version, package_version::number_version>;
         using base::base;
         bool contains(const package_version::number_version &v) const {
+            // <= v < ? but harder to implement?
             return first <= v && v <= second;
         }
     };
@@ -235,7 +236,15 @@ struct package_version_range {
     }
     package_version_range(std::string_view s) : package_version_range{string{s.begin(), s.end()}} {
     }
-    package_version_range(const package_version &v) : range{v} {
+    package_version_range(const package_version &v) {
+        if (v.is_branch()) {
+            range = v;
+        } else {
+            range = version_range{.pairs = {{
+                std::get<package_version::number_version>(v.version),
+                std::get<package_version::number_version>(v.version)
+                }}};
+        }
     }
     package_version_range(const std::string &s) {
         if (s == "*") {
