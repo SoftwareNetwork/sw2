@@ -632,6 +632,17 @@ struct raw_command {
             in.inside_fork(STDIN_FILENO);
             out.inside_fork(STDOUT_FILENO);
             err.inside_fork(STDERR_FILENO);
+
+            if (time_limit.count()) {
+                struct rlimit old, newl{};
+                newl.rlim_cur = time_limit.count();
+                newl.rlim_max = time_limit.count();
+                if (prlimit(0, RLIMIT_CPU, &newl, &old) == -1) {
+                    std::cerr << "prlimit error: " << errno << "\n";
+                    exit(1);
+                }
+            }
+
             // child
             if (execve(args2[0], args2.data(), environ) == -1) {
                 std::cerr << "execve error: " << errno << "\n";
@@ -704,6 +715,17 @@ struct raw_command {
             in.inside_fork(STDIN_FILENO);
             out.inside_fork(STDOUT_FILENO);
             err.inside_fork(STDERR_FILENO);
+
+            if (time_limit.count()) {
+                struct rlimit old, newl{};
+                newl.rlim_cur = time_limit.count();
+                newl.rlim_max = time_limit.count();
+                if (setrlimit(RLIMIT_CPU, &newl) == -1) {
+                    std::cerr << "setrlimit error: " << errno << "\n";
+                    exit(1);
+                }
+            }
+
             // child
             if (execve(args2[0], args2.data(), environ) == -1) {
                 std::cerr << "execve error: " << errno << "\n";
