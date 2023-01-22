@@ -684,7 +684,7 @@ using namespace fs;
             if (fs::exists("/bin/sh")) {
                 auto fn = "/bin/sw";
                 write_file_if_different(fn, format(R"(#!/bin/sh
-exec {} exec -remove-shebang "$@"
+exec {} exec -remove-shebang $@
 )", argv[0])); // write argv[0] instead of sw?
                 fs::permissions(fn, (fs::perms)0755);
             }
