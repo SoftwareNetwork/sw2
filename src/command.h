@@ -1310,9 +1310,10 @@ if [ $E -ne 0 ]; then echo "Error code: $E"; fi
         if (!working_directory.empty()) {
             s += "cd \"" + working_directory.string() + "\"\n\n";
         }
+        auto start_space = "    "s;
         for (int i = 0; auto &&a : arguments) {
             if (i++) {
-                s += "    ";
+                s += start_space;
             }
             auto quote = [&](const std::string &as) {
                 s += "\"" + as + "\" " + visit(t,[](auto &&v){return v.arg_delim;}) + "\n";
@@ -1335,7 +1336,20 @@ if [ $E -ne 0 ]; then echo "Error code: $E"; fi
         if (!arguments.empty()) {
             s.resize(s.size() - 2 - string{visit(t,[](auto &&v){return v.arg_delim;})}.size());
             s += " "s + visit(t,[](auto &&v){return v.any_arg;});
-            s += "\n\n";
+            if (auto p = std::get_if<path>(&in.s)) {
+                s += " "s + visit(t,[](auto &&v){return v.arg_delim;}) + "\n";
+                s += start_space + "< " + p->string();
+            }
+            if (auto p = std::get_if<path>(&out.s)) {
+                s += " "s + visit(t,[](auto &&v){return v.arg_delim;}) + "\n";
+                s += start_space + "> " + p->string();
+            }
+            if (auto p = std::get_if<path>(&err.s)) {
+                s += " "s + visit(t,[](auto &&v){return v.arg_delim;}) + "\n";
+                s += start_space + "2> " + p->string();
+            }
+            s += "\n";
+            s += "\n";
         }
         s += visit(t,[](auto &&v){return v.epilog;});
         write_file(fn, s);
