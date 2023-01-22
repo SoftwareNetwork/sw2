@@ -11,6 +11,8 @@
 #include <signal.h>
 #include <sys/epoll.h>
 #include <sys/syscall.h>
+#include <sys/resource.h>
+#include <sys/time.h>
 #include <sys/wait.h>
 #include <unistd.h>
 

@@ -6,11 +6,13 @@
 #ifdef __APPLE__
 #include "../helpers/common.h"
 
+#include <signal.h>
 #include <spawn.h>
 #include <sys/event.h>
-#include <unistd.h>
+#include <sys/resource.h>
 #include <sys/sysctl.h>
-#include <signal.h>
+#include <sys/time.h>
+#include <unistd.h>
 
 extern char **environ;
 
