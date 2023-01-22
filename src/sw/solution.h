@@ -1,6 +1,7 @@
 #pragma once
 
 #include "rule_target.h"
+#include "command.h"
 #include "input.h"
 #include "package_id.h"
 #include "helpers/xml.h"
@@ -344,7 +345,7 @@ struct solution {
     auto test(auto &&ex, auto &&cl) {
         auto ce = make_command_executor(true);
         ce.ex_external = &ex;
-        ce.ignore_errors = std::numeric_limits<decltype(ce.ignore_errors)>::max();
+        ce.ignore_errors = (std::numeric_limits<decltype(ce.ignore_errors)>::max)(); // (msvc)(prank)
         ce.run(cl, *this);
         return ce;
     }

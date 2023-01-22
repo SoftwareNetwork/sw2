@@ -1179,7 +1179,7 @@ setlocal
                     if (auto v = getenv(env)) {
                         string s = v;
                         // this wont handle utf? but we do not have wgetenv()
-                        std::transform(s.begin(), s.end(), s.begin(), tolower);
+                        std::transform(s.begin(), s.end(), s.begin(), ::tolower);
                         return s.contains("4nt.exe");
                     }
                     return false;

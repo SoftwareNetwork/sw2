@@ -274,9 +274,10 @@ struct command_line_parser {
     struct run_common : build_run_common {
         argument<string, options::positional{}, options::one_or_more{}, options::consume_after{}> arguments;
         flag<options::flag<"-remove-shebang"_s>{}> remove_shebang;
+        argument<string, options::flag<"-deps"_s,"-dependencies"_s>{}> dependencies;
 
         auto option_list(auto && ... args) {
-            return build_run_common::option_list(arguments, remove_shebang, FWD(args)...);
+            return build_run_common::option_list(arguments, dependencies, remove_shebang, FWD(args)...);
         }
     };
     struct run : run_common {

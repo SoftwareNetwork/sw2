@@ -7,9 +7,3 @@
 #include "package.h"
 #include "rule_target.h"
 #include "solution.h"
-
-namespace sw::self_build {
-#include "../sw.h"
-} // namespace sw::self_build
-
-using namespace sw;

@@ -346,7 +346,7 @@ inline size_t hash_combine(size_t &seed, const T &v) {
 }
 
 string to_upper_copy(string in) {
-    std::transform(in.begin(), in.end(), in.begin(), toupper);
+    std::transform(in.begin(), in.end(), in.begin(), ::toupper);
     return std::move(in);
 }
 

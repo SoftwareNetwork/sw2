@@ -404,6 +404,9 @@ struct target_data : compile_options_t,link_options_t {
     void add(const unresolved_package_name &d) {
         add(dependency{d,target().solution_bs});
     }
+    void add(const rule_target &t) {
+        add(dependency{t.name, target().solution_bs});
+    }
 
     void merge(auto &&from) {
         files.merge(from.files);

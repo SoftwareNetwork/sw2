@@ -11,6 +11,9 @@
 #define NOMINMAX
 #endif
 #include <windows.h>
+#ifdef byte
+#undef byte
+#endif
 
 #define WINAPI_CALL(x) if (!(x)) {throw ::sw::win32::winapi_exception{#x};}
 #define WINAPI_CALL_HANDLE(x) ::sw::win32::handle{x,[]{throw ::sw::win32::winapi_exception{"bad handle from " #x};}}

@@ -235,6 +235,8 @@ struct package_version_range {
     }
     package_version_range(std::string_view s) : package_version_range{string{s.begin(), s.end()}} {
     }
+    package_version_range(const package_version &v) : range{v} {
+    }
     package_version_range(const std::string &s) {
         if (s == "*") {
             package_version::number_version from{{0}};
@@ -305,6 +307,7 @@ struct unresolved_package_name {
     unresolved_package_name(const char *p) : path{p} {}
     unresolved_package_name(const std::string &p) : path{p} {}
     unresolved_package_name(auto &&p, auto &&r) : path{p}, range{r} {}
+    unresolved_package_name(const package_name &p) : path{p.path}, range{p.version} {}
 
     bool contains(const package_version &v) {
         if (v.is_branch() && range.is_branch()) {

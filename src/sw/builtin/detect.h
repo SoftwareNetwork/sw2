@@ -6,6 +6,8 @@
 #include "../sw.h"
 #include "vs_instance_helpers.h"
 
+namespace sw {
+
 void add_compile_options(auto &&obj, auto &&c) {
     for (auto &&o : obj.compile_options) {
         c += o;
@@ -16,6 +18,14 @@ void add_compile_options(auto &&obj, auto &&c) {
     for (auto &&i : obj.include_directories) {
         c += "-I", i;
     }
+}
+
+auto format_command_name(auto &&tgt, auto &&f) {
+    auto rel = f.lexically_relative(tgt.source_dir);
+    if (rel.empty()) {
+        rel = f;
+    }
+    return format_log_record(tgt, "/"s + normalize_path(f.string()));
 }
 
 struct gcc_compile_rule {
@@ -115,7 +125,7 @@ struct gcc_compile_rule {
             c.err = ""s;
             c.out = ""s;
             c.deps_file = path{base} += ".d";
-            c.name_ = format_log_record(tgt, "/"s + normalize_path(f.lexically_relative(tgt.source_dir).string()));
+            c.name_ = format_command_name(tgt, f);
             c += compiler.executable, "-c";
             c += "-MF", c.deps_file;
             add_flags(c, f);
@@ -345,7 +355,7 @@ struct cl_exe_rule {
             c += compiler.executable, "-nologo", "-c";
             c.inputs.insert(compiler.executable);
             auto out = tgt.binary_dir / "obj" / f.filename() += objext;
-            c.name_ = format_log_record(tgt, "/"s + normalize_path(f.lexically_relative(tgt.source_dir).string()));
+            c.name_ = format_command_name(tgt, f);
             if constexpr (requires { tgt.precompiled_header; }) {
                 if (!tgt.precompiled_header.header.empty() && tgt.precompiled_header.use) {
                     c += "-FI" + tgt.precompiled_header.header.string();
@@ -1199,3 +1209,5 @@ void detect_gcc_clang(auto &s) {
     f("clang", "clang++", c_compiler::clang::package_name, cpp_compiler::clang::package_name, clangvers, clangversall, gcc_compile_rule{.clang=true}, gcc_link_rule{});
     f("clang-cl", "clang-cl", c_compiler::clang_cl::package_name, cpp_compiler::clang_cl::package_name, clangvers, clangversall, cl_exe_rule{.clang=true}, link_exe_rule{});
 }
+
+} // namespace sw

@@ -2,93 +2,17 @@
 // Copyright (C) 2022 Egor Pugin <egor.pugin@gmail.com>
 
 #include "sw.h"
+using namespace sw;
+
 #include "runtime/command_line.h"
-#include "builtin/detect.h"
 #include "runtime/main.h"
 #include "sys/log.h"
 #include "generator/common.h"
+#include "builtin/default_settings.h"
 
-auto &get_msvc_detector() {
-    static msvc_detector d;
-    return d;
-}
-void get_msvc_detector(auto &&s) {
-    get_msvc_detector().add(s);
-    // return d;
-}
-
-auto default_host_settings() {
-    build_settings bs;
-    bs.build_type = build_type::release{};
-    bs.library_type = library_type::shared{};
-    bs.c.runtime = library_type::shared{};
-    bs.cpp.runtime = library_type::shared{};
-
-#if defined(__x86_64__) || defined(_M_X64)
-    bs.arch = arch::x64{};
-#elif defined(__i386__) || defined(_M_IX86)
-    bs.arch = arch::x86{};
-#elif defined(__arm64__) || defined(__aarch64__) || defined(_M_ARM64)
-    bs.arch = arch::arm64{};
-#elif defined(__arm__) || defined(_M_ARM)
-    bs.arch = arch::arm{};
-#else
-#error "unknown arch"
-#endif
-
-    // see more definitions at https://opensource.apple.com/source/WTF/WTF-7601.1.46.42/wtf/Platform.h.auto.html
-//#if defined(__MINGW32__)
-    //bs.os = os::mingw{};
-#if defined(_WIN32)
-    bs.os = os::windows{};
-    bs.kernel_lib = unresolved_package_name{"com.Microsoft.Windows.SDK.um"s};
-    if (get_msvc_detector().exists()) {
-        bs.c.compiler = c_compiler::msvc{}; // switch to gcc-12+
-        bs.c.stdlib.emplace_back("com.Microsoft.Windows.SDK.ucrt"s);
-        bs.c.stdlib.emplace_back("com.Microsoft.VisualStudio.VC.libc"s);
-        bs.cpp.compiler = cpp_compiler::msvc{}; // switch to gcc-12+
-        bs.cpp.stdlib.emplace_back("com.Microsoft.VisualStudio.VC.libcpp"s);
-        bs.librarian = librarian::msvc{}; // switch to gcc-12+
-        bs.linker = linker::msvc{};       // switch to gcc-12+
-    } else {
-        SW_UNIMPLEMENTED;
-    }
-#elif defined(__APPLE__)
-    bs.os = os::macos{};
-    bs.c.compiler = c_compiler::gcc{};
-    bs.cpp.compiler = cpp_compiler::gcc{};
-    bs.librarian = librarian::ar{};
-    bs.linker = linker::gpp{};
-#elif defined(__linux__)
-    bs.os = os::linux{};
-    bs.c.compiler = c_compiler::gcc{};
-    bs.cpp.compiler = cpp_compiler::gcc{};
-    bs.librarian = librarian::ar{};
-    bs.linker = linker::gpp{};
-#else
-#error "unknown os"
-#endif
-
-    return bs;
-}
-
-auto default_build_settings() {
-    return default_host_settings();
-}
-
-auto make_solution() {
-    auto binary_dir = ".sw";
-    solution s{binary_dir, default_host_settings()};
-#ifdef _WIN32
-    if (get_msvc_detector().exists()) {
-        get_msvc_detector(s);
-        detect_winsdk(s);
-    }
-#endif
-    // we detect clang cl on windows atleast
-    detect_gcc_clang(s);
-    return s;
-}
+namespace sw::self_build {
+#include "../sw.h"
+} // namespace sw::self_build
 
 struct cpp_emitter {
     struct ns {
@@ -414,6 +338,20 @@ SKIPPED: {})",
         });
 }
 
+path get_this_file_dir() {
+    path p = __FILE__;
+    if (p.is_absolute()) {
+        return p.parent_path();
+    } else {
+        auto swdir = fs::absolute(path{std::source_location::current().file_name()}.parent_path());
+        return swdir;
+    }
+}
+path get_main_cpp_dir() {
+    path p = get_this_file_dir();
+    return p.parent_path().parent_path();
+}
+
 int main1(int argc, char *argv[]) {
     command_line_parser cl{argc, argv};
 
@@ -499,14 +437,7 @@ int main1(int argc, char *argv[]) {
                              e += "namespace sw { struct entry_point; }";
                              e += "#define SW1_BUILD";
                              e += "std::vector<sw::entry_point> sw1_load_inputs();";
-                             path p = __FILE__;
-                             if (p.is_absolute()) {
-                                 e.include(p);
-                             } else {
-                                 auto swdir =
-                                     fs::absolute(path{std::source_location::current().file_name()}.parent_path());
-                                 e.include(swdir / "main.cpp");
-                             }
+                             e.include(get_main_cpp_dir() / "main.cpp");
                              //
                              auto pch_tmp = temp_sw_directory_path() / "pch";
                              auto pch = pch_tmp / "sw.h";
@@ -609,8 +540,8 @@ int main1(int argc, char *argv[]) {
                      },
         [&](auto &b) requires(false || std::same_as<std::decay_t<decltype(b)>, command_line_parser::run> ||
                               std::same_as<std::decay_t<decltype(b)>, command_line_parser::exec>) {
-                         auto s = make_solution();
-                         s.binary_dir = temp_sw_directory_path() / ".sw";
+                         auto sln = make_solution();
+                         sln.binary_dir = temp_sw_directory_path() / ".sw";
 
                          auto it = std::ranges::find(*b.arguments.value, "--"sv);
                          if (it == b.arguments.value->end()) {
@@ -618,44 +549,69 @@ int main1(int argc, char *argv[]) {
                          }
                          using ttype = executable;
                          auto tname = path{*b.arguments.value->begin()}.stem().string();
-            if (b.remove_shebang) {
-                auto orig = fs::absolute(*b.arguments.value->begin());
-                auto fn = temp_sw_directory_path() / "exec" / std::to_string(std::hash<path>{}(orig)) += ".cpp";
-                auto s = read_file(orig);
-                // we are trying to detect env, by default shebang is in .sh scripts
-                auto unix = fs::exists("/bin/sh") || true;
-                string out;
-                // 1. pch?
-                // 2. add useful functions library... like read_file write_file etc.
-                if (unix) {
-                    out += R"(#include <bits/stdc++.h>
 
+                         auto orig = fs::absolute(*b.arguments.value->begin());
+                         auto s = read_file(orig);
+                         if (s.starts_with("#!/bin/sw")) {
+                             b.remove_shebang.value = true;
+                         }
+                         auto first_line = s.substr(0, s.find('\n'));
+                         auto unix = fs::exists("/bin/sh");
+                        if (b.remove_shebang) {
+                            auto fn = temp_sw_directory_path() / "run" / std::to_string(std::hash<path>{}(orig)) += ".cpp";
+                            // we are trying to detect env, by default shebang is in .sh scripts
+                            string out;
+                            // 1. pch?
+                            // 2. add useful functions library... like read_file write_file etc.
+                            if (unix) {
+                                out += R"(#include <bits/stdc++.h>
+)";
+                            } else {
+                                out += R"(
+#define _SILENCE_ALL_CXX17_DEPRECATION_WARNINGS 1
+#define WIN32_LEAN_AND_MEAN
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+
+#include <__msvc_all_public_headers.hpp>
+
+#include <windows.h>
+#include <objbase.h>
+)";
+                            }
+                            out += R"(
 using namespace std;
 using namespace std::literals;
 namespace fs = std::filesystem;
 using namespace fs;
 )";
-                } else {
-                    //out += "#include <bits/stdc++.h>\n"; // msvc_public_headers.hpp
-                    SW_UNIMPLEMENTED;
-                }
-                out += format("#line 2 \"{}\"\n{}", *b.arguments.value->begin(), s.substr(s.find('\n')));
-                write_file_if_different(fn, out);
-                *b.arguments.value->begin() = fn.string();
-            }
+                            out += format("#line 2 \"{}\"\n{}", *b.arguments.value->begin(), s.substr(s.find('\n')));
+                            write_file_if_different(fn, out);
+                            *b.arguments.value->begin() = fn.string();
+                        }
                          auto ep = [&](solution &s) {
                              auto &t = s.add<ttype>(tname);
                              for (auto &&f : std::ranges::subrange(b.arguments.value->begin(), it)) {
                                  t += f;
                              }
+                             if (!unix && b.remove_shebang) {
+                                 // add deps here!
+                                 //command_line_parser::run_common r;
+                                 //command_line_parser::parse1(r, );
+                                 t += include_directory{get_main_cpp_dir()};
+                                 //t += force_include{get_main_cpp_dir() / "sw.h"};
+                                 auto &&sw = sln.targets.find_first<native_library_target>("sw.lib");
+                                 t += sw;
+                             }
                          };
                          input_with_settings is{entry_point{ep, fs::current_path()}};
                          auto settings = make_settings(b);
                          is.settings.insert(settings.begin(), settings.end());
-                         s.add_input(is);
-                         s.build(cl);
+                         sln.add_input(is);
+                         sln.build(cl);
 
-                         auto &&t = s.targets.find_first<ttype>(tname);
+                         auto &&t = sln.targets.find_first<ttype>(tname);
                          raw_command c;
                          c.working_directory = fs::current_path();
                          c += t.executable;
@@ -684,7 +640,7 @@ using namespace fs;
             if (fs::exists("/bin/sh")) {
                 auto fn = "/bin/sw";
                 write_file_if_different(fn, format(R"(#!/bin/sh
-exec {} exec -remove-shebang $@
+exec {} exec -remove-shebang "$@"
 )", argv[0])); // write argv[0] instead of sw?
                 fs::permissions(fn, (fs::perms)0755);
             }
