@@ -23,12 +23,12 @@ string format_log_settings(auto &&bs) {
     bs.build_type.visit_no_special([&](auto &&a) {
         cfg += format("{},", std::decay_t<decltype(a)>::short_name);
     });
-    if (bs.cpp.runtime.template is<library_type::static_>()) {
+    /*if (bs.cpp.runtime.template is<library_type::static_>()) {
         cfg += "cppmt,";
     }
     if (bs.c.runtime.template is<library_type::static_>()) {
         cfg += "cmt,";
-    }
+    }*/
     cfg.resize(cfg.size() - 1);
     return cfg;
 }
@@ -407,6 +407,9 @@ struct target_data : compile_options_t,link_options_t {
     void add(const rule_target &t) {
         add(dependency{t.name, target().solution_bs});
     }
+    void add(const dependency_base &d) {
+        add(dependency{d.name, d.bs});
+    }
 
     void merge(auto &&from) {
         files.merge(from.files);
@@ -563,7 +566,7 @@ struct native_target : rule_target, target_data_storage<native_target> {
 
     void init_compilers(auto &&s) {
         // order
-        for (auto &&l : bs.cpp.stdlib) {
+        /*for (auto &&l : bs.cpp.stdlib) {
             add(l);
         }
         for (auto &&l : bs.c.stdlib) {
@@ -578,7 +581,11 @@ struct native_target : rule_target, target_data_storage<native_target> {
         });
         bs.c.compiler.visit_no_special([&](auto &c) {
             add(c.package);
-        });
+        });*/
+
+        for (auto &&d : bs.forced_dependencies) {
+            add(d);
+        }
     }
 
 #ifndef _MSC_VER
@@ -683,8 +690,7 @@ struct native_target : rule_target, target_data_storage<native_target> {
             //operator+=(to);
     }
     void configureFile(auto && ... args) {return configure_file(args...);} // v1 compat
-    void configureFile1(const path &from, const path &to, int flags)
-    {
+    void configureFile1(const path &from, const path &to, int flags) {
         static const std::regex cmDefineRegex(R"xxx(#\s*cmakedefine[ \t]+([A-Za-z_0-9]*)([^\r\n]*?)[\r\n])xxx");
         static const std::regex cmDefine01Regex(R"xxx(#\s*cmakedefine01[ \t]+([A-Za-z_0-9]*)[^\r\n]*?[\r\n])xxx");
         static const std::regex mesonDefine(R"xxx(#\s*mesondefine[ \t]+([A-Za-z_0-9]*)[^\r\n]*?[\r\n])xxx");
@@ -876,9 +882,9 @@ struct native_library_target : native_target {
         set_binary_include_dirs();
 
         if (is<library_type::shared>()) {
-            bs.linker.visit_no_special([&](auto &c) {
+            /*bs.linker.visit_no_special([&](auto &c) {
                 add(c.package);
-            });
+            });*/
 
             library = binary_dir / "bin" / (string)name;
             implib = binary_dir / "lib" / (string)name;
@@ -895,9 +901,9 @@ struct native_library_target : native_target {
                 *this += "_WINDLL"_def;
             });
         } else {
-            bs.librarian.visit_no_special([&](auto &c) {
+            /*bs.librarian.visit_no_special([&](auto &c) {
                 add(c.package);
-            });
+            });*/
 
             library = binary_dir / "lib" / (string)name;
             ::sw::visit(bs.os, [&](auto &&os) {
@@ -935,9 +941,9 @@ struct executable_target : native_target {
                 executable += os.executable_extension;
             }
         });
-        bs.linker.visit_no_special([&](auto &c) {
+        /*bs.linker.visit_no_special([&](auto &c) {
             add(c.package);
-        });
+        });*/
     }
     executable_target(auto &&s, auto &&id, raw_target_tag t) : base{s, id, t} {
     }

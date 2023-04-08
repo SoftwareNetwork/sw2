@@ -2,6 +2,7 @@
 // Copyright (C) 2022 Egor Pugin <egor.pugin@gmail.com>
 
 #include "sw.h"
+#include "rule.h"
 using namespace sw;
 
 #include "runtime/command_line.h"
@@ -76,7 +77,7 @@ auto make_settings(auto &b) {
         s.library_type = v;
     });
     //
-    if (b.c_static_runtime) {
+    /*if (b.c_static_runtime) {
         for (auto &&s : settings) {
             s.c.runtime = library_type::static_{};
         }
@@ -89,8 +90,9 @@ auto make_settings(auto &b) {
     static_shared_product(b.c_and_cpp_static_runtime, b.c_and_cpp_dynamic_runtime, [](auto &&s, auto &&v) {
         s.c.runtime = v;
         s.cpp.runtime = v;
-    });
+    });*/
     /*static_shared_product(b.c_and_cpp_static_runtime, b.c_and_cpp_dynamic_runtime, [](auto &&s, auto &&v) {
+    * SWUNIMPLe
         s.cpp.runtime = v;
     });*/
 
@@ -146,13 +148,13 @@ auto make_settings(auto &b) {
     cfg_product(b.config, [&](auto &&s, auto &&v) {
         return check_and_set(s.build_type, v);
     });
-    cfg_product(b.compiler, [&](auto &&s, auto &&v) {
+    /*cfg_product(b.compiler, [&](auto &&s, auto &&v) {
         return 1
         && check_and_set(s.c.compiler, v)
         && check_and_set(s.cpp.compiler, v)
         //&& check_and_set(s.linker, v)?
         ;
-    });
+    });*/
     cfg_product(b.os, [&](auto &&s, auto &&v) {
         return check_and_set(s.os, v);
     });
@@ -352,7 +354,34 @@ path get_sw_dir() {
     return p.parent_path().parent_path();
 }
 
+struct outputs {
+};
+
+auto clrule(auto &&input_file) {
+    rule r;
+    r += "cl", "-c", input_file;
+    return r;
+}
+
 int main1(int argc, char *argv[]) {
+    command_line_parser cl{argc, argv};
+    auto sln = make_solution();
+
+    auto r = clrule("d:/dev/cppan2/client4/.sw4/zlib/adler32.c");
+
+    environment env;
+    env.aliases["cl"] = R"(c:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.34.31933\bin\Hostx64\x64\cl.exe)"sv;
+
+    executor ex;
+    command_executor ce;
+    ce.ex_external = &ex;
+    ce += r.commands(env);
+    ce.run(cl, sln);
+    ce.check_errors();
+
+    return 0;
+}
+int main2(int argc, char *argv[]) {
     command_line_parser cl{argc, argv};
 
     if (cl.trace) {

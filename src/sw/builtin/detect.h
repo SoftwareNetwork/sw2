@@ -302,12 +302,12 @@ struct cl_exe_rule {
             };
             if (is_c_file(f)) {
                 c += "-TC";
-                mt_md(tgt.bs.c.runtime);
+                //mt_md(tgt.bs.c.runtime);
             } else if (is_cpp_file(f)) {
                 c += "-TP";
                 c += "-EHsc"; // enable for c too?
                 c += "-std:c++latest";
-                mt_md(tgt.bs.cpp.runtime);
+                //mt_md(tgt.bs.cpp.runtime);
             }
             add_compile_options(tgt.merge_object(), c);
             for (auto &&i : tgt.merge_object().force_includes) {
@@ -460,6 +460,7 @@ struct link_exe_rule {
             },
             [&](build_type::release) {
                 c += "-DEBUG:NONE";
+                // c += "-PDB:" + tgt.out.string(); // only for !debug?
             });
         auto add = [&](auto &&v) {
             for (auto &&i : v.link_directories) {
@@ -575,7 +576,7 @@ struct msvc_instance {
                 add_if_exists("OLDNAMES.LIB");
                 add_if_exists("LEGACY_STDIO_DEFINITIONS.LIB");
                 add_if_exists("LEGACY_STDIO_WIDE_SPECIFIERS.LIB");
-                if (t.bs.c.runtime.template is<library_type::static_>()) {
+                /*if (t.bs.c.runtime.template is<library_type::static_>()) {
                     t.bs.build_type.visit(
                         [&](build_type::debug) {
                             t.public_.link_libraries.push_back("LIBCMTD.LIB");
@@ -595,7 +596,7 @@ struct msvc_instance {
                             t.public_.link_libraries.push_back("MSVCRT.LIB");
                             t.public_.link_libraries.push_back("VCRUNTIME.LIB");
                         });
-                }
+                }*/
             }});
         s.add_entry_point(package_name{"com.Microsoft.VisualStudio.VC.libcpp"s, version()}, entry_point{[&](decltype(s) &s) {
             if (!has_cl_exe(s,*s.bs)) {
@@ -615,7 +616,7 @@ struct msvc_instance {
             //add_if_exists("OLDNAMES.LIB");
             //add_if_exists("LEGACY_STDIO_DEFINITIONS.LIB");
             //add_if_exists("LEGACY_STDIO_WIDE_SPECIFIERS.LIB");
-            if (t.bs.cpp.runtime.template is<library_type::static_>()) {
+            /*if (t.bs.cpp.runtime.template is<library_type::static_>()) {
                 t.bs.build_type.visit(
                     [&](build_type::debug) {
                         t.public_.link_libraries.push_back("LIBCONCRTD.LIB");
@@ -635,7 +636,7 @@ struct msvc_instance {
                         t.public_.link_libraries.push_back("CONCRT.LIB");
                         t.public_.link_libraries.push_back("MSVCPRT.LIB");
                     });
-            }
+            }*/
         }});
     }
     //auto root() const { return install_location / "VC" / "Tools" / "MSVC"; }
@@ -723,7 +724,7 @@ struct win_kit {
                                   }
                                   t.public_.link_directories.push_back(libdir);
                                   if (name == "ucrt") {
-                                      if (t.bs.c.runtime.template is<library_type::static_>()) {
+                                      /*if (t.bs.c.runtime.template is<library_type::static_>()) {
                                           t.bs.build_type.visit(
                                               [&](build_type::debug) {
                                                   t.public_.link_libraries.push_back("LIBUCRTD.LIB");
@@ -739,7 +740,7 @@ struct win_kit {
                                               [&](auto) {
                                                   t.public_.link_libraries.push_back("UCRT.LIB");
                                               });
-                                      }
+                                      }*/
                                   } else if (name == "um") {
                                       t.public_.link_libraries.push_back("KERNEL32.LIB");
                                   }

@@ -1273,9 +1273,8 @@ if [ $E -ne 0 ]; then echo "Error code: $E"; fi
             //if (auto ch = std::get_if<command_pointer_holder>(&out.s)) {
                 //return ch->io->outdated(explain);
             //}
-            return true;
         }
-        return false;
+        return true;
     }
 
     void operator<(const path &p) {
@@ -1684,6 +1683,7 @@ struct command_executor {
     int running_commands{0};
     size_t maximum_running_commands{std::thread::hardware_concurrency()};
     executor *ex_external{nullptr};
+    std::vector<command> owned_commands;
     std::vector<command*> external_commands;
     // this number differs with external_commands.size() because we have:
     // 1. pipes a | b | ...
@@ -1866,6 +1866,19 @@ struct command_executor {
             });
         }
     }
+    void check_errors() {
+        if (errors.empty()) {
+            return;
+        }
+        string t;
+        for (auto &&cmd : errors) {
+            visit(*cmd, [&](auto &&c) {
+                t += c.get_error_message() + "\n";
+            });
+        }
+        t += "Total errors: " + std::to_string(errors.size());
+        throw std::runtime_error{t};
+    }
     path get_saved_commands_dir(auto &&sln) {
         return sln.work_dir / "rsp";
     }
@@ -1873,6 +1886,13 @@ struct command_executor {
     void operator+=(std::vector<command> &commands) {
         for (auto &&c : commands) {
             external_commands.push_back(&c);
+        }
+    }
+    void operator+=(std::vector<command> &&commands) {
+        owned_commands.reserve(owned_commands.size() + commands.size());
+        for (auto &&c : commands) {
+            auto &&p = owned_commands.emplace_back(std::move(c));
+            external_commands.push_back(&p);
         }
     }
 };

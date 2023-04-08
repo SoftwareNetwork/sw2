@@ -18,8 +18,8 @@ auto default_host_settings() {
     build_settings bs;
     bs.build_type = build_type::release{};
     bs.library_type = library_type::shared{};
-    bs.c.runtime = library_type::shared{};
-    bs.cpp.runtime = library_type::shared{};
+    //bs.c.runtime = library_type::shared{};
+    //bs.cpp.runtime = library_type::shared{};
 
 #if defined(__x86_64__) || defined(_M_X64)
     bs.arch = arch::x64{};
@@ -38,15 +38,35 @@ auto default_host_settings() {
 // bs.os = os::mingw{};
 #if defined(_WIN32)
     bs.os = os::windows{};
-    bs.kernel_lib = unresolved_package_name{"com.Microsoft.Windows.SDK.um"s};
     if (get_msvc_detector().exists()) {
-        bs.c.compiler = c_compiler::msvc{}; // switch to gcc-12+
+        // mingw could use its own windows headers
+        bs.forced_dependencies.emplace_back(dependency_base{.name = "com.Microsoft.Windows.SDK.um"s, .bs = bs});
+        //
+        bs.forced_dependencies.emplace_back(dependency_base{.name = "com.Microsoft.Windows.SDK.ucrt"s, .bs = bs});
+        bs.forced_dependencies.emplace_back(dependency_base{.name = "com.Microsoft.VisualStudio.VC.libc"s, .bs = bs});
+        bs.forced_dependencies.emplace_back(dependency_base{.name = "com.Microsoft.VisualStudio.VC.libcpp"s, .bs = bs});
+        //bs.forced_dependencies.emplace_back(dependency_base{.name = "com.Microsoft.VisualStudio.VC.cl"s, .bs = bs});
+        //bs.forced_dependencies.emplace_back(dependency_base{.name = "com.Microsoft.VisualStudio.VC.lib"s, .bs = bs});
+        //bs.forced_dependencies.emplace_back(dependency_base{.name = "com.Microsoft.VisualStudio.VC.link"s, .bs = bs});
+
+        bs.env.aliases["cl"] = "cl"s;
+        bs.env.aliases["lib"] = "lib"s;
+        bs.env.aliases["link"] = "link"s;
+        bs.env.aliases["rc"] = "rc"s;
+
+        bs.env.aliases["cc"] = "cl"s;
+        bs.env.aliases["c++"] = "cl"s;
+        bs.env.aliases["ar"] = "lib"s;
+        bs.env.aliases["ld"] = "link"s;
+
+        /*bs.c.compiler = c_compiler::msvc{}; // switch to gcc-12+
         bs.c.stdlib.emplace_back("com.Microsoft.Windows.SDK.ucrt"s);
         bs.c.stdlib.emplace_back("com.Microsoft.VisualStudio.VC.libc"s);
         bs.cpp.compiler = cpp_compiler::msvc{}; // switch to gcc-12+
         bs.cpp.stdlib.emplace_back("com.Microsoft.VisualStudio.VC.libcpp"s);
         bs.librarian = librarian::msvc{}; // switch to gcc-12+
         bs.linker = linker::msvc{};       // switch to gcc-12+
+        */
     } else {
         SW_UNIMPLEMENTED;
     }

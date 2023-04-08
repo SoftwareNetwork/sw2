@@ -325,17 +325,7 @@ struct solution {
         auto ce = make_command_executor();
         ce.ex_external = &ex;
         ce.run(cl, *this);
-
-        if (!ce.errors.empty()) {
-            string t;
-            for (auto &&cmd : ce.errors) {
-                visit(*cmd, [&](auto &&c) {
-                    t += c.get_error_message() + "\n";
-                });
-            }
-            t += "Total errors: " + std::to_string(ce.errors.size());
-            throw std::runtime_error{t};
-        }
+        ce.check_errors();
         //return ce;
     }
     void test(auto &&cl) {

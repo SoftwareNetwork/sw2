@@ -58,8 +58,7 @@ struct package_path {
     auto hash() const {
         size_t h = 0;
         for (auto &&e : elements) {
-            //h ^= e.hash();
-            h ^= std::hash<string>{}(e);
+            h = hash_combine(h, e);
         }
         return h;
     }
@@ -104,7 +103,7 @@ struct package_version {
             auto hash() const {
                 size_t h = 0;
                 for (auto &&e : value) {
-                    h ^= std::hash<number_type>()(e);
+                    h = hash_combine(h, e);
                 }
                 return h;
             }
@@ -206,6 +205,16 @@ struct version_range {
             // <= v < ? but harder to implement?
             return first <= v && v <= second;
         }
+        auto operator<(const pair &rhs) const {
+            return first < rhs.first;
+        }
+
+        auto hash() const {
+            size_t h = 0;
+            h = hash_combine(h, first.hash());
+            h = hash_combine(h, second.hash());
+            return h;
+        }
     };
 
     // change to set
@@ -223,6 +232,18 @@ struct version_range {
             s.resize(s.size() - 2);
         }
         return s;
+    }
+
+    auto hash() const {
+        size_t h = 0;
+        for (auto &&p : pairs) {
+            h = hash_combine(h, p.hash());
+        }
+        return h;
+    }
+
+    auto operator<(const version_range &rhs) const {
+        return pairs < rhs.pairs;
     }
 };
 
@@ -276,6 +297,20 @@ struct package_version_range {
             return std::get<string>(range);
         }
         return std::get<version_range>(range);
+    }
+
+    auto hash() const {
+        size_t h = 0;
+        if (is_branch()) {
+            h = hash_combine(h, std::get<string>(range));
+        } else {
+            h = hash_combine(h, std::get<version_range>(range).hash());
+        }
+        return h;
+    }
+
+    auto operator<(const package_version_range &rhs) const {
+        return range < rhs.range;
     }
 };
 
@@ -331,6 +366,16 @@ struct unresolved_package_name {
         string s = path;
         s += "-"s + string{range};
         return s;
+    }
+
+    auto hash() const {
+        size_t h = path.hash();
+        h = hash_combine(h, range.hash());
+        return h;
+    }
+
+    auto operator<(const unresolved_package_name &rhs) const {
+        return std::tie(path, range) < std::tie(rhs.path, rhs.range);
     }
 };
 
