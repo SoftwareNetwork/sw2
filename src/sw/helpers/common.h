@@ -71,13 +71,13 @@ using path = fs::path;
 
 template <>
 struct fmt::formatter<std::source_location> : formatter<std::string> {
-    auto format(const std::source_location &p, format_context &ctx) {
+    auto format(const std::source_location &p, format_context &ctx) const {
         return fmt::formatter<std::string>::format(fmt::format("{}:{}", p.file_name(), p.line()), ctx);
     }
 };
 template <>
 struct fmt::formatter<sw::path> : formatter<std::string> {
-    auto format(const sw::path &p, format_context &ctx) {
+    auto format(const sw::path &p, format_context &ctx) const {
         return fmt::formatter<std::string>::format(p.string(), ctx);
     }
 };

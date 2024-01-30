@@ -1883,6 +1883,9 @@ struct command_executor {
         return sln.work_dir / "rsp";
     }
 
+    void operator+=(command &c) {
+        external_commands.push_back(&c);
+    }
     void operator+=(std::vector<command> &commands) {
         for (auto &&c : commands) {
             external_commands.push_back(&c);

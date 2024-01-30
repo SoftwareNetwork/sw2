@@ -8,72 +8,75 @@
 
 namespace sw {
 
+struct target_version {
+    using targets_type = std::map<build_settings, target_uptr>;
+
+    targets_type targets;
+    entry_point ep;
+
+    auto empty() const {
+        return targets.empty();
+    }
+    bool emplace(const package_id &id, target_uptr ptr) {
+        auto it = targets.find(id.settings);
+        if (it == targets.end()) {
+            targets.emplace(id.settings, std::move(ptr));
+            return true;
+        } else {
+            return false;
+        }
+    }
+    auto &container() {
+        return targets;
+    }
+    bool contains(const package_id &id) const {
+        return targets.contains(id.settings);
+    }
+
+    auto &load(auto &s, const build_settings &bs) {
+        auto it = targets.find(bs);
+        if (it == targets.end()) {
+            ep(s, bs);
+            it = targets.find(bs);
+        }
+        if (it == targets.end()) {
+            throw std::runtime_error{"target was not loaded with provided settings"};
+        }
+        return it->second;
+    }
+    auto try_load(auto &s, const build_settings &bs) {
+        auto it = targets.find(bs);
+        if (it == targets.end()) {
+            ep(s, bs);
+            it = targets.find(bs);
+        }
+        return it;
+    }
+};
+struct target_versions {
+    using versions_type = std::map<package_version, target_version>;
+
+    versions_type versions;
+
+    auto &operator[](const package_version &version) {
+        auto it = versions.find(version);
+        if (it == versions.end()) {
+            auto &&[it2, _] = versions.emplace(version, target_version{});
+            it = it2;
+        }
+        return it->second;
+    }
+    auto &container() {
+        return versions;
+    }
+
+    auto find(const package_version_range &r) {
+        return std::max_element(versions.begin(), versions.end(), [&](auto &&v1, auto &&v2) {
+            return r.contains(v1.first) && r.contains(v2.first) && v1.first < v2.first;
+        });
+    }
+};
 struct target_map {
-    struct target_version {
-        using targets_type = std::map<build_settings, target_uptr>;
-
-        targets_type targets;
-        entry_point ep;
-
-        auto empty() const { return targets.empty(); }
-        bool emplace(const package_id &id, target_uptr ptr) {
-            auto it = targets.find(id.settings);
-            if (it == targets.end()) {
-                targets.emplace(id.settings, std::move(ptr));
-                return true;
-            } else {
-                return false;
-            }
-        }
-        auto &container() {
-            return targets;
-        }
-        bool contains(const package_id &id) const {
-            return targets.contains(id.settings);
-        }
-
-        auto &load(auto &s, const build_settings &bs) {
-            auto it = targets.find(bs);
-            if (it == targets.end()) {
-                ep(s, bs);
-                it = targets.find(bs);
-            }
-            if (it == targets.end()) {
-                throw std::runtime_error{"target was not loaded with provided settings"};
-            }
-            return it->second;
-        }
-        auto try_load(auto &s, const build_settings &bs) {
-            auto it = targets.find(bs);
-            if (it == targets.end()) {
-                ep(s, bs);
-                it = targets.find(bs);
-            }
-            return it;
-        }
-    };
-    struct target_versions {
-        using versions_type = std::map<package_version, target_version>;
-
-        versions_type versions;
-
-        auto &operator[](const package_version &version) {
-            auto it = versions.find(version);
-            if (it == versions.end()) {
-                auto &&[it2, _] = versions.emplace(version, target_version{});
-                it = it2;
-            }
-            return it->second;
-        }
-        auto &container() { return versions; }
-
-        auto find(const package_version_range &r) {
-            return std::max_element(versions.begin(), versions.end(), [&](auto &&v1, auto &&v2) {
-                return r.contains(v1.first) && r.contains(v2.first) && v1.first < v2.first;
-            });
-        }
-    };
-
     using packages_type = std::map<package_path, target_versions>;
     packages_type packages;
 

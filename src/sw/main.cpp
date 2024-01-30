@@ -357,6 +357,8 @@ path get_sw_dir() {
 struct outputs {
 };
 
+#include "sw/packages/!repo.h"
+
 auto clrule(auto &&input_file) {
     rule r;
     r += "cl", "-c", input_file;
@@ -364,6 +366,9 @@ auto clrule(auto &&input_file) {
 }
 
 int main1(int argc, char *argv[]) {
+    repository();
+    return 0;
+
     command_line_parser cl{argc, argv};
     auto sln = make_solution();
 
