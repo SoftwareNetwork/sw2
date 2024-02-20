@@ -293,7 +293,6 @@ struct target_data : compile_options_t,link_options_t {
         return *target_;
     }
 
-#ifdef _MSC_VER
     auto operator+=(this auto &&self, auto &&v) {
         self.add(v);
         return appender{[&](auto &&v) {
@@ -306,20 +305,6 @@ struct target_data : compile_options_t,link_options_t {
             self.remove(v);
         }};
     }
-#else
-    auto operator+=(auto &&v) {
-        add(v);
-        return appender{[&](auto &&v) {
-            add(v);
-        }};
-    }
-    auto operator-=(auto &&v) {
-        remove(v);
-        return appender{[&](auto &&v) {
-            remove(v);
-        }};
-    }
-#endif
 
     void add(const file_regex &r) {
         r(target().source_dir, [&](auto &&iter) {

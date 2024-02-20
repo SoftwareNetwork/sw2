@@ -365,8 +365,27 @@ auto clrule(auto &&input_file) {
     return r;
 }
 
+namespace sw {
+
+// sw_context?
+// sw_command_runner?
+struct sw_tool {
+    repository repo;
+
+    int run_command_line(int argc, char *argv[]) {
+        return run_command_line(std::span<char *>{argv, argv+argc});
+    }
+    int run_command_line(std::span<char *> args) {
+        return 0;
+    }
+};
+
+} // namespace sw
+
 int main1(int argc, char *argv[]) {
-    repository();
+    sw_tool ctx;
+    return ctx.run_command_line(argc, argv);
+    repository1();
     return 0;
 
     command_line_parser cl{argc, argv};

@@ -192,7 +192,7 @@ struct executor {
                 break;
             case JOB_OBJECT_MSG_ACTIVE_PROCESS_ZERO:
                 if (process_callbacks.size() != 1) {
-                    throw std::logic_error{"bad process_callbacks, you did not call something"};
+                    throw std::logic_error{"bad process_callbacks, you did not call anything"};
                 }
                 (uint64_t &)o = process_callbacks.begin()->first;
             case JOB_OBJECT_MSG_EXIT_PROCESS:
