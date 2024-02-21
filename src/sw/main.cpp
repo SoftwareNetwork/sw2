@@ -372,6 +372,7 @@ namespace sw {
 struct sw_tool {
     path config_dir;
     path storage_dir;
+    path temp_dir;
     repository repo;
 
     sw_tool() {
@@ -383,13 +384,23 @@ struct sw_tool {
             write_file(storfn, (const char *)(config_dir / "storage").u8string().c_str());
         }
         storage_dir = (const char8_t *)read_file(config_dir / "storage_dir").c_str();
-        repo.init(storage_dir);
+        temp_dir = fs::temp_directory_path() / "sw";
+        if (!fs::exists(temp_dir)) {
+            fs::create_directories(temp_dir);
+            std::error_code ec;
+            fs::permissions(temp_dir, fs::perms::all, ec);
+        }
+        repo.init(*this);
     }
     int run_command_line(int argc, char *argv[]) {
         return run_command_line(std::span<char *>{argv, argv+argc});
     }
     int run_command_line(std::span<char *> args) {
         return 0;
+    }
+
+    path mirror_fn(auto &&name) const {
+        return storage_dir / "mirror" / name;
     }
 };
 
@@ -398,8 +409,6 @@ struct sw_tool {
 int main1(int argc, char *argv[]) {
     sw_tool ctx;
     return ctx.run_command_line(argc, argv);
-    repository1();
-    return 0;
 
     command_line_parser cl{argc, argv};
     auto sln = make_solution();

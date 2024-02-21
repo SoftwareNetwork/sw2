@@ -100,7 +100,9 @@ struct iter_with_range {
 template <typename F>
 struct scope_exit {
     F &&f;
-    ~scope_exit() {f();}
+    bool disabled{};
+    ~scope_exit() {if(!disabled)f();}
+    void disable() {disabled = true;}
 };
 
 template <typename T> struct type_ { using type = T; };

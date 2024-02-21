@@ -133,6 +133,10 @@ struct package_version {
             }
             return s;
         }
+
+        auto &operator[](int i) const {
+            return elements.value.at(i);
+        }
     };
     using version_type = std::variant<string, number_version>;
     version_type version;
@@ -194,7 +198,15 @@ struct package_version {
         }
         return std::hash<string>()(std::get<string>(version));
     }
+
+    auto &operator[](int i) const {
+        return std::get<number_version>(version)[i];
+    }
 };
+
+package_version operator""_ver(const char *s, size_t len) {
+    return {s};
+}
 
 struct version_range {
     using version = package_version::number_version::numbers;
