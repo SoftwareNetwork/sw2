@@ -183,7 +183,7 @@ void sw1(auto &cl) {
                 swap_and_restore sr{s.dry_run, true};
                 for (auto &&ep : entry_points) {
                     input_with_settings is;
-                    is.ep = entry_point{ep.f, ep.source_dir};
+                    is.ep = entry_point{ep.build, ep.source_dir};
                     is.settings.insert(settings.begin(), settings.end());
                     s.gather_entry_points(is);
                 }
@@ -192,7 +192,7 @@ void sw1(auto &cl) {
             auto settings = make_settings(b);
             for (auto &&ep : entry_points) {
                 input_with_settings is;
-                is.ep = entry_point{ep.f, ep.source_dir};
+                is.ep = entry_point{ep.build, ep.source_dir};
                 is.settings.insert(settings.begin(), settings.end());
                 s.add_input(is);
             }
@@ -370,8 +370,21 @@ namespace sw {
 // sw_context?
 // sw_command_runner?
 struct sw_tool {
+    path config_dir;
+    path storage_dir;
     repository repo;
 
+    sw_tool() {
+        config_dir = get_home_directory() / ".sw2";
+#ifndef BUILTIN_STORAGE_DIR
+#endif
+        auto storfn = config_dir / "storage_dir";
+        if (!fs::exists(storfn)) {
+            write_file(storfn, (const char *)(config_dir / "storage").u8string().c_str());
+        }
+        storage_dir = (const char8_t *)read_file(config_dir / "storage_dir").c_str();
+        repo.init(storage_dir);
+    }
     int run_command_line(int argc, char *argv[]) {
         return run_command_line(std::span<char *>{argv, argv+argc});
     }
@@ -497,7 +510,7 @@ int main2(int argc, char *argv[]) {
                              write_file_if_different(pch, e.s);
                              pch_ep.source_dir = pch_tmp;
                              pch_ep.binary_dir = pch_tmp;
-                             pch_ep.f = [pch](solution &s) {
+                             pch_ep.build = [pch](solution &s) {
                                  auto &t = s.add<native_target>("sw_pch");
                                  t += precompiled_header{pch};
 #ifdef __APPLE__
@@ -553,7 +566,9 @@ int main2(int argc, char *argv[]) {
                          e += "}";
                          write_file_if_different(fn, e.s);
 
-                         input_with_settings is{entry_point{&self_build::build, cfg_dir}};
+                         input_with_settings is;
+                         is.ep.build = [](auto &&s){ self_build::sw_build b; b.build(s); };
+                         is.ep.source_dir = cfg_dir;
                          auto dbs = default_build_settings();
                          dbs.build_type = build_type::debug{};
                          is.settings.insert(dbs);
@@ -658,7 +673,9 @@ using namespace fs;
                                  t += "sw.lib"_dep;
                              }
                          };
-                         input_with_settings is{entry_point{&self_build::build, get_sw_dir()}};
+                         input_with_settings is;
+                         is.ep.build = [](auto &&s){ self_build::sw_build b; b.build(s); };
+                         is.ep.source_dir = get_sw_dir();
                          auto settings = make_settings(b);
                          is.settings.insert(settings.begin(), settings.end());
                          sln.add_input(is);

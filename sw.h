@@ -1,3 +1,5 @@
+struct sw_build {
+
 void build(solution &s) {
     auto &lib = s.add<native_library_target>("sw.lib");
     lib += "src/.*\\.h"_rdir;
@@ -24,3 +26,5 @@ void build(solution &s) {
         //s.add<test_command>();
     }*/
 }
+
+};

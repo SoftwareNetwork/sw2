@@ -3,9 +3,20 @@
 
 #pragma once
 
-#ifdef _WIN32
 #include "../helpers/common.h"
+#include "../sys/fs.h"
+#include "exception.h"
 
+#include <functional>
+#include <map>
+#include <stdexcept>
+#include <string>
+
+#ifndef FWD
+#define FWD(x) std::forward<decltype(x)>(x)
+#endif
+
+#ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -26,6 +37,14 @@
 namespace sw::win32 {
 
 struct winapi_exception : std::runtime_error {
+    template <typename F>
+    struct scope_exit {
+        F &&f;
+        ~scope_exit() {
+            f();
+        }
+    };
+
     using base = std::runtime_error;
     winapi_exception(const string &msg) : base{msg + ": "s + get_last_error()} {
     }
@@ -40,12 +59,6 @@ struct winapi_exception : std::runtime_error {
 
         return "error code = "s + std::to_string(code) + ": " + msg;
     }
-};
-
-struct io_callback {
-    OVERLAPPED o{};
-    std::move_only_function<void(size_t)> f;
-    string buf;
 };
 
 struct handle {
@@ -149,6 +162,12 @@ struct pipe {
         r = WINAPI_CALL_HANDLE(CreateNamedPipeW(s.c_str(), PIPE_ACCESS_INBOUND, 0, 1, sz, sz, 0, &sa));
         w = WINAPI_CALL_HANDLE(CreateFileW(s.c_str(), GENERIC_WRITE, 0, &sa, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0));
     }
+};
+
+struct io_callback {
+    OVERLAPPED o{};
+    std::move_only_function<void(size_t)> f;
+    string buf;
 };
 
 struct executor {

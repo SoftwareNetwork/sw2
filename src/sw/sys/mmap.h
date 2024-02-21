@@ -5,6 +5,7 @@
 
 #include "win32.h"
 
+#include <span>
 #include <string.h>
 
 #ifdef _WIN32
@@ -18,6 +19,8 @@ namespace sw {
 
 template <typename T = uint8_t>
 struct mmap_file {
+    using path = std::filesystem::path;
+
 #ifdef _WIN32
     struct ro {
         static inline constexpr auto access = GENERIC_READ;
@@ -56,17 +59,17 @@ struct mmap_file {
     size_type sz;
 
     mmap_file() = default;
-    mmap_file(const fs::path &fn) : fn{fn} {
+    mmap_file(const path &fn) : fn{fn} {
         open(ro{});
     }
-    mmap_file(const fs::path &fn, rw v) : fn{fn} {
+    mmap_file(const path &fn, rw v) : fn{fn} {
         open(v);
     }
-    void open(const fs::path &fn) {
+    void open(const path &fn) {
         this->fn = fn;
         open(ro{});
     }
-    void open(const fs::path &fn, rw v) {
+    void open(const path &fn, rw v) {
         this->fn = fn;
         open(v);
     }

@@ -10,7 +10,7 @@ namespace sw {
 struct solution;
 
 struct entry_point {
-    std::function<void(solution &)> f;
+    std::function<void(solution &)> build;
     path source_dir;
     path binary_dir;
 
@@ -24,7 +24,7 @@ struct entry_point {
             sln.binary_dir = binary_dir;
         }
         swap_and_restore sr3{sln.bs, &bs};
-        f(sln);
+        build(sln);
     }
 };
 
