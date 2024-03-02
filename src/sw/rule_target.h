@@ -205,7 +205,7 @@ struct rule_target {
         bs.visit(FWD(f)...);
     }
 
-    void prepare(/*this */ auto &&self) {
+    void prepare(this auto &&self) {
         // init_rules
         while (1) {
             auto sz = self.commands.size();
@@ -573,17 +573,6 @@ struct native_target : rule_target, target_data_storage<native_target> {
         }
     }
 
-#ifndef _MSC_VER
-    auto operator+=(auto &&v) {
-        add(v);
-        return appender{[&](auto &&v) { add(v); }};
-    }
-    auto operator-=(auto &&v) {
-        remove(v);
-        return appender{[&](auto &&v) { remove(v); }};
-    }
-#endif
-
     //void build() { operator()(); }
     // void run(){}
 
@@ -606,9 +595,6 @@ struct native_target : rule_target, target_data_storage<native_target> {
         }
         merge();
         //sln.load_target(solution_bs);
-    }
-    void prepare(/*this */auto &&self) {
-        rule_target::prepare(self);
     }
 
     void make_pch() {

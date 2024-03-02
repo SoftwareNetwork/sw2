@@ -4,6 +4,7 @@
 #pragma once
 
 #include "os.h"
+#include "../command.h"
 
 namespace sw {
 

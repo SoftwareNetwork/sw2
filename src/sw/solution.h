@@ -8,6 +8,52 @@
 
 namespace sw {
 
+template <typename T>
+struct settings_map {
+    using targets_type = std::map<build_settings, T>;
+
+    targets_type targets;
+    entry_point ep;
+
+    auto empty() const {
+        return targets.empty();
+    }
+    bool emplace(const package_id &id, T ptr) {
+        auto it = targets.find(id.settings);
+        if (it == targets.end()) {
+            targets.emplace(id.settings, std::move(ptr));
+            return true;
+        } else {
+            return false;
+        }
+    }
+    auto &container() {
+        return targets;
+    }
+    bool contains(const package_id &id) const {
+        return targets.contains(id.settings);
+    }
+    auto &load(auto &s, const build_settings &bs) {
+        auto it = targets.find(bs);
+        if (it == targets.end()) {
+            ep(s, bs);
+            it = targets.find(bs);
+        }
+        if (it == targets.end()) {
+            throw std::runtime_error{"target was not loaded with provided settings"};
+        }
+        return it->second;
+    }
+    auto try_load(auto &s, const build_settings &bs) {
+        auto it = targets.find(bs);
+        if (it == targets.end()) {
+            ep(s, bs);
+            it = targets.find(bs);
+        }
+        return it;
+    }
+};
+
 struct target_version {
     using targets_type = std::map<build_settings, target_uptr>;
 

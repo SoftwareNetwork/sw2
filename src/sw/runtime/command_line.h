@@ -332,6 +332,7 @@ struct command_line_parser {
         );
     }
 
+    command_line_parser() = default;
     command_line_parser(int argc, char *argv[]) {
         args a{.value{(const char **)argv, (const char **)argv + argc}};
         parse(a);

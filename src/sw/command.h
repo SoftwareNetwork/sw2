@@ -1225,8 +1225,6 @@ if [ $E -ne 0 ]; then echo "Error code: $E"; fi
     dag_status dagstatus{};
     //
 
-    void process_deps(){} // msvc 17.5P2 bug workaround
-
     auto hash() const {
         if (!h) {
             h(*this);
