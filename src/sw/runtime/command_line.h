@@ -190,6 +190,9 @@ struct command_line_parser {
         }
         void check() {
         }
+        void operator=(bool b) {
+            value = b;
+        }
     };
 
     // subcommands
@@ -334,9 +337,15 @@ struct command_line_parser {
 
     command_line_parser() = default;
     command_line_parser(int argc, char *argv[]) {
+        parse(argc,argv);
+    }
+    void parse(int argc, char *argv[]) {
         args a{.value{(const char **)argv, (const char **)argv + argc}};
         parse(a);
-        // run()?
+    }
+    void parse(const vector<string> &in_args) {
+        args a{.value{in_args.data(), in_args.data() + in_args.size()}};
+        parse(a);
     }
     void parse(const args &args) {
         if (args.size() <= 1) {

@@ -5,6 +5,7 @@
 
 #include "os.h"
 #include "../command.h"
+#include "../sys/arch.h"
 
 namespace sw {
 
@@ -44,49 +45,7 @@ struct environment {
 };
 
 struct build_settings_base {
-    template <typename... Types>
-    struct special_variant : variant<any_setting, Types...> {
-        using base = variant<any_setting, Types...>;
-        using base::base;
-        using base::operator=;
-
-        auto operator<(const special_variant &rhs) const {
-            return base::index() < rhs.base::index();
-        }
-        // auto operator==(const build_settings &) const = default;
-
-        template <typename T>
-        bool is() const {
-            constexpr auto c = contains<T, Types...>();
-            if constexpr (c) {
-                return std::holds_alternative<T>(*this);
-            }
-            return false;
-        }
-
-        auto for_each(auto &&f) {
-            (f(Types{}), ...);
-        }
-
-        decltype(auto) visit(auto &&...args) const {
-            return ::sw::visit(*this, FWD(args)...);
-        }
-        decltype(auto) visit_any(auto &&...args) const {
-            return ::sw::visit_any(*this, FWD(args)...);
-        }
-        // name visit special or?
-        decltype(auto) visit_no_special(auto &&...args) {
-            return ::sw::visit(*this, FWD(args)..., [](any_setting &) {
-            });
-        }
-        decltype(auto) visit_no_special(auto &&...args) const {
-            return ::sw::visit(*this, FWD(args)..., [](const any_setting &) {
-            });
-        }
-    };
-
     using os_type = special_variant<os::linux, os::macos, os::windows, os::mingw, os::cygwin, os::wasm>;
-    using arch_type = special_variant<arch::x86, arch::x64, arch::arm, arch::arm64>;
     using build_type_type = special_variant<build_type::debug, build_type::minimum_size_release,
                                             build_type::release_with_debug_information, build_type::release>;
     using library_type_type = special_variant<library_type::static_, library_type::shared>;

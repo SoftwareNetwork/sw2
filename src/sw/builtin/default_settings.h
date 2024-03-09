@@ -21,17 +21,7 @@ auto default_host_settings() {
     //bs.c.runtime = library_type::shared{};
     //bs.cpp.runtime = library_type::shared{};
 
-#if defined(__x86_64__) || defined(_M_X64)
-    bs.arch = arch::x64{};
-#elif defined(__i386__) || defined(_M_IX86)
-    bs.arch = arch::x86{};
-#elif defined(__arm64__) || defined(__aarch64__) || defined(_M_ARM64)
-    bs.arch = arch::arm64{};
-#elif defined(__arm__) || defined(_M_ARM)
-    bs.arch = arch::arm{};
-#else
-#error "unknown arch"
-#endif
+    bs.arch = current_arch();
 
     // see more definitions at https://opensource.apple.com/source/WTF/WTF-7601.1.46.42/wtf/Platform.h.auto.html
 // #if defined(__MINGW32__)

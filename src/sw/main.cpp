@@ -10,41 +10,12 @@ using namespace sw;
 #include "sys/log.h"
 #include "generator/common.h"
 #include "builtin/default_settings.h"
-#include "system.h"
+#include "startup.h"
+#include "sw_tool.h"
 
 namespace sw::self_build {
 #include "../sw.h"
 } // namespace sw::self_build
-
-struct cpp_emitter {
-    struct ns {
-        cpp_emitter &e;
-        ns(cpp_emitter &e, auto &&name) : e{e} {
-            e += "namespace "s + name + " {";
-        }
-        ~ns() {
-            e += "}";
-        }
-    };
-
-    string s;
-    int indent{};
-
-    cpp_emitter &operator+=(auto &&s) {
-        add_line(s);
-        return *this;
-    }
-    void add_line(auto &&s) {
-        this->s += s + "\n"s;
-    }
-    void include(const path &p) {
-        auto fn = normalize_path_and_drive(p);
-        s += "#include \"" + fn + "\"\n";
-    }
-    auto namespace_(auto &&name) {
-        return ns{*this, name};
-    }
-};
 
 auto make_settings(auto &b) {
     std::vector<build_settings> settings{default_build_settings()};
@@ -341,89 +312,17 @@ SKIPPED: {})",
         });
 }
 
-path get_this_file_dir() {
-    path p = __FILE__;
-    if (p.is_absolute()) {
-        return p.parent_path();
-    } else {
-        auto swdir = fs::absolute(path{std::source_location::current().file_name()}.parent_path());
-        return swdir;
-    }
-}
-path get_sw_dir() {
-    path p = get_this_file_dir();
-    return p.parent_path().parent_path();
-}
-
-struct outputs {
-};
-
-#include "sw/builtin/!repo.h"
-#include "sw/packages/!repo.h"
-
 auto clrule(auto &&input_file) {
     rule r;
     r += "cl", "-c", input_file;
     return r;
 }
 
-namespace sw {
-
-// sw_context?
-// sw_command_runner?
-struct sw_tool {
-    path config_dir;
-    path storage_dir;
-    path temp_dir;
-
-    system sys;
-
-    builtin_repository builtin_repo;
-    repository repo;
-
-    sw_tool() {
-        config_dir = get_home_directory() / ".sw2";
-#ifndef BUILTIN_STORAGE_DIR
-#endif
-        auto storfn = config_dir / "storage_dir";
-        if (!fs::exists(storfn)) {
-            write_file(storfn, (const char *)(config_dir / "storage").u8string().c_str());
-        }
-        storage_dir = (const char8_t *)read_file(config_dir / "storage_dir").c_str();
-        temp_dir = temp_sw_directory_path();
-        if (!fs::exists(temp_dir)) {
-            fs::create_directories(temp_dir);
-            std::error_code ec;
-            fs::permissions(temp_dir, fs::perms::all, ec);
-        }
-
-        builtin_repo.init(*this);
-        repo.init(*this);
-    }
-    int run_command_line(int argc, char *argv[]) {
-        return run_command_line(std::span<char *>{argv, argv+argc});
-    }
-    int run_command_line(std::span<char *> args) {
-        return 0;
-    }
-
-    path pkg_root(auto &&name, auto &&version) const {
-        return storage_dir / "pkg" / name / (string)version;
-    }
-    path mirror_fn(auto &&name, auto &&version) const {
-        auto ext = ".zip";
-        return storage_dir / "mirror" / (name + "_" + (string)version + ext);
-    }
-};
-
-} // namespace sw
-
 int main1(int argc, char *argv[]) {
-    sw_tool ctx;
-    return ctx.run_command_line(argc, argv);
+    startup_data sd{argc,argv};
+    return sd.run();
 
-    command_line_parser cl{argc, argv};
-    auto sln = make_solution();
+    /*auto sln = make_solution();
 
     auto r = clrule("d:/dev/cppan2/client4/.sw4/zlib/adler32.c");
 
@@ -435,48 +334,13 @@ int main1(int argc, char *argv[]) {
     ce.ex_external = &ex;
     ce += r.commands(env);
     ce.run(cl, sln);
-    ce.check_errors();
+    ce.check_errors();*/
 
     return 0;
 }
-int main2(int argc, char *argv[]) {
+void main2(int argc, char *argv[]) {
     command_line_parser cl{argc, argv};
-
-    if (cl.trace) {
-        log_settings.log_level = std::max(log_settings.log_level, 6);
-    }
-    if (cl.verbose) {
-        log_settings.log_level = std::max(log_settings.log_level, 4);
-    }
-    if (cl.log_level) {
-        log_settings.log_level = std::max<int>(log_settings.log_level, cl.log_level);
-    }
-
-    if (cl.version) {
-        log_trace("sw2");
-        return 0;
-    }
-    if (cl.sleep) {
-        log_trace("sleep started");
-        std::this_thread::sleep_for(std::chrono::seconds(cl.sleep));
-        log_trace("sleep completed");
-    }
-
-    auto this_path = fs::current_path();
-    if (cl.working_directory) {
-        fs::current_path(cl.working_directory);
-    }
-    if (cl.sw1) {
-        if (cl.int3) {
-            debug_break_if_not_attached();
-        }
-        sw1(cl);
-    }
-#ifdef SW1_BUILD
-    return 0;
-#endif
-    cl.rebuild_all.value = false; // not for config/run builds
-    return visit_any(
+    visit_any(
         cl.c,
         [&](auto &b) requires(false || std::same_as<std::decay_t<decltype(b)>, command_line_parser::build> ||
                               std::same_as<std::decay_t<decltype(b)>, command_line_parser::test> ||
@@ -619,7 +483,7 @@ int main2(int argc, char *argv[]) {
                              return path{s};
                          };
                          raw_command c;
-                         c.working_directory = setup_path(this_path);
+                         //c.working_directory = setup_path(this_path);
                          c += setup_path(t.executable), "-sw1";
                          for (int i = 1; i < argc; ++i) {
                              c += (const char *)argv[i];

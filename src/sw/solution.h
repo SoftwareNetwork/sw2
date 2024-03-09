@@ -8,9 +8,9 @@
 
 namespace sw {
 
-template <typename T>
+template <typename K, typename V>
 struct settings_map {
-    using targets_type = std::map<build_settings, T>;
+    using targets_type = std::map<K, V>;
 
     targets_type targets;
     entry_point ep;
@@ -18,7 +18,7 @@ struct settings_map {
     auto empty() const {
         return targets.empty();
     }
-    bool emplace(const package_id &id, T ptr) {
+    bool emplace(const package_id &id, V ptr) {
         auto it = targets.find(id.settings);
         if (it == targets.end()) {
             targets.emplace(id.settings, std::move(ptr));
@@ -27,13 +27,10 @@ struct settings_map {
             return false;
         }
     }
-    auto &container() {
-        return targets;
-    }
     bool contains(const package_id &id) const {
         return targets.contains(id.settings);
     }
-    auto &load(auto &s, const build_settings &bs) {
+    auto &load(auto &s, const K &bs) {
         auto it = targets.find(bs);
         if (it == targets.end()) {
             ep(s, bs);
@@ -44,7 +41,7 @@ struct settings_map {
         }
         return it->second;
     }
-    auto try_load(auto &s, const build_settings &bs) {
+    auto try_load(auto &s, const K &bs) {
         auto it = targets.find(bs);
         if (it == targets.end()) {
             ep(s, bs);
@@ -52,116 +49,23 @@ struct settings_map {
         }
         return it;
     }
+
+    auto begin() {
+        return targets.begin();
+    }
+    auto end() {
+        return targets.end();
+    }
 };
 
-struct target_version {
-    using targets_type = std::map<build_settings, target_uptr>;
+struct target_map : package_map<settings_map<build_settings, target_uptr>> {
+    using base = package_map<settings_map<build_settings, target_uptr>>;
 
-    targets_type targets;
-    entry_point ep;
-
-    auto empty() const {
-        return targets.empty();
-    }
-    bool emplace(const package_id &id, target_uptr ptr) {
-        auto it = targets.find(id.settings);
-        if (it == targets.end()) {
-            targets.emplace(id.settings, std::move(ptr));
-            return true;
-        } else {
-            return false;
-        }
-    }
-    auto &container() {
-        return targets;
-    }
-    bool contains(const package_id &id) const {
-        return targets.contains(id.settings);
-    }
-
-    auto &load(auto &s, const build_settings &bs) {
-        auto it = targets.find(bs);
-        if (it == targets.end()) {
-            ep(s, bs);
-            it = targets.find(bs);
-        }
-        if (it == targets.end()) {
-            throw std::runtime_error{"target was not loaded with provided settings"};
-        }
-        return it->second;
-    }
-    auto try_load(auto &s, const build_settings &bs) {
-        auto it = targets.find(bs);
-        if (it == targets.end()) {
-            ep(s, bs);
-            it = targets.find(bs);
-        }
-        return it;
-    }
-};
-struct target_versions {
-    using versions_type = std::map<package_version, target_version>;
-
-    versions_type versions;
-
-    auto &operator[](const package_version &version) {
-        auto it = versions.find(version);
-        if (it == versions.end()) {
-            auto &&[it2, _] = versions.emplace(version, target_version{});
-            it = it2;
-        }
-        return it->second;
-    }
-    auto &container() {
-        return versions;
-    }
-
-    auto find(const package_version_range &r) {
-        return std::max_element(versions.begin(), versions.end(), [&](auto &&v1, auto &&v2) {
-            return r.contains(v1.first) && r.contains(v2.first) && v1.first < v2.first;
-        });
-    }
-};
-struct target_map {
-    using packages_type = std::map<package_path, target_versions>;
-    packages_type packages;
-
-    auto &operator[](const package_name &name) {
-        auto it = packages.find(name.path);
-        if (it == packages.end()) {
-            auto &&[it2, _] = packages.emplace(name.path, target_versions{});
-            it = it2;
-        }
-        return it->second[name.version];
-    }
-    bool emplace(const package_id &id, target_uptr ptr) {
-        return operator[](id.name).emplace(id, std::move(ptr));
-    }
     bool contains(const package_id &id) {
         return operator[](id.name).contains(id);
     }
-    auto &container() { return packages; }
-
-    auto &find(const unresolved_package_name &pkg) {
-        auto it = packages.find(pkg.path);
-        if (it == packages.end()) {
-            throw std::runtime_error{"cannot load package: "s + string{pkg.path} + ": not found"};
-        }
-        auto it2 = it->second.find(pkg.range);
-        if (it2 == it->second.container().end()) {
-            throw std::runtime_error{"cannot load package: "s + string{pkg} + ": not found"};
-        }
-        return it2->second;
-    }
-    template <typename T>
-    auto &find_first(const unresolved_package_name &pkg) {
-        auto &&t = find(pkg);
-        if (t.empty()) {
-            // logic error?
-            SW_UNIMPLEMENTED;
-            //throw std::runtime_error{"cannot load package: "s + string{pkg} + ": not found"};
-        }
-        return *std::get<uptr<T>>(t.targets.begin()->second);
+    bool emplace(const package_id &id, target_uptr ptr) {
+        return operator[](id.name).emplace(id, std::move(ptr));
     }
     auto &find_and_load(auto &&s, const unresolved_package_name &pkg, const build_settings &bs) {
         auto it = packages.find(pkg.path);
@@ -169,11 +73,11 @@ struct target_map {
             throw std::runtime_error{"cannot load package: "s + string{pkg.path} + ": not found"};
         }
         auto &r = pkg.range;
-        auto &cnt = it->second.container();
+        auto &cnt = it->second;
         for (auto &&[v,d] : cnt | std::views::reverse) {
             if (r.contains(v)) {
                 auto it = d.try_load(s, bs);
-                if (it != d.container().end()) {
+                if (it != d.end()) {
                     return it->second;
                 }
             }
@@ -181,60 +85,70 @@ struct target_map {
         throw std::runtime_error{"target was not loaded with provided settings: "s + (string)pkg};
     }
 
-    struct end_sentinel{};
+    struct end_sentinel {};
     struct iterator {
-        target_map &tm;
-        packages_type::iterator p;
-        target_versions::versions_type::iterator v;
-        target_version::targets_type::iterator t;
+        struct package_id_ref {
+            const base::iterator::package_id_ref &id;
+            const build_settings &settings;
+        };
+        struct pair {
+            package_id_ref first;
+            target_uptr &second;
+        };
 
-        iterator(target_map &tm) : tm{tm} {
-            init(tm,p,v,t);
-        }
-        iterator(target_map &tm, packages_type::iterator p) : tm{tm}, p{p} {
+        target_map *tm;
+        base::iterator p{*tm};
+        mapped_type::versions_type::mapped_type::targets_type::iterator t;
+
+        iterator(target_map &tm) : tm{&tm} {
+            init((base&)*this->tm, p, t);
         }
         auto operator*() {
-            struct package_id_ref {
-                const package_path &path;
-                const package_version &version;
-                const build_settings &settings;
-            };
-            struct pair {
-                package_id_ref ref;
-                target_uptr &ptr;
-            };
-            return pair{package_id_ref{p->first,v->first,t->first}, t->second};
+            return pair{package_id_ref{(*p).first, t->first}, t->second};
         }
-        void operator++() {
-            next(tm,p,v,t);
+        auto &operator++() {
+            next((base &)*tm, p, t);
+            return *this;
         }
         bool operator==(const iterator &rhs) const {
-            return std::tie(p,v,t) == std::tie(rhs.p,rhs.v,rhs.t);
+            return std::tie(p, t) == std::tie(rhs.p, rhs.t);
         }
         bool operator==(end_sentinel) const {
-            return p == tm.container().end();
+            return p == tm->base::end();
         }
-        bool init(auto &&obj, auto &&it, auto && ... tail) {
-            it = obj.container().begin();
+        bool init(auto *&obj, auto &&it, auto &&...tail) {
+            return init(*obj, it, tail...);
+        }
+        bool init(auto &&obj, auto &&it, auto &&...tail) {
+            it = obj.begin();
             if constexpr (sizeof...(tail) > 0) {
-                while (it != obj.container().end() && !init(it->second, FWD(tail)...)) {
+                while (it != obj.end() && !init(it->second, FWD(tail)...)) {
                     ++it;
                 }
             }
-            return it != obj.container().end();
+            return it != obj.end();
+        }
+        bool next(auto *&obj, auto &&it, auto &&...tail) {
+            return next(*obj, it, tail...);
         }
         bool next(auto &&obj, auto &&it, auto &&...tail) {
+            //using T = std::decay_t<decltype(obj)>;
             if constexpr (sizeof...(tail) > 0) {
                 if (!next(it->second, FWD(tail)...)) {
                     ++it;
-                    while (it != obj.container().end() && !init(it->second, FWD(tail)...)) {
+                    while (it != obj.end() && !init(it->second, FWD(tail)...)) {
                         ++it;
                     }
-                    return it != obj.container().end();
+                    return it != obj.end();
                 }
                 return true;
             }
-            return ++it != obj.container().end();
+            /*if constexpr (std::is_pointer_v<T>) {
+                return ++it != obj->end();
+            } else {
+                return ++it != obj.end();
+            }*/
+            return ++it != obj.end();
         }
     };
     auto begin() { return iterator{*this}; }
