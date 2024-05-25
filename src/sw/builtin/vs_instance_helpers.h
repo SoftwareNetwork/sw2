@@ -3,9 +3,9 @@
 
 #pragma once
 
-#ifdef _WIN32
-
 #include "../helpers/common.h"
+
+#ifdef _WIN32
 
 // Published by Visual Studio Setup team
 // <copyright file="Setup.Configuration.h" company="Microsoft Corporation">

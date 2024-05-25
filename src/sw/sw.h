@@ -3,7 +3,8 @@
 
 #pragma once
 
-#include "command.h"
-#include "package.h"
-#include "rule_target.h"
 #include "solution.h"
+
+using namespace sw;
+
+//using sw::path;

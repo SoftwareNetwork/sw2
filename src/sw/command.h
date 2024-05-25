@@ -11,6 +11,16 @@
 #include "helpers/json.h"
 #include "sys/log.h"
 
+#ifdef __GNUC__
+// not yet in libstdc++
+template <>
+struct std::formatter<std::chrono::seconds> : formatter<std::string> {
+    auto format(const std::chrono::seconds &p, format_context &ctx) const {
+        return std::formatter<std::string>::format(std::format("{}", p.count()), ctx);
+    }
+};
+#endif
+
 namespace sw {
 
 struct raw_command;
@@ -120,12 +130,12 @@ struct command_stream {
                 if constexpr (Input) {
                     pipe.r = open(fn.string().c_str(), O_RDONLY);
                     if (pipe.r == -1) {
-                        throw std::runtime_error(format("cannot open file for reading: {}", fn.string()));
+                        throw std::runtime_error(std::format("cannot open file for reading: {}", fn.string()));
                     }
                 } else {
                     pipe.w = open(fn.string().c_str(), O_CREAT | O_WRONLY | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP);
                     if (pipe.w == -1) {
-                        throw std::runtime_error(format("cannot open file for writing: {}", fn.string()));
+                        throw std::runtime_error(std::format("cannot open file for writing: {}", fn.string()));
                     }
                 }
 #endif
@@ -576,9 +586,9 @@ struct raw_command {
             //}};
             if (time_limit_hit) {
                 if (auto p = std::get_if<path>(&err.s)) {
-                    write_file(*p, format("time limit hit: {}", time_limit));
+                    write_file(*p, std::format("time limit hit: {}", time_limit));
                 } else {
-                    err = format("time limit hit: {}", time_limit);
+                    err = std::format("time limit hit: {}", time_limit);
                 }
             }
             cb();
@@ -892,7 +902,7 @@ struct raw_command {
     }
     string get_error_code() const {
         if (exit_code) {
-            return format("process exit code: {}", *exit_code);
+            return std::format("process exit code: {}", *exit_code);
         }
         return "process did not start";
     }
@@ -916,7 +926,7 @@ struct raw_command {
         /*if (!t.empty()) {
             t = "\nerror:\n" + t;
         }*/
-        return format("{}\nerror:\n{}", get_error_code(), t);
+        return std::format("{}\nerror:\n{}", get_error_code(), t);
     }
 };
 
@@ -1245,7 +1255,7 @@ if [ $E -ne 0 ]; then echo "Error code: $E"; fi
                     return string{};
                 },
                 [](command_storage::new_command &c) {
-                    return format("new command: hash = {}, {}", (size_t)c.c->hash(), c.c->print());
+                    return std::format("new command: hash = {}, {}", (size_t)c.c->hash(), c.c->print());
                 },
                 [](command_storage::new_file &f) {
                     return "new file: "s + f.p->string();
@@ -1288,7 +1298,7 @@ if [ $E -ne 0 ]; then echo "Error code: $E"; fi
             command_pointer_holder ch;
             ch.r = &c;
             ch.io = &c;
-            out = ch;
+            c.out = ch;
         }
         {
             command_pointer_holder ch;
@@ -1305,7 +1315,7 @@ if [ $E -ne 0 ]; then echo "Error code: $E"; fi
         if (!outputs.empty()) {
             string s = "generating: ";
             for (auto &&o : outputs) {
-                s += format("\"{}\", ", (const char *)o.u8string().c_str());
+                s += std::format("\"{}\", ", (const char *)o.u8string().c_str());
             }
             s.resize(s.size() - 2);
             return s;
@@ -1551,7 +1561,7 @@ struct gcc_command : io_command {
 
         mmap_file<char> f{deps_file};
         if (f.sz == 0) {
-            throw std::runtime_error{format("cannot open deps file: {}", deps_file)};
+            throw std::runtime_error{std::format("cannot open deps file: {}", deps_file)};
         }
         string_view sv{f.p, f.sz};
         auto p = sv.find(": ");

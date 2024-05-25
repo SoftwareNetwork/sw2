@@ -4,30 +4,15 @@
 #pragma once
 
 #include <algorithm>
-#if __has_include(<format>)
 #include <format>
-using std::format;
-namespace fmt = std;
-#elif __has_include(<format.h>)
-#error "wrong branch"
-#define FMT_HEADER_ONLY
-#include <format.h>
-using fmt::format;
-#else
-#define FMT_HEADER_ONLY
-#include <fmt/chrono.h>
-#include <fmt/format.h>
-using fmt::format;
-#endif
 #include <source_location>
 
 template <>
-struct fmt::formatter<std::source_location> : formatter<std::string> {
+struct std::formatter<std::source_location> : formatter<std::string> {
     auto format(const std::source_location &p, format_context &ctx) const {
-        return fmt::formatter<std::string>::format(fmt::format("{}:{}", p.file_name(), p.line()), ctx);
+        return std::formatter<std::string>::format(std::format("{}:{}", p.file_name(), p.line()), ctx);
     }
 };
-
 
 // #define SW_BINARY_DIR ".sw"
 

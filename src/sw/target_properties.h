@@ -163,35 +163,6 @@ struct file_regex {
     std::string str;
     bool recursive;
 
-    void operator()(auto &&rootdir, auto &&f) const {
-        auto &&[root,regex] = extract_dir_regex(str);
-        if (root.is_absolute()) {
-            throw;
-        }
-        root = rootdir / root;
-        auto range = [&]<typename Iter>() {
-            return
-                // add caching? yes
-                // add win fast path? yes
-                std::ranges::owning_view{Iter{root}}
-                | std::views::filter([dir = root.string(), r = std::regex{regex}](auto &&el){
-                    auto s = el.path().string();
-                    if (s.starts_with(dir)) {
-                        // eat one more slash
-                        s = s.substr(dir.size() + 1);
-                    } else {
-                        throw;
-                    }
-                    return std::regex_match(s, r);
-                })
-                ;
-        };
-        if (recursive) {
-            f(range.template operator()<fs::recursive_directory_iterator>());
-        } else {
-            f(range.template operator()<fs::directory_iterator>());
-        }
-    }
     static auto extract_dir_regex(std::string_view fn) {
         path dir;
         std::string regex_string;
@@ -231,6 +202,35 @@ struct file_regex {
 
             dir /= s;
         } while (1);
+    }
+    void operator()(auto &&rootdir, auto &&f) const {
+        auto &&[root,regex] = extract_dir_regex(str);
+        if (root.is_absolute()) {
+            throw;
+        }
+        root = rootdir / root;
+        auto range = [&]<typename Iter>() {
+            return
+                // add caching? yes
+                // add win fast path? yes
+                std::ranges::owning_view{Iter{root}}
+                | std::views::filter([dir = root.string(), r = std::regex{regex}](auto &&el){
+                    auto s = el.path().string();
+                    if (s.starts_with(dir)) {
+                        // eat one more slash
+                        s = s.substr(dir.size() + 1);
+                    } else {
+                        throw;
+                    }
+                    return std::regex_match(s, r);
+                })
+                ;
+        };
+        if (recursive) {
+            f(range.template operator()<fs::recursive_directory_iterator>());
+        } else {
+            f(range.template operator()<fs::directory_iterator>());
+        }
     }
 };
 

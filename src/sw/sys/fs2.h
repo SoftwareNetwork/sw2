@@ -207,9 +207,9 @@ inline path temp_sw_directory_path() {
 } // namespace sw
 
 template <>
-struct fmt::formatter<sw::path> : formatter<std::string> {
+struct std::formatter<sw::path> : formatter<std::string> {
     auto format(const sw::path &p, format_context &ctx) const {
-        return fmt::formatter<std::string>::format(p.string(), ctx);
+        return std::formatter<std::string>::format(p.string(), ctx);
     }
 };
 

@@ -36,14 +36,14 @@ void log(const char *compponent, int severity, auto &&fmtstring, auto &&...args)
     }
     string s;
     if constexpr (sizeof...(args) > 0) {
-        s = fmt::vformat(fmtstring, fmt::make_format_args(FWD(args)...));
+        s = std::vformat(fmtstring, std::make_format_args(args...));
     } else {
         s += fmtstring;
     }
     /*std::cerr << fmt::format("[{}] [{}] {}\n"
                              , std::chrono::system_clock::now()
                              , get_severity_string(severity), s);*/
-    std::cerr << fmt::format("{}\n", s); // simple for now
+    std::cerr << std::format("{}\n", s); // simple for now
 }
 
 void log_fatal(auto &&fmtstring, auto &&...args) {

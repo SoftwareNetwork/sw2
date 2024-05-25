@@ -1,8 +1,7 @@
 #pragma once
 
 #include "msvc.h"
-
-namespace sw {
+#include "../../sw.h"
 
 struct builtin_repository {
     void init(auto &&swctx) {
@@ -10,7 +9,7 @@ struct builtin_repository {
         // or maybe we should detect only basic compilers to boostrap ourselves/repositories
         msvc m;
         m.detect(swctx);
+
+        sw_build s;
     }
 };
-
-}

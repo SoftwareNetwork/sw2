@@ -5,8 +5,11 @@
 #include "input.h"
 #include "package_id.h"
 #include "helpers/xml.h"
+#include "system.h"
 
 namespace sw {
+
+//struct system;
 
 template <typename K, typename V>
 struct settings_map {
@@ -156,6 +159,7 @@ struct target_map : package_map<settings_map<build_settings, target_uptr>> {
 };
 
 struct solution {
+    system &sys;
     abspath work_dir;
     abspath binary_dir;
     const build_settings host_settings_;
@@ -171,7 +175,7 @@ struct solution {
     std::vector<target_uptr> temp_targets;
 
     //solution() {}
-    solution(const abspath &binary_dir, const build_settings &host_settings) : work_dir{binary_dir}, binary_dir{binary_dir}, host_settings_{host_settings} {
+    solution(system &sys, const abspath &binary_dir, const build_settings &host_settings) : sys{sys}, work_dir{binary_dir}, binary_dir{binary_dir}, host_settings_{host_settings} {
     }
 
     template <typename T, typename... Args>

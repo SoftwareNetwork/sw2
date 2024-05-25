@@ -7,6 +7,7 @@
 #include "../sys/fs.h"
 #include "exception.h"
 
+#include <atomic>
 #include <functional>
 #include <map>
 #include <stdexcept>
@@ -141,7 +142,7 @@ struct pipe {
         return pipe_id++;
     }
     auto pipe_name() {
-        path p = format("\\\\.\\pipe\\swpipe.{}.{}", GetCurrentProcessId(), pipe_id());
+        path p = std::format("\\\\.\\pipe\\swpipe.{}.{}", GetCurrentProcessId(), pipe_id());
         return p.wstring();
     }
     void init(bool inherit = false) {

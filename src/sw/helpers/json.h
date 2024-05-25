@@ -52,8 +52,8 @@ struct json {
         for (auto i = sv.begin(); i != sv.end(); ++i) {
             if (*i == '\\') {
                 switch (*(i+1)) {
-                case '\\': s += (char)'\\'; ++i; break;
-                case '\0': s += (char)'\0'; ++i; break;
+                case '\\': s += (typename T::value_type)'\\'; ++i; break;
+                case '\0': s += (typename T::value_type)'\0'; ++i; break;
                 default:
                     throw std::runtime_error{"not implemented"};
                 }

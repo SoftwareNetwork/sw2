@@ -120,4 +120,20 @@
         </Expand>
     </Type>
 
+    <Type Name="sw::target_map">
+        <DisplayString>{packages}</DisplayString>
+        <Expand>
+            <ExpandedItem>packages</ExpandedItem>
+        </Expand>
+    </Type>
+    <Type Name="sw::package_version_map&lt;*&gt;">
+        <DisplayString>{versions}</DisplayString>
+        <Expand>
+            <ExpandedItem>versions</ExpandedItem>
+        </Expand>
+    </Type>
+    <Type Name="std::pair&lt;sw::package_path const, * &gt;">
+        <DisplayString>{second}</DisplayString>
+    </Type>
+
 </AutoVisualizer>

@@ -511,10 +511,6 @@ struct native_target : rule_target, target_data_storage<native_target> {
 
     struct raw_target_tag {};
 
-#ifdef _MSC_VER
-    using target_data_storage::operator+=;
-    using target_data_storage::operator-=;
-#endif
     using target_data_storage::add;
     using target_data_storage::remove;
     using target_data_storage::begin;
@@ -550,6 +546,9 @@ struct native_target : rule_target, target_data_storage<native_target> {
     }
 
     void init_compilers(auto &&s) {
+        // rules
+        //rules.insert(s.sys.packages["cl"]);
+
         // order
         /*for (auto &&l : bs.cpp.stdlib) {
             add(l);
@@ -903,6 +902,7 @@ struct native_static_library_target : native_library_target {
 struct executable_target : native_target {
     using base = native_target;
 
+    // should be a command?
     path executable;
 
     executable_target(auto &&s, auto &&id) : base{s, id} {

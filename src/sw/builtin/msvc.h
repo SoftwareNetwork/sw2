@@ -1,7 +1,7 @@
 #pragma once
 
 #include "vs_instance_helpers.h"
-#include "../builtin/detect.h"
+//#include "../builtin/detect.h"
 
 struct cl_exe_rule1 {
     path executable;
@@ -233,12 +233,6 @@ struct link_exe_rule1 {
     }
 };
 
-using rule_list = types<
-    cl_exe_rule1,
-    lib_exe_rule1,
-    link_exe_rule1
->;
-
 struct msvc_instance1 {
     path root;
     package_version vs_version;
@@ -299,3 +293,4 @@ struct msvc {
         }
     }
 };
+

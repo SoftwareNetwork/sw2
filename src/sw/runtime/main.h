@@ -9,9 +9,9 @@ int main(int argc, char *argv[]) {
     try {
         return main1(argc, argv);
     } catch (std::exception &e) {
-        log_error("{}", e.what());
+        sw::log_error("{}", e.what());
     } catch (...) {
-        log_error("unknown exception");
+        sw::log_error("unknown exception");
     }
     return 1;
 }

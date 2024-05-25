@@ -5,8 +5,9 @@
 
 #include "win32.h"
 
+#include <fstream>
 #include <span>
-#include <string.h>
+#include <cstring>
 
 #ifdef _WIN32
 #else

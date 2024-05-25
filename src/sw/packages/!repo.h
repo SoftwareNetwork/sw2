@@ -1,3 +1,9 @@
+#pragma once
+
+#include "png.h"
+#include "png_1.0.5.h"
+#include "zlib.h"
+
 struct git {
     std::string dl_url;
 
@@ -13,13 +19,6 @@ struct github : git {
         : git{"https://github.com/"s + user_repo, version_tag} {
     }
 };
-
-namespace sw::self_build {
-#include "../sw.h"
-}
-#include "zlib.h"
-#include "png_1.0.5.h"
-#include "png.h"
 
 std::string replace_all(std::string s, const std::string &pattern, const std::string &repl) {
     size_t pos;
@@ -240,7 +239,7 @@ struct repository {
                 }
                 //b.build();
 
-                auto s = make_solution();
+                /*auto s = make_solution();
                 input_with_settings is;
                 is.ep.build = [](auto &&s) {
                     Builder b;
@@ -253,7 +252,7 @@ struct repository {
                 s.add_input(is);
                 s.load_inputs();
                 command_line_parser cl;
-                s.build(cl);
+                s.build(cl);*/
             }
         };
 

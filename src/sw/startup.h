@@ -3,6 +3,7 @@
 #include "helpers/common.h"
 #include "runtime/command_line.h"
 #include "sys/log.h"
+#include "sw_tool.h"
 
 namespace sw {
 
@@ -39,17 +40,8 @@ struct startup_data {
         return sw_main();
     }
     int sw_main() {
-        if (cl.sw1) {
-            if (cl.int3) {
-                debug_break_if_not_attached();
-            }
-            // sw1(cl);
-            return 1;
-        }
-#ifdef SW1_BUILD
-        return 0;
-#endif
-        cl.rebuild_all = false; // not for config/run builds
+        sw_tool t;
+        return t.run_command_line(cl);
     }
     void init_logger() {
         if (cl.trace) {

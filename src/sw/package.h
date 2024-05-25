@@ -447,7 +447,7 @@ struct package_map {
         }
         return it2->second;
     }
-    template <typename T>
+    template <typename U>
     auto &find_first(const unresolved_package_name &pkg) {
         auto &&t = find(pkg);
         if (t.empty()) {
@@ -455,7 +455,7 @@ struct package_map {
             SW_UNIMPLEMENTED;
             // throw std::runtime_error{"cannot load package: "s + string{pkg} + ": not found"};
         }
-        return *std::get<uptr<T>>(t.targets.begin()->second);
+        return *std::get<uptr<U>>(t.targets.begin()->second);
     }
 
     struct end_sentinel {};
