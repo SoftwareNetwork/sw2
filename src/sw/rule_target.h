@@ -256,7 +256,7 @@ struct rule_target {
         tests.reserve(50); // todo: implement normal non relocating vector finally
         tests.push_back(T{});
         auto &c = std::get<T>(tests.back());
-        auto n = !name.empty() ? name : format("{}", tests.size());
+        auto n = !name.empty() ? name : std::format("{}", tests.size());
         c.name_ = format_log_record(*this, "/[test]/["s + n + "]");
         auto testdir = [&](auto &&sln) {
             return sln.binary_dir / "test" / format_log_settings(solution_bs) / (string)this->name / n;
@@ -605,7 +605,7 @@ struct native_target : rule_target, target_data_storage<native_target> {
         precompiled_header.obj = dir / "sw_pch.obj"; // like in cl rule
         string s;
         for (auto &&p : precompiled_headers) {
-            s += format("#include \"{}\"\n", p.p);
+            s += std::format("#include \"{}\"\n", p.p);
         }
         write_file_if_different(precompiled_header.header, s);
         write_file_if_different(precompiled_header.cpp, "");

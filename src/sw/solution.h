@@ -1,7 +1,8 @@
 #pragma once
 
 #include "rule_target.h"
-#include "command.h"
+#include "command/command.h"
+#include "command/executor.h"
 #include "input.h"
 #include "package_id.h"
 #include "helpers/xml.h"

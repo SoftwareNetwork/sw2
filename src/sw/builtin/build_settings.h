@@ -4,7 +4,7 @@
 #pragma once
 
 #include "os.h"
-#include "../command.h"
+#include "sw/command/command.h"
 #include "../sys/arch.h"
 
 namespace sw {

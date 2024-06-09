@@ -17,21 +17,7 @@
 #include <cmath>
 #include <deque>
 #include <filesystem>
-#if __has_include(<format>)
 #include <format>
-using std::format;
-namespace fmt = std;
-#elif __has_include(<format.h>)
-#error "wrong branch"
-#define FMT_HEADER_ONLY
-#include <format.h>
-using fmt::format;
-#else
-#define FMT_HEADER_ONLY
-#include <fmt/format.h>
-#include <fmt/chrono.h>
-using fmt::format;
-#endif
 #include <fstream>
 #include <functional>
 #include <iostream>

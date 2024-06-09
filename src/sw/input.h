@@ -47,6 +47,7 @@ struct directory_specification_file_input {};
 using input = variant<specification_file_input, directory_input, direct_build_input>;
 
 struct input_with_settings {
+    input i;
     entry_point ep;
     std::set<build_settings> settings;
 
@@ -56,6 +57,8 @@ struct input_with_settings {
         }
     }
 };
+
+using inputs_type = std::vector<input_with_settings>;
 
 // in current dir
 //void detect_inputs(){}

@@ -5,6 +5,7 @@
 #include "repository.h"
 #include "solution.h"
 #include "system.h"
+#include "build.h"
 
 namespace sw {
 
@@ -53,9 +54,10 @@ struct sw_tool {
 #endif
         cl.rebuild_all = false; // not for config/run builds
 
-        return visit_any(cl.c, [&](auto &b) {
-            return run_command(cl, b);
+        visit_any(cl.c, [&](auto &b) {
+            run_command(cl, b);
         });
+        return 0;
     }
     int run_command(command_line_parser &cl, command_line_parser::setup &b) {
         // name sw interpreter as 'swi'?
@@ -73,8 +75,50 @@ exec {} exec -remove-shebang "$@"
         solution s{sys, sys.binary_dir, default_host_settings()};
         return s;
     }
+    auto make_inputs(auto &&b) {
+        if (!b.inputs) {
+            b.inputs.value = std::vector<string>{"."};
+        }
+        inputs_type inputs;
+        for (auto &&bi : *b.inputs.value) {
+            path p{bi};
+            if (!fs::exists(p)) {
+                //inputs
+                throw std::runtime_error{"does not exist: "s + p.string()};
+            }
+            if (fs::is_regular_file(p)) {
+                SW_UNIMPLEMENTED;
+                //direct_build.fns.insert(p);
+            } else if (fs::is_directory(p)) {
+                if (false) {
+                } else if (fs::exists(p / "sw.h")) {
+                    input_with_settings is;
+                    is.i = specification_file_input{p / "sw.h"};
+                    inputs.push_back(is);
+                } else if (fs::exists(p / "sw.cpp")) {
+                    input_with_settings is;
+                    is.i = specification_file_input{p / "sw.cpp"};
+                    inputs.push_back(is);
+                } else {
+                    SW_UNIMPLEMENTED;
+                }
+            } else {
+                throw std::runtime_error{"unknown fs object: "s + p.string()};
+            }
+        }
+        return inputs;
+    }
+    auto make_build() {
+    }
     int run_command(command_line_parser &cl, command_line_parser::build &b) {
-        auto s = make_solution();
+        build bb;
+        bb.inputs = make_inputs(b);
+        bb.run();
+
+        return 0;
+    }
+    int x(command_line_parser &cl, command_line_parser::build &b) {
+        /*auto s = make_solution();
         s.binary_dir = temp_sw_directory_path();
 
         direct_build_input direct_build;
@@ -204,7 +248,7 @@ exec {} exec -remove-shebang "$@"
         s.build(cl);
 
         if (!fs::exists(t.executable)) {
-            throw std::runtime_error{format("missing sw1 file", t.executable)};
+            throw std::runtime_error{std::format("missing sw1 file", t.executable)};
         }
         auto setup_path = [](auto &&in) {
             auto s = normalize_path_and_drive(in);
@@ -220,7 +264,7 @@ exec {} exec -remove-shebang "$@"
             //c += (const char *)argv[i];
         //}
         log_debug("sw1");
-        return c.run();
+        return c.run();*/
         return 1;
     }
     int run_command(command_line_parser &cl, auto &) {

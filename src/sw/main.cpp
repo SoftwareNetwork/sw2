@@ -199,7 +199,8 @@ auto clrule(auto &&input_file) {
 
 int main1(int argc, char *argv[]) {
     startup_data sd{argc,argv};
-    return sd.run();
+    sd.run();
+    return 0;
 }
 /*void main2(int argc, char *argv[]) {
     command_line_parser cl{argc, argv};

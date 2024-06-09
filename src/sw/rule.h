@@ -1,7 +1,6 @@
 #pragma once
 
-#include "helpers/common.h"
-#include "command.h"
+#include "command/command.h"
 
 namespace sw {
 

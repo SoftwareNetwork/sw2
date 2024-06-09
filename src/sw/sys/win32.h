@@ -142,8 +142,7 @@ struct pipe {
         return pipe_id++;
     }
     auto pipe_name() {
-        path p = std::format("\\\\.\\pipe\\swpipe.{}.{}", GetCurrentProcessId(), pipe_id());
-        return p.wstring();
+        return std::format(L"\\\\.\\pipe\\swpipe.{}.{}", GetCurrentProcessId(), pipe_id());
     }
     void init(bool inherit = false) {
         DWORD sz = 0;

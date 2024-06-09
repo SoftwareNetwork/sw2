@@ -13,7 +13,7 @@ struct startup_data {
     vector<string> args;
     command_line_parser cl;
 
-    int run() {
+    void run() {
         // setConsoleColorProcessing();
         args.assign(argv, argv + argc);
         // prepare args - replace %20 from uri invocation
@@ -29,7 +29,7 @@ struct startup_data {
 
         if (cl.version) {
             log_trace("sw2");
-            return 0;
+            return;
         }
         if (cl.sleep) {
             log_trace("sleep started");
@@ -37,11 +37,11 @@ struct startup_data {
             log_trace("sleep completed");
         }
 
-        return sw_main();
+        sw_main();
     }
-    int sw_main() {
+    void sw_main() {
         sw_tool t;
-        return t.run_command_line(cl);
+        t.run_command_line(cl);
     }
     void init_logger() {
         if (cl.trace) {
