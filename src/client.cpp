@@ -1,17 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2022 Egor Pugin <egor.pugin@gmail.com>
 
-#include "runtime/command_line.h"
-#include "runtime/main.h"
-#include "sys/log.h"
-#include "generator/common.h"
-#include "builtin/default_settings.h"
-#include "startup.h"
-#include "sw_tool.h"
+/*#include "sw/runtime/command_line.h"
+#include "sw/sys/log.h"
+#include "sw/generator/common.h"
+#include "sw/builtin/default_settings.h"*/
+#include "sw/runtime/main.h"
+#include "sw/startup.h"
+//#include "sw/sw_tool.h"
 
-#include "rule.h"
-#include "sw.h"
-using namespace sw;
+/*#include "sw/rule.h"
+#include "sw/sw.h"
+using namespace sw;*/
 
 /*void sw1(auto &cl) {
     visit(
@@ -191,17 +191,18 @@ SKIPPED: {})",
         });
 }*/
 
-auto clrule(auto &&input_file) {
+/*auto clrule(auto &&input_file) {
     rule r;
     r += "cl", "-c", input_file;
     return r;
-}
+}*/
 
 int main1(int argc, char *argv[]) {
     startup_data sd{argc,argv};
     sd.run();
     return 0;
 }
+
 /*void main2(int argc, char *argv[]) {
     command_line_parser cl{argc, argv};
     visit_any(

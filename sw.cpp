@@ -1,12 +1,12 @@
 void build(Solution &s) {
-    auto &t = s.addExecutable("sw");
+    auto &p = s.addProject("sw2");
+    auto &sw = p.addStaticLibrary("sw");
     {
-        t.SwDefinitions = true;
-        t.PackageDefinitions = true;
+        auto &t = sw;
         t += cpp23;
-        t += "src/.*"_rr;
+        t += "src/sw/.*"_rr;
         t.Public += "src"_idir;
-        t += "src/sw"_idir;
+        t += "src/sw"_idir; // remove?
         if (t.getBuildSettings().TargetOS.Type == OSType::Windows) {
             t += "ole32.lib"_slib;
             t += "OleAut32.lib"_slib;
@@ -18,8 +18,29 @@ void build(Solution &s) {
             t += "org.sw.demo.mingw.w64.headers.windows.advapi32-0.0.1"_dep;
         }
         if (t.getCompilerType() == CompilerType::MSVC) {
-            t.CompileOptions.push_back("/bigobj");
+            t.Public.CompileOptions.push_back("/bigobj");
         }
+    }
+    auto &exe = p.addExecutable("exe");
+    {
+        auto &t = exe;
+        t.SwDefinitions = true;
+        t.PackageDefinitions = true;
+        t += cpp23;
+        t += "src/client.cpp";
+        t.Public += "src"_idir;
+        t += sw;
+    }
+
+    auto &create_package_storage = p.addExecutable("create_package_storage");
+    {
+        auto &t = create_package_storage;
+        t.SwDefinitions = true;
+        t.PackageDefinitions = true;
+        t += cpp23;
+        t += "src/create_package_storage.cpp";
+        t.Public += "src"_idir;
+        t += sw;
     }
 }
 

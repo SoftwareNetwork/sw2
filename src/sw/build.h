@@ -10,6 +10,8 @@ struct build {
     // list of repos
 
     void run() {
+        path x;
+
         int a = 5;
         a++;
     }
