@@ -6,8 +6,8 @@
 #include "unix.h"
 #include "win32.h"
 
-#include "helpers/json.h"
-#include "sys/log.h"
+#include "../helpers/json.h"
+#include "../sys/log.h"
 
 #ifdef __GNUC__
 // not yet in libstdc++

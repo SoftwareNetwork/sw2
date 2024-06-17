@@ -19,7 +19,7 @@ struct sw_tool {
     system sys;
 
     builtin_repository builtin_repo;
-    repository repo;
+    //repository repo;
 
     sw_tool() {
         config_dir = get_home_directory() / ".sw2";
@@ -39,7 +39,7 @@ struct sw_tool {
     }
     void init() {
         builtin_repo.init(*this);
-        repo.init(*this);
+        //repo.init(*this);
     }
     int run_command_line(command_line_parser &cl) {
         if (cl.sw1) {

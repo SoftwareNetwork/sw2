@@ -107,6 +107,9 @@ struct package_version {
                 }
                 return h;
             }
+            auto size() const {
+                return value.size();
+            }
         };
         numbers elements;
         string extra;
@@ -136,6 +139,9 @@ struct package_version {
 
         auto &operator[](int i) const {
             return elements.value.at(i);
+        }
+        auto size() const {
+            return elements.size();
         }
     };
     using version_type = std::variant<string, number_version>;
@@ -187,6 +193,17 @@ struct package_version {
         }
         return std::get<number_version>(version);
     }
+    std::string to_string_initializer_list() const {
+        auto &v = std::get<number_version>(version);
+        std::string s;
+        for (auto &&e : v.elements.value) {
+            s += std::format("{},", e);
+        }
+        if (!s.empty()) {
+            s.pop_back();
+        }
+        return std::format("{{{}}}", s);
+    }
 
     // this is release order
     // sometimes we want semver order - todo: implement
@@ -201,6 +218,9 @@ struct package_version {
 
     auto &operator[](int i) const {
         return std::get<number_version>(version)[i];
+    }
+    auto size() const {
+        return std::get<number_version>(version).size();
     }
 };
 

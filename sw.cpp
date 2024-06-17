@@ -31,17 +31,6 @@ void build(Solution &s) {
         t.Public += "src"_idir;
         t += sw;
     }
-
-    auto &create_package_storage = p.addExecutable("create_package_storage");
-    {
-        auto &t = create_package_storage;
-        t.SwDefinitions = true;
-        t.PackageDefinitions = true;
-        t += cpp23;
-        t += "src/create_package_storage.cpp";
-        t.Public += "src"_idir;
-        t += sw;
-    }
 }
 
 // win: cl -nologo -std:c++latest -EHsc src/*.cpp -link -OUT:sw.exe

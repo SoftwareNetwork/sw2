@@ -3,8 +3,8 @@
 
 #pragma once
 
-#include "helpers/common.h"
-#include "sys/win32.h"
+#include "../helpers/common.h"
+#include "../sys/win32.h"
 
 #if defined(_WIN32)
 

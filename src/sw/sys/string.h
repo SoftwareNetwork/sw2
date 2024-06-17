@@ -45,6 +45,14 @@ using namespace std::literals;
     return s;
 }
 
+std::string replace_all(std::string s, const std::string &pattern, const std::string &repl) {
+    size_t pos{};
+    while ((pos = s.find(pattern, pos)) != -1) {
+        s = s.substr(0, pos) + repl + s.substr(pos + pattern.size());
+    }
+    return std::move(s);
+}
+
 template <std::size_t N>
 struct static_string {
     char p[N]{};

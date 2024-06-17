@@ -3,11 +3,11 @@
 
 #pragma once
 
-#include "helpers/common.h"
+#include "../helpers/common.h"
 
-#include "sys/linux.h"
-#include "sys/macos.h"
-#include "sys/mmap.h"
+#include "../sys/linux.h"
+#include "../sys/macos.h"
+#include "../sys/mmap.h"
 
 #if defined(__linux) || defined(__APPLE__)
 
