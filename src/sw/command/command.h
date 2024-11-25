@@ -414,7 +414,7 @@ if [ $E -ne 0 ]; then echo "Error code: $E"; fi
         if (!outputs.empty()) {
             string s = "generating: ";
             for (auto &&o : outputs) {
-                s += std::format("\"{}\", ", (const char *)o.u8string().c_str());
+                s += std::format("\"{}\", ", o.string().c_str());
             }
             s.resize(s.size() - 2);
             return s;
@@ -514,7 +514,7 @@ struct cl_exe_command : io_command {
                     auto fo = path{base} += ".obj";
 
                     std::ofstream{fh};
-                    std::ofstream{fc} << "#include \"sw_msvc_prefix.h\"\nint dummy;";
+                    std::ofstream{fc.fspath()} << "#include \"sw_msvc_prefix.h\"\nint dummy;";
 
                     scope_exit se{[&] {
                         fs::remove(fh);
@@ -578,7 +578,7 @@ struct cl_exe_command : io_command {
                 auto j = json::parse(p);
                 // version 1.1 has different path case
                 // version 1.2 has all lower paths
-                vector<std::u8string> includes = j["Data"]["Includes"];
+                vector<std::string> includes = j["Data"]["Includes"];
                 std::ranges::copy(includes, std::inserter(implicit_inputs, implicit_inputs.end()));
             };
 

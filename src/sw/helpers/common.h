@@ -58,6 +58,10 @@ namespace sw {
 using std::variant;
 using std::vector;
 
+using u8 = uint8_t;
+using u32 = uint32_t;
+using u64 = uint64_t;
+
 template <typename ... Types>
 using uptr = std::unique_ptr<Types...>;
 
@@ -289,7 +293,7 @@ path get_this_file_dir() {
         return swdir;
     }
 }
-path get_sw_dir() {
+auto get_sw_dir() {
     path p = get_this_file_dir();
     return p.parent_path().parent_path();
 }

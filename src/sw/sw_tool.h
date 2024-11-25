@@ -27,9 +27,9 @@ struct sw_tool {
 #endif
         auto storfn = config_dir / "storage_dir";
         if (!fs::exists(storfn)) {
-            write_file(storfn, (const char *)(config_dir / "storage").u8string().c_str());
+            write_file(storfn, (config_dir / "storage").string());
         }
-        storage_dir = (const char8_t *)read_file(config_dir / "storage_dir").c_str();
+        storage_dir = read_file(config_dir / "storage_dir");
         temp_dir = temp_sw_directory_path();
         if (!fs::exists(temp_dir)) {
             fs::create_directories(temp_dir);

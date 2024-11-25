@@ -253,7 +253,6 @@ struct executor {
         jcp.CompletionPort = port;
         jcp.CompletionKey = (PVOID)port.h;
         WINAPI_CALL(SetInformationJobObject(job, JobObjectAssociateCompletionPortInformation, &jcp, sizeof(jcp)));
-        //this->job = job;
     }
     void register_process(auto &&h, auto &&pid, auto &&f) {
         WINAPI_CALL(AssignProcessToJobObject(job, h));

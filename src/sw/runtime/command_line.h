@@ -104,7 +104,7 @@ struct command_line_parser {
         explicit operator bool() const {
             return !!value;
         }
-        operator auto() const {
+        operator auto &&() const {
             return *value;
         }
         void parse(auto &&args, auto &&cur) requires (is_single_val) {

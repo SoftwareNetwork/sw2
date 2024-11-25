@@ -1,7 +1,7 @@
 #pragma once
 
 #include "msvc.h"
-#include "../../sw.h"
+#include <sw/sw.h>
 
 struct builtin_repository {
     void init(auto &&swctx) {
@@ -10,6 +10,6 @@ struct builtin_repository {
         msvc m;
         m.detect(swctx);
 
-        sw_build s;
+        //sw_build s;
     }
 };

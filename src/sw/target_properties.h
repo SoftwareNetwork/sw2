@@ -56,10 +56,10 @@ inline definition operator""_def(const char *in, size_t len) {
 }
 
 struct include_directory {
-    path dir;
+    path value;
     include_directory() = default;
-    include_directory(const path &p) : dir{p} {}
-    operator auto() const { return dir; }
+    include_directory(const path &p) : value{p} {}
+    operator auto &&() const { return value; }
 };
 inline auto operator""_idir(const char *s, size_t len) {
     return include_directory{std::string{s,len}};

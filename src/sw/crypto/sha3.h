@@ -90,6 +90,7 @@ struct keccak_p {
 template <auto DigestSizeBits, auto c = 2 * DigestSizeBits, auto Padding = 0b10>
 struct keccak : keccak_p<1600> {
     static inline constexpr auto r = StateBits - c;
+    static inline constexpr auto digest_size_bytes = DigestSizeBits / 8;
 
     int blockpos{};
     uint64_t bitlen{};

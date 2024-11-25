@@ -4,6 +4,7 @@
 #pragma once
 
 #include "win32.h"
+#include "../sys/fs.h"
 
 #include <fstream>
 #include <span>
@@ -20,8 +21,6 @@ namespace sw {
 
 template <typename T = uint8_t>
 struct mmap_file {
-    using path = std::filesystem::path;
-
 #ifdef _WIN32
     struct ro {
         static inline constexpr auto access = GENERIC_READ;
@@ -126,6 +125,8 @@ struct mmap_file {
 
     auto begin() const { return p; }
     auto end() const { return p+sz; }
+    auto data() {return p;}
+    auto size() const {return sz;}
 
     T *alloc(size_type sz) {
         close();
@@ -137,6 +138,17 @@ struct mmap_file {
         fs::resize_file(fn, oldsz ? this->sz * 2 + sz : sz * 2);
         open(rw{});
         return p + oldsz;
+    }
+    T *resize(size_type sz) {
+     close();
+     auto oldsz = this->sz;
+     if (!fs::exists(fn)) {
+      fs::create_directories(fn.parent_path());
+      std::ofstream{fn};
+     }
+     fs::resize_file(fn, sz);
+     open(rw{});
+     return p;
     }
 
     struct stream {
@@ -220,7 +232,7 @@ struct mmap_file {
             return *this;
         }
         stream &operator<<(const path &p) {
-            auto s = p.u8string();
+            auto s = p.string();
             uint64_t len = s.size();
             if (!has_room(len + sizeof(len))) {
                 m().alloc(len + sizeof(len));

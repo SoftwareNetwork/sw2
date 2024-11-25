@@ -48,7 +48,7 @@ auto read_file(const path &fn) {
 auto write_file(const path &fn, string_view v) {
     if (!fs::exists(fn)) {
         fs::create_directories(fn.parent_path());
-        std::ofstream{fn};
+        std::ofstream{fn.fspath()};
     }
     fs::resize_file(fn, v.size());
     mmap_file<uint8_t> m{fn, mmap_file<uint8_t>::rw{}};
@@ -101,7 +101,7 @@ string &&normalize_path(string &&s) {
     return std::move(s);
 }
 void lower_drive_letter(string &s) {
-    if (!s.empty()) {
+    if (s.size() > 1 && s[1] == ':') {
         s[0] = tolower(s[0]);
     }
 }
@@ -111,6 +111,7 @@ void mingw_drive_letter(string &s) {
         s = "/"s + s[0] + s.substr(2);
     }
 }
+// also /cygdrive/
 auto normalize_path(const path &p) {
     auto fn = p.string();
     std::replace(fn.begin(), fn.end(), '\\', '/');
@@ -200,7 +201,7 @@ inline auto is_cpp_file(const path &fn) {
     return exts.contains(fn.extension().string());
 }
 
-inline path temp_sw_directory_path() {
+inline auto temp_sw_directory_path() {
     return fs::temp_directory_path() / "sw";
 }
 
@@ -210,6 +211,17 @@ template <>
 struct std::formatter<sw::path> : formatter<std::string> {
     auto format(const sw::path &p, format_context &ctx) const {
         return std::formatter<std::string>::format(p.string(), ctx);
+    }
+};
+
+template <>
+struct std::hash<::sw::path> {
+    size_t operator()(const ::sw::path &p) {
+#ifdef _WIN32
+        return std::hash<std::filesystem::path>()(p.fspath());
+#else
+        return std::hash<sw::string>()(p.string());
+#endif
     }
 };
 

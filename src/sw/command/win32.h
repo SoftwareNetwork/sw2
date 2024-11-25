@@ -20,6 +20,15 @@ struct command_stream {
     struct close_ {};
     // default mode is inheritance
     using stream = variant<inherit, close_, string, stream_callback, path, second_end_of_pipe>;
+    /*using stream_type = variant<inherit, close_, string, stream_callback, path, second_end_of_pipe>;
+    struct stream : stream_type {
+        using base = stream_type;
+        using base::base;
+
+        void close() {
+            ((base&)*this) = close_{};
+        }
+    };*/
 
     stream s;
     HANDLE h = 0;
@@ -190,6 +199,9 @@ struct command_stream {
     }
     void finish() {
         pipe = decltype(pipe){};
+    }
+    void close() {
+        s = close_{};
     }
 
     template <typename T>
@@ -396,11 +408,13 @@ struct raw_command {
             if (time_limit_hit) {
                 TerminateProcess(d.pi.hProcess, 1);
             }
+            WaitForSingleObject(d.pi.hProcess, INFINITE);
             DWORD exit_code;
             WINAPI_CALL(GetExitCodeProcess(d.pi.hProcess, &exit_code));
-            while (exit_code == STILL_ACTIVE) {
+            // not needed after WaitForSingleObject()
+            /*while (exit_code == STILL_ACTIVE) {
                 WINAPI_CALL(GetExitCodeProcess(d.pi.hProcess, &exit_code));
-            }
+            }*/
             this->exit_code = exit_code;
 
             //d.close_file_handles();
@@ -440,6 +454,13 @@ struct raw_command {
                 throw std::runtime_error{get_error_message()};
             }
         });
+    }
+    auto run(std::error_code &ec) {
+        executor ex;
+        run(ex, []{});
+        ex.run();
+        ec.assign(!ok(), std::generic_category());
+        return *exit_code;
     }
     auto run() {
         executor ex;

@@ -22,7 +22,7 @@ struct startup_data {
         // set wdir
         auto this_path = fs::current_path();
         if (cl.working_directory) {
-            fs::current_path(cl.working_directory);
+            fs::current_path(cl.working_directory.value->stdpath());
         }
 
         init_logger();
