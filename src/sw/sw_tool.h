@@ -9,6 +9,26 @@
 
 namespace sw {
 
+struct config_emitter {
+    cpp_emitter2 e;
+    //cpp_emitter2::stru cfg;
+
+    config_emitter() {
+        //cfg = std::move(e.struct_("config"));
+    }
+    ~config_emitter() {
+    }
+
+    void write(auto &&cfgdir) {
+        auto &&text = e.text();
+        auto h = digest<crypto::sha3<256>>(text);
+        auto fn = cfgdir / h += ".h"s;
+        if (!fs::exists(fn)) {
+            write_file(fn, text);
+        }
+    }
+};
+
 // sw_context?
 // sw_command_runner?
 struct sw_tool {
@@ -111,6 +131,69 @@ exec {} exec -remove-shebang "$@"
     auto make_build() {
     }
     int run_command(command_line_parser &cl, command_line_parser::build &b) {
+        auto cfgdir = storage_dir / "tmp" / "configs";
+
+        //
+        config_emitter cfg_host;
+        cfg_host.write(cfgdir);
+
+        //
+        config_emitter cfg_target;
+        cfg_target.write(cfgdir);
+
+        auto gpp = resolve_executable("g++");
+        if (gpp) {
+            gcc_command g;
+            g += *gpp, "--version";
+            auto ret = g() && g();
+            ret = g() && g() && g();
+            std::cerr << g.out.get<string>() << "\n";
+
+            gcc_command g2;
+            g2 += *gpp, "asdasd";
+            ret = g() && g2();
+            ret = g2() && g();
+            ret = ret || g();
+            ret = g2() || g();
+            std::cerr << g2.out.get<string>() << "\n";
+            std::cerr << g2.err.get<string>() << "\n";
+
+            gcc_command g3;
+            g3 += *gpp, "-c", "-xc++", "-", "-otest";
+            g3.in = string{"#include <iostream>\nint main(){}"};
+            g3();
+            std::cerr << g3.out.get<string>() << "\n";
+            std::cerr << g3.err.get<string>() << "\n";
+            g2 |= g3;
+            executor ex;
+            g2.run(ex);
+            g3.run(ex);
+            ex.run();
+            //std::cerr << g2.out.get<string>() << "\n"; g2.out is redirected
+            std::cerr << g2.err.get<string>() << "\n";
+            std::cerr << g3.out.get<string>() << "\n";
+            std::cerr << g3.err.get<string>() << "\n";
+            g2 | g3;
+            g2();
+            g3();
+            std::cerr << g2.out.get<string>() << "\n";
+            std::cerr << g2.err.get<string>() << "\n";
+            std::cerr << g3.out.get<string>() << "\n";
+            std::cerr << g3.err.get<string>() << "\n";
+
+            // cls && g++ src/client.cpp -Isrc -std=c++26 -lole32 -lOleAut32 -g -O0 -static-libstdc++ -static-libgcc -static -lpthread
+            // g++ src/client.cpp -Isrc -std=c++26 -lole32 -lOleAut32 -g -O0 -static-libstdc++ -static-libgcc -static -lpthread
+            // mingw command
+            gcc_command build_sw;
+            build_sw += *gpp, "src/client.cpp", "-Isrc", "-std=c++26",
+                // win
+                "-lole32", "-lOleAut32",
+                // dbg
+                //"-g", "-O0",
+                "-static-libstdc++", "-static-libgcc", "-static", "-lpthread"
+            ;
+        }
+
         build bb;
         bb.inputs = make_inputs(b);
         bb.run();

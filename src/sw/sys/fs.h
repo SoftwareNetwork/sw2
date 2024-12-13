@@ -59,7 +59,7 @@ struct path {
     void prepare() {
 #ifdef _WIN32
         normalize_path(value);
-        lower_drive_letter(value);
+        prepare_drive_letter(value);
 #endif
     }
 
@@ -169,9 +169,9 @@ struct path {
     static void normalize_path(std::string &s) {
         std::replace(s.begin(), s.end(), '\\', '/');
     }
-    static void lower_drive_letter(std::string &s) {
+    static void prepare_drive_letter(std::string &s) {
         if (s.size() > 1 && s[1] == ':') {
-            s[0] = tolower(s[0]);
+            s[0] = toupper(s[0]);
         }
     }
 };

@@ -13,6 +13,7 @@ namespace sw {
 template <bool Output>
 struct command_stream {
     static constexpr auto Input = !Output;
+    static constexpr HANDLE default_handle_value = 0; // or INVALID_HANDLE_VALUE?
 
     using second_end_of_pipe = command_stream<!Output>*;
     using stream_callback = std::function<void(string_view)>;
@@ -31,7 +32,7 @@ struct command_stream {
     };*/
 
     stream s;
-    HANDLE h = 0;
+    HANDLE h{default_handle_value};
     win32::pipe pipe;
 
     command_stream() = default;
@@ -78,8 +79,6 @@ struct command_stream {
                         Output ? CREATE_ALWAYS : OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0));
             },
             [&](second_end_of_pipe &e) {
-                SW_UNIMPLEMENTED;
-                // ok, but verify
                 if constexpr (Input) {
                     h = e->pipe.r;
                 } else {
@@ -88,11 +87,12 @@ struct command_stream {
                 }
             },
             [&](auto &) {
-                pipe.init(true);
                 if constexpr (Input) {
+                    pipe.init(true, false, false, true);
                     ex.register_handle(pipe.w);
                     h = pipe.r;
                 } else {
+                    pipe.init(false, true, true, false);
                     ex.register_handle(pipe.r);
                     h = pipe.w;
                 }
@@ -110,30 +110,36 @@ struct command_stream {
             },
             [&](string &s) {
                 if constexpr (Input) {
-                    SW_UNIMPLEMENTED;
-                    /*pipe.r.reset();
-                    ex.write_async(pipe.w, [&](auto &&f, auto &&buf, auto &&ec) mutable {
+                    pipe.r.reset();
+                    h = default_handle_value;
+                    ex.write_async(pipe.w, s.data(), s.size(), [&, pos = 0uz](auto &&cb, auto &&ec) mutable {
                         if (!ec) {
-                            s += buf;
-                            ex.write_async(pipe.w, std::move(f));
+                            pos += cb->datasize;
+                            ex.write_async(pipe.w, cb, s.data() + pos, s.size() - pos);
+                        } else {
+                            pipe.w.reset();
                         }
-                    });*/
+                    });
                 } else {
                     pipe.w.reset();
-                    ex.read_async(pipe.r, [&](auto &&f, auto &&buf, auto &&ec) mutable {
+                    h = default_handle_value;
+                    ex.read_async(pipe.r, [&](auto &&cb, auto &&ec) mutable {
                         if (!ec) {
-                            s += buf;
-                            ex.read_async(pipe.r, std::move(f));
+                            s.append((char *)cb->buf, cb->datasize);
+                            ex.read_async(pipe.r, cb);
+                        } else {
+                            pipe.r.reset();
                         }
                     });
                 }
             },
-            [&](second_end_of_pipe &) {
-                SW_UNIMPLEMENTED;
+            [&](second_end_of_pipe &e) {
                 if constexpr (Input) {
-                    //CloseHandle(d.si.StartupInfo.hStdInput);
+                    e->pipe.r.reset();
+                    h = default_handle_value;
                 } else {
-                   //CloseHandle(h);
+                    pipe.w.reset();
+                    h = default_handle_value;
                 }
             },
             [&](stream_callback &cb) {
@@ -153,21 +159,25 @@ struct command_stream {
                     });*/
                 } else {
                     pipe.w.reset();
-                    ex.read_async(pipe.r, [&, cb, s = string{}](auto &&f, auto &&buf, auto &&ec) mutable {
+                    ex.read_async(pipe.r, [&, scb = cb, s = string{}](auto &&cb, auto &&ec) mutable {
                         if (!ec) {
-                            s += buf;
+                            s.append((char *)cb->buf, cb->datasize);
                             if (auto p = s.find_first_of("\r\n"); p != -1) {
-                                cb(string_view(s.data(), p));
+                                scb(string_view(s.data(), p));
                                 p = s.find("\n", p);
                                 s = s.substr(p + 1);
                             }
-                            ex.read_async(pipe.r, std::move(f));
+                            ex.read_async(pipe.r, cb);
+                        } else {
+                            pipe.r.reset();
+                            h = default_handle_value;
                         }
                     });
                 }
             },
             [&](path &fn) {
                 CloseHandle(h);
+                h = default_handle_value;
             });
     }
     void inside_fork(int fd) {
@@ -198,7 +208,27 @@ struct command_stream {
         );
     }
     void finish() {
-        pipe = decltype(pipe){};
+        //pipe = decltype(pipe){};
+        visit(
+            s,
+            [&](inherit) {
+                h = default_handle_value;
+            },
+            [&](close_) {
+                // empty
+            },
+            [&](string &s) {
+                // empty
+            },
+            [&](second_end_of_pipe &) {
+                // empty
+            },
+            [&](stream_callback &cb) {
+                // empty
+            },
+            [&](path &fn) {
+                // empty
+            });
     }
     void close() {
         s = close_{};
@@ -242,7 +272,7 @@ struct raw_command {
     process_data d;
     //
     bool detach{};
-    bool exec{};
+    bool exec{}; // replace current process
     std::chrono::seconds time_limit{};
 
     // sync()
@@ -318,6 +348,8 @@ struct raw_command {
         flags |= CREATE_UNICODE_ENVIRONMENT;
         flags |= EXTENDED_STARTUPINFO_PRESENT;
         // flags |= CREATE_NO_WINDOW;
+        flags |= CREATE_SUSPENDED;
+        // CREATE_BREAKAWAY_FROM_JOB for detached?
 
         d.si.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
         if (detach) {
@@ -432,6 +464,7 @@ struct raw_command {
             }
             cb();
         });
+        WINAPI_CALL(ResumeThread(d.thread));
         /*visit(
             out.s,
             [&](command_pointer_holder &ch) {

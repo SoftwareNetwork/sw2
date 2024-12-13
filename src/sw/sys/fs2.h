@@ -45,7 +45,7 @@ auto read_file(const path &fn) {
     mmap_file<uint8_t> m{fn};
     return std::string(m.p, m.p+m.sz);
 }
-auto write_file(const path &fn, string_view v) {
+auto write_file(const path &fn, auto &&v) {
     if (!fs::exists(fn)) {
         fs::create_directories(fn.parent_path());
         std::ofstream{fn.fspath()};
@@ -100,14 +100,14 @@ string &&normalize_path(string &&s) {
     std::replace(s.begin(), s.end(), '\\', '/');
     return std::move(s);
 }
-void lower_drive_letter(string &s) {
+void prepare_drive_letter(string &s) {
     if (s.size() > 1 && s[1] == ':') {
-        s[0] = tolower(s[0]);
+        s[0] = toupper(s[0]);
     }
 }
 void mingw_drive_letter(string &s) {
     if (s.size() > 1 && s[1] == ':') {
-        s[0] = tolower(s[0]);
+        s[0] = toupper(s[0]);
         s = "/"s + s[0] + s.substr(2);
     }
 }
@@ -119,7 +119,7 @@ auto normalize_path(const path &p) {
 }
 auto normalize_path_and_drive(const path &p) {
     auto fn = normalize_path(p);
-    lower_drive_letter(fn);
+    prepare_drive_letter(fn);
     return fn;
 }
 
@@ -165,11 +165,11 @@ void write_file_once(const path &fn, const string &content, const path &lock_dir
     }
 }
 
-path resolve_executable(auto &&exe) {
+std::optional<path> resolve_executable(auto &&exe) {
 #ifdef _WIN32
-    auto p = getenv("Path");
+    auto p = getenv("Path"); // use W version?
     auto delim = ';';
-    auto exts = {".exe", ".bat", ".cmd", ".com"};
+    auto exts = {".exe", ".bat", ".cmd", ".com"}; // use PATHEXT? it has different order
 #else
     auto p = getenv("PATH");
     auto delim = ':';

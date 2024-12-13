@@ -254,13 +254,26 @@ struct special_variant : variant<any_setting, Types...> {
 };
 
 struct cpp_emitter {
-    struct ns {
+    struct scope {
         cpp_emitter &e;
-        ns(cpp_emitter &e, auto &&name) : e{e} {
-            e += "namespace "s + name + " {";
+        string tail;
+
+        scope(cpp_emitter &e, auto &&kv, auto &&name, auto &&tail) : e{e}, tail{tail} {
+            e += kv + " "s + name + " {";
         }
-        ~ns() {
-            e += "}";
+        scope(cpp_emitter &e) : e{e} {
+            e += "{";
+        }
+        ~scope() {
+            e += "}" + tail;
+        }
+    };
+    struct ns : scope {
+        ns(cpp_emitter &e, auto &&name) : scope{e, "namespace", name, ""} {
+        }
+    };
+    struct stru : scope {
+        stru(cpp_emitter &e, auto &&name) : scope{e, "struct", name, ";"} {
         }
     };
 
@@ -280,6 +293,92 @@ struct cpp_emitter {
     }
     auto namespace_(auto &&name) {
         return ns{*this, name};
+    }
+    auto struct_(auto &&name) {
+        return stru{*this, name};
+    }
+    operator const string &() const {return s;}
+};
+
+struct cpp_emitter2 {
+    struct line {
+        using other = std::unique_ptr<cpp_emitter2>;
+        std::variant<string, other> s;
+        int indent{};
+
+        line() : s{std::make_unique<cpp_emitter2>()} {
+        }
+        line(const string &s) : s{s} {
+        }
+        template <auto N>
+        line(const char (&s)[N]) : line{string{s}} {
+        }
+        auto ptr() { return std::get<other>(s).get(); }
+        auto text(int parent_indent, const string &delim) const {
+            string t;
+            auto pi = parent_indent;
+            while (pi--) {
+                t += delim;
+            }
+            return t + visit(s, [](const string &s) {
+                    return s;
+                }, [&](const auto &e) {
+                    return e->text(parent_indent, delim);
+                });
+        }
+    };
+
+    struct scope {
+        cpp_emitter2 &e;
+        string tail;
+
+        scope(cpp_emitter2 &e, auto &&kv, auto &&name, auto &&tail) : e{e}, tail{tail} {
+            e += kv + " "s + name + " {";
+        }
+        scope(cpp_emitter2 &e) : e{e} {
+            e += "{";
+        }
+        ~scope() {
+            e += "}" + tail;
+        }
+    };
+    struct ns : scope {
+        ns(cpp_emitter2 &e, auto &&name) : scope{e, "namespace", name, ""} {
+        }
+    };
+    struct stru : scope {
+        stru(cpp_emitter2 &e, auto &&name) : scope{e, "struct", name, ";"} {
+        }
+    };
+
+    std::vector<line> lines;
+    int current_indent{};
+
+    cpp_emitter2 &operator+=(auto &&s) {
+        add_line(s);
+        return *this;
+    }
+    void add_line(auto &&s) {
+        lines.push_back(s);
+    }
+    void include(const path &p) {
+        auto fn = normalize_path_and_drive(p);
+        add_line("#include \"" + fn + "\"\n");
+    }
+    auto namespace_(auto &&name) {
+        auto &l = lines.emplace_back();
+        return ns{*l.ptr(), name};
+    }
+    auto struct_(auto &&name) {
+        auto &l = lines.emplace_back();
+        return stru{*l.ptr(), name};
+    }
+    string text(int parent_indent = 0, const string &delim = "  "s) const {
+        string s;
+        for (auto &&line : lines) {
+            s += line.text(parent_indent, delim) + "\n"s;
+        }
+        return s;
     }
 };
 

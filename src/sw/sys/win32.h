@@ -144,22 +144,25 @@ struct pipe {
     auto pipe_name() {
         return std::format(L"\\\\.\\pipe\\swpipe.{}.{}", GetCurrentProcessId(), pipe_id());
     }
-    void init(bool inherit = false) {
-        DWORD sz = 0;
+    void init(bool inherit_read, bool overlapped_read, bool inherit_write, bool overlapped_write) {
         auto s = pipe_name();
-        r = WINAPI_CALL_HANDLE(CreateNamedPipeW(s.c_str(), PIPE_ACCESS_INBOUND | FILE_FLAG_OVERLAPPED, 0, 1, sz, sz, 0, 0));
 
-        SECURITY_ATTRIBUTES sa = {0};
-        sa.bInheritHandle = !!inherit;
-        w = WINAPI_CALL_HANDLE(CreateFileW(s.c_str(), GENERIC_WRITE, 0, &sa, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED, 0));
+        SECURITY_ATTRIBUTES sar{};
+        sar.bInheritHandle = !!inherit_read;
+        DWORD buffer_size{};
+        r = WINAPI_CALL_HANDLE(CreateNamedPipeW(s.c_str(), PIPE_ACCESS_INBOUND | (overlapped_read ? FILE_FLAG_OVERLAPPED : 0), 0, 1, buffer_size, buffer_size, 0, &sar));
+
+        SECURITY_ATTRIBUTES saw{};
+        saw.bInheritHandle = !!inherit_write;
+        w = WINAPI_CALL_HANDLE(CreateFileW(s.c_str(), GENERIC_WRITE, 0, &saw, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | (overlapped_write ? FILE_FLAG_OVERLAPPED : 0), 0));
     }
     void init_double(bool inherit = false) {
-        SECURITY_ATTRIBUTES sa = {0};
+        SECURITY_ATTRIBUTES sa{};
         sa.bInheritHandle = !!inherit;
 
-        DWORD sz = 0;
         auto s = pipe_name();
-        r = WINAPI_CALL_HANDLE(CreateNamedPipeW(s.c_str(), PIPE_ACCESS_INBOUND, 0, 1, sz, sz, 0, &sa));
+        DWORD buffer_size{};
+        r = WINAPI_CALL_HANDLE(CreateNamedPipeW(s.c_str(), PIPE_ACCESS_INBOUND, 0, 1, buffer_size, buffer_size, 0, &sa));
         w = WINAPI_CALL_HANDLE(CreateFileW(s.c_str(), GENERIC_WRITE, 0, &sa, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0));
     }
 };
@@ -167,7 +170,19 @@ struct pipe {
 struct io_callback {
     OVERLAPPED o{};
     std::move_only_function<void(size_t)> f;
-    string buf;
+    uint8_t *buf{};
+    size_t bufsize;
+    size_t datasize{};
+    DWORD last_error{1}; // default error code
+
+    io_callback(size_t bufsize = 4096) : bufsize{bufsize} {
+        buf = new uint8_t[bufsize];
+    }
+    ~io_callback() {
+        delete [] buf;
+    }
+    auto data() const {return buf;}
+    auto size() const {return datasize;}
 };
 
 struct executor {
@@ -210,7 +225,7 @@ struct executor {
             case JOB_OBJECT_MSG_NEW_PROCESS:
                 break;
             case JOB_OBJECT_MSG_ACTIVE_PROCESS_ZERO:
-                if (process_callbacks.size() != 1) {
+                if (process_callbacks.size() != 0) {
                     throw std::logic_error{"bad process_callbacks, you did not call anything"};
                 }
                 (uint64_t &)o = process_callbacks.begin()->first;
@@ -242,7 +257,7 @@ struct executor {
         }
         --jobs;
         o->f(bytes);
-        delete o;
+        //delete o;
     }
 
     void register_handle(auto &&h) {
@@ -259,27 +274,58 @@ struct executor {
         process_callbacks.emplace(pid, FWD(f));
     }
 
-    void read_async(auto &&h, auto &&f) {
+    void read_async(auto &&h, auto &&user_f) {
         auto cb = new io_callback;
-        cb->buf.resize(4096);
-        cb->f = [cb, f = std::move(f)](size_t sz) mutable {
+        cb->f = [cb, user_f = std::move(user_f)](size_t sz) mutable {
+            cb->datasize = sz;
             if (sz == 0) {
-                f(std::move(f), cb->buf, std::error_code(1, std::generic_category()));
+                user_f(cb, std::error_code(cb->last_error, std::generic_category()));
+                delete cb;
             } else {
-                cb->buf.resize(sz);
-                f(std::move(f), cb->buf, std::error_code{});
+                user_f(cb, std::error_code{});
             }
         };
+        read_async(h, cb);
+    }
+    void read_async(auto &&h, io_callback *cb) {
+        cb->o = OVERLAPPED{};
         ++jobs;
-        if (!ReadFile(h, cb->buf.data(), cb->buf.size(), 0, (OVERLAPPED *)cb)) {
+        DWORD bytes_read;
+        if (!ReadFile(h, cb->buf, cb->bufsize, &bytes_read, (OVERLAPPED *)cb)) {
             auto err = GetLastError();
             if (err != ERROR_IO_PENDING) {
                 --jobs;
-                f(std::move(f), cb->buf, std::error_code(err, std::generic_category()));
-                delete cb;
+                cb->last_error = err;
+                cb->f(0);
             }
-        } else {
-            // operation will be complete via io port
+        }
+    }
+
+    void write_async(auto &&h, void *data, size_t sz, auto &&user_f) {
+        auto cb = new io_callback;
+        cb->f = [cb, user_f = std::move(user_f)](size_t sz) mutable {
+            cb->datasize = sz;
+            if (sz == 0) {
+                user_f(cb, std::error_code(cb->last_error, std::generic_category()));
+                delete cb;
+            } else {
+                user_f(cb, std::error_code{});
+            }
+        };
+        write_async(h, cb, data, sz);
+    }
+    void write_async(auto &&h, io_callback *cb, void *data, size_t sz) {
+        cb->o = OVERLAPPED{};
+        auto tocopy = std::min(sz, cb->bufsize);
+        memcpy(cb->buf, data, tocopy);
+        ++jobs;
+        if (!WriteFile(h, cb->buf, tocopy, 0, (OVERLAPPED *)cb)) {
+            auto err = GetLastError();
+            if (err != ERROR_IO_PENDING) {
+                --jobs;
+                cb->last_error = err;
+                cb->f(0);
+            }
         }
     }
 };

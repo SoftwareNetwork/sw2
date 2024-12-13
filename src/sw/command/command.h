@@ -392,8 +392,12 @@ if [ $E -ne 0 ]; then echo "Error code: $E"; fi
         base::operator>(p);
         outputs.insert(p);
     }
+
+    // this operator will run commands
     void operator|(auto &c) {
-        {
+        out.s = &c.in;
+        c.in.s = &out;
+        /*{
             command_pointer_holder ch;
             ch.r = &c;
             ch.io = &c;
@@ -404,7 +408,12 @@ if [ $E -ne 0 ]; then echo "Error code: $E"; fi
             ch.r = this;
             ch.io = this;
             c.in = ch;
-        }
+        }*/
+    }
+    // this operator will make a pipe between commands
+    void operator|=(auto &c) {
+        out.s = &c.in;
+        c.in.s = &out;
     }
 
     string name() const {
@@ -421,14 +430,12 @@ if [ $E -ne 0 ]; then echo "Error code: $E"; fi
         }
         return print();
     }
-
     string get_error_message() {
         if (ok()) {
             return {};
         }
         return "command failed: " + name() + ":\n" + raw_command::get_error_message();
     }
-
     void save(const path &dir, shell_type t = detect_shell()) {
         auto fn = dir / std::to_string(hash()) += visit(t,[](auto &&v){return v.extension;});
         string s;
@@ -490,6 +497,21 @@ if [ $E -ne 0 ]; then echo "Error code: $E"; fi
 #else
         return io_command::shell::sh{};
 #endif
+    }
+
+    /*struct command_result {
+        bool success{};
+
+        command_result() = default;
+        command_result(const decltype(exit_code) &e) : success{e ? *e == 0 : false} {}
+
+        operator bool() const {return success;}
+    };*/
+    bool operator()(this auto &&self) {
+        executor ex;
+        self.run(ex, []{});
+        ex.run();
+        return self.exit_code ? *self.exit_code == 0 : false;
     }
 };
 
@@ -627,11 +649,15 @@ struct cl_exe_command : io_command {
 struct gcc_command : io_command {
     path deps_file;
 
-    void run(auto &&ex, auto &&cb) {
+    gcc_command() {
         err = ""s;
         out = ""s;
-
+    }
+    void run(auto &&ex, auto &&cb) {
         io_command::run(ex, cb);
+    }
+    void run(auto &&ex) {
+        run(ex, [&]{process_deps();});
     }
     void process_deps() {
         auto is_space = [](auto c) {
