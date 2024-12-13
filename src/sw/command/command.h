@@ -394,21 +394,39 @@ if [ $E -ne 0 ]; then echo "Error code: $E"; fi
     }
 
     // this operator will run commands
-    void operator|(auto &c) {
-        out.s = &c.in;
-        c.in.s = &out;
-        /*{
-            command_pointer_holder ch;
-            ch.r = &c;
-            ch.io = &c;
-            c.out = ch;
+    struct command_pipeline {
+        std::vector<std::function<void(executor&)>> commands;
+        raw_command *last;
+
+        command_pipeline(auto &l, auto &r) {
+            add(l);
+            add(r);
         }
-        {
-            command_pointer_holder ch;
-            ch.r = this;
-            ch.io = this;
-            c.in = ch;
-        }*/
+        ~command_pipeline() noexcept(false) {
+            executor ex;
+            for (auto &&c : commands) {
+                c(ex);
+            }
+            ex.run();
+        }
+        void add(auto &v) {
+            commands.emplace_back([&](auto &ex){
+                v.run(ex);
+            });
+            last = &v;
+        }
+        command_pipeline &&operator|(auto &c) {
+            last->out.s = &c.in;
+            c.in.s = &last->out;
+            add(c);
+            return std::move(*this);
+        }
+    };
+    auto operator|(this auto &&self, auto &&c) {
+        self.out.s = &c.in;
+        c.in.s = &self.out;
+        command_pipeline p{self, c};
+        return p;
     }
     // this operator will make a pipe between commands
     void operator|=(auto &c) {

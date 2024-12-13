@@ -150,7 +150,7 @@ exec {} exec -remove-shebang "$@"
             std::cerr << g.out.get<string>() << "\n";
 
             gcc_command g2;
-            g2 += *gpp, "asdasd";
+            g2 += *gpp, "asdasd", "-otest";
             ret = g() && g2();
             ret = g2() && g();
             ret = ret || g();
@@ -159,8 +159,8 @@ exec {} exec -remove-shebang "$@"
             std::cerr << g2.err.get<string>() << "\n";
 
             gcc_command g3;
-            g3 += *gpp, "-c", "-xc++", "-", "-otest";
-            g3.in = string{"#include <iostream>\nint main(){}"};
+            g3 += *gpp, "-xc++", "-", "-std=c++26", "-otest", "-lstdc++exp", "-static-libstdc++", "-static-libgcc", "-static", "-lpthread";
+            g3.in = string{"#include <print>\nint main(){std::println(\"hello world\");}"};
             g3();
             std::cerr << g3.out.get<string>() << "\n";
             std::cerr << g3.err.get<string>() << "\n";
@@ -174,12 +174,21 @@ exec {} exec -remove-shebang "$@"
             std::cerr << g3.out.get<string>() << "\n";
             std::cerr << g3.err.get<string>() << "\n";
             g2 | g3;
-            g2();
-            g3();
-            std::cerr << g2.out.get<string>() << "\n";
+            //std::cerr << g2.out.get<string>() << "\n";
             std::cerr << g2.err.get<string>() << "\n";
             std::cerr << g3.out.get<string>() << "\n";
             std::cerr << g3.err.get<string>() << "\n";
+            g2();
+            g3();
+            //std::cerr << g2.out.get<string>() << "\n";
+            std::cerr << g2.err.get<string>() << "\n";
+            std::cerr << g3.out.get<string>() << "\n";
+            std::cerr << g3.err.get<string>() << "\n";
+            g2 | g3 | g;
+            std::cerr << g2.err.get<string>() << "\n";
+            std::cerr << g3.err.get<string>() << "\n";
+            std::cerr << g.out.get<string>() << "\n";
+            std::cerr << g.err.get<string>() << "\n";
 
             // cls && g++ src/client.cpp -Isrc -std=c++26 -lole32 -lOleAut32 -g -O0 -static-libstdc++ -static-libgcc -static -lpthread
             // g++ src/client.cpp -Isrc -std=c++26 -lole32 -lOleAut32 -g -O0 -static-libstdc++ -static-libgcc -static -lpthread

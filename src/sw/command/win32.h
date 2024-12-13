@@ -112,9 +112,9 @@ struct command_stream {
                 if constexpr (Input) {
                     pipe.r.reset();
                     h = default_handle_value;
-                    ex.write_async(pipe.w, s.data(), s.size(), [&, pos = 0uz](auto &&cb, auto &&ec) mutable {
-                        if (!ec) {
-                            pos += cb->datasize;
+                    ex.write_async(pipe.w, s.data(), s.size(), [&, pos = 0uz](auto &&cb) mutable {
+                        if (!cb->ec) {
+                            pos += cb->size;
                             ex.write_async(pipe.w, cb, s.data() + pos, s.size() - pos);
                         } else {
                             pipe.w.reset();
@@ -123,12 +123,16 @@ struct command_stream {
                 } else {
                     pipe.w.reset();
                     h = default_handle_value;
-                    ex.read_async(pipe.r, [&](auto &&cb, auto &&ec) mutable {
-                        if (!ec) {
-                            s.append((char *)cb->buf, cb->datasize);
-                            ex.read_async(pipe.r, cb);
+                    s.resize(4096);
+                    ex.read_async(pipe.r, s.data(), s.size(), [&, pos = 0uz](auto &&cb) mutable {
+                        if (!cb->ec) {
+                            pos += cb->size;
+                            if (pos == s.size()) {
+                                s.resize(s.size() + 4096);
+                            }
+                            ex.read_async(pipe.r, cb, s.data() + pos, s.size() - pos);
                         } else {
-                            pipe.r.reset();
+                            s.resize(pos);
                         }
                     });
                 }
@@ -143,6 +147,7 @@ struct command_stream {
                 }
             },
             [&](stream_callback &cb) {
+                SW_UNIMPLEMENTED;
                 if constexpr (Input) {
                     SW_UNIMPLEMENTED;
                     /*pipe.r.reset();
@@ -158,9 +163,9 @@ struct command_stream {
                         }
                     });*/
                 } else {
-                    pipe.w.reset();
-                    ex.read_async(pipe.r, [&, scb = cb, s = string{}](auto &&cb, auto &&ec) mutable {
-                        if (!ec) {
+                    /*pipe.w.reset();
+                    ex.read_async(pipe.r, [&, scb = cb, s = string{}](auto &&cb) mutable {
+                        if (!cb->ec) {
                             s.append((char *)cb->buf, cb->datasize);
                             if (auto p = s.find_first_of("\r\n"); p != -1) {
                                 scb(string_view(s.data(), p));
@@ -172,7 +177,7 @@ struct command_stream {
                             pipe.r.reset();
                             h = default_handle_value;
                         }
-                    });
+                    });*/
                 }
             },
             [&](path &fn) {
@@ -207,7 +212,7 @@ struct command_stream {
                 }
         );
     }
-    void finish() {
+    void finish(auto &&ex) {
         //pipe = decltype(pipe){};
         visit(
             s,
@@ -218,7 +223,13 @@ struct command_stream {
                 // empty
             },
             [&](string &s) {
-                // empty
+                if constexpr (Input) {
+                    //ex.cancel(pipe.w.h);
+                    pipe.w.reset();
+                } else {
+                    ex.cancel(pipe.r.h);
+                    pipe.r.reset();
+                }
             },
             [&](second_end_of_pipe &) {
                 // empty
@@ -410,7 +421,7 @@ struct raw_command {
             _exit(0);
         }
         if (detach) {
-            finish();
+            finish(ex);
             exit_code = 0;
             cb();
         }
@@ -436,7 +447,7 @@ struct raw_command {
         // If we do not create default job for main process, we have a race here.
         // If main process is killed before register_process() call, created process
         // won't stop.
-        ex.register_process(d.pi.hProcess, d.pi.dwProcessId, [this, cb, process_job = std::move(process_job)](bool time_limit_hit) {
+        ex.register_process(d.pi.hProcess, d.pi.dwProcessId, [this, &ex, cb, process_job = std::move(process_job)](bool time_limit_hit) {
             if (time_limit_hit) {
                 TerminateProcess(d.pi.hProcess, 1);
             }
@@ -453,7 +464,7 @@ struct raw_command {
 
             //scope_exit se{[&] {
                 //CloseHandle(pi.hProcess); // we may want to use h in the callback?
-                finish();
+                finish(ex);
             //}};
             if (time_limit_hit) {
                 if (auto p = std::get_if<path>(&err.s)) {
@@ -502,15 +513,15 @@ struct raw_command {
         return *exit_code;
     }
 
-    void finish() {
-        in.finish();
-        out.finish();
-        err.finish();
+    void finish(auto &&ex) {
+        in.finish(ex);
+        out.finish(ex);
+        err.finish(ex);
         d.close();
     }
-    void terminate() {
+    void terminate(auto &&ex) {
         TerminateProcess(d.pi.hProcess, 1);
-        finish();
+        finish(ex);
     }
 
     void add(auto &&p) {
@@ -575,11 +586,11 @@ struct raw_command {
             f(f,p->r);
         }*/
     }
-    void terminate_chain() {
+    void terminate_chain(auto &&ex) {
         if (is_pipe_leader()) {
             if (d.pi.hProcess) {
                 //SW_UNIMPLEMENTED;
-                terminate();
+                terminate(ex);
             }
         } else {
             SW_UNIMPLEMENTED;
