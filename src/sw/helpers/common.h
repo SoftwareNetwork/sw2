@@ -81,10 +81,17 @@ struct iter_with_range {
   T range;
   std::ranges::iterator_t<T> i;
 
-  iter_with_range(T &&r) : range{r}, i{range.begin()} {}
-  auto operator*() const { return *i; }
-  void operator++() { ++i; }
-  bool operator==(auto &&) const { return i == std::end(range); }
+  iter_with_range(T &&r) : range{r}, i{range.begin()} {
+  }
+  auto operator*() const {
+    return *i;
+  }
+  void operator++() {
+    ++i;
+  }
+  bool operator==(auto &&) const {
+    return i == std::end(range);
+  }
 };
 
 template <typename F>
@@ -95,7 +102,9 @@ struct scope_exit {
     if (!disabled)
       f();
   }
-  void disable() { disabled = true; }
+  void disable() {
+    disabled = true;
+  }
 };
 
 template <typename T>
@@ -112,7 +121,9 @@ struct types {
   static constexpr bool contains() {
     return (false || ... || std::same_as<Types, T>);
   }
-  static auto for_each(auto &&f) { return (f((Types **)nullptr) || ... || false); }
+  static auto for_each(auto &&f) {
+    return (f((Types **)nullptr) || ... || false);
+  }
 };
 
 #ifndef FWD
@@ -121,15 +132,21 @@ struct types {
 
 template <typename... Ts>
 struct overload : Ts... {
-  overload(Ts... ts) : Ts(FWD(ts))... {}
+  overload(Ts &&...ts) : Ts(FWD(ts))... {
+  }
   using Ts::operator()...;
 };
 
-decltype(auto) visit(auto &&var, auto &&...f) { return ::std::visit(overload{FWD(f)...}, var); }
-decltype(auto) visit_any(auto &&var, auto &&...f) {
-  return visit(FWD(var), overload{FWD(f)..., [](auto &&) {}});
+decltype(auto) visit(auto &&var, auto &&...f) {
+  return ::std::visit(overload{FWD(f)...}, FWD(var));
 }
-decltype(auto) visit1(auto &&var, auto &&...f) { return overload{FWD(f)...}(FWD(var)); }
+decltype(auto) visit_any(auto &&var, auto &&...f) {
+  return visit(FWD(var), overload{FWD(f)..., [](auto &&) {
+                                  }});
+}
+decltype(auto) visit1(auto &&var, auto &&...f) {
+  return overload{FWD(f)...}(FWD(var));
+}
 
 template <typename T, typename Head, typename... Types>
 static constexpr bool contains() {
@@ -156,7 +173,8 @@ struct swap_and_restore {
   bool should_restore{true};
 
 public:
-  swap_and_restore(T &restore) : swap_and_restore(restore, restore) {}
+  swap_and_restore(T &restore) : swap_and_restore(restore, restore) {
+  }
   template <typename U>
   swap_and_restore(T &restore, U NewVal) : restore(restore), original_value(restore) {
     restore = std::move(NewVal);
@@ -188,7 +206,9 @@ size_t fnv1a(auto &&in) {
 template <class T>
 inline size_t hash_combine(size_t &seed, const T &v) {
   auto distribute = [](size_t n) {
-    auto xorshift = [](size_t n, int i) { return n ^ (n >> i); };
+    auto xorshift = [](size_t n, int i) {
+      return n ^ (n >> i);
+    };
     uint64_t p = 0x5555555555555555ull;
     uint64_t c = 17316035218449499591ull; // use fnv1a prime?
     return c * xorshift(p * xorshift(n, 32), 32);
@@ -216,7 +236,9 @@ struct special_variant : variant<any_setting, Types...> {
   using base::base;
   using base::operator=;
 
-  auto operator<(const special_variant &rhs) const { return base::index() < rhs.base::index(); }
+  auto operator<(const special_variant &rhs) const {
+    return base::index() < rhs.base::index();
+  }
   // auto operator==(const build_settings &) const = default;
 
   template <typename T>
@@ -228,16 +250,24 @@ struct special_variant : variant<any_setting, Types...> {
     return false;
   }
 
-  auto for_each(auto &&f) { (f(Types{}), ...); }
+  auto for_each(auto &&f) {
+    (f(Types{}), ...);
+  }
 
-  decltype(auto) visit(auto &&...args) const { return ::sw::visit(*this, FWD(args)...); }
-  decltype(auto) visit_any(auto &&...args) const { return ::sw::visit_any(*this, FWD(args)...); }
+  decltype(auto) visit(auto &&...args) const {
+    return ::sw::visit(*this, FWD(args)...);
+  }
+  decltype(auto) visit_any(auto &&...args) const {
+    return ::sw::visit_any(*this, FWD(args)...);
+  }
   // name visit special or?
   decltype(auto) visit_no_special(auto &&...args) {
-    return ::sw::visit(*this, FWD(args)..., [](any_setting &) {});
+    return ::sw::visit(*this, FWD(args)..., [](any_setting &) {
+    });
   }
   decltype(auto) visit_no_special(auto &&...args) const {
-    return ::sw::visit(*this, FWD(args)..., [](const any_setting &) {});
+    return ::sw::visit(*this, FWD(args)..., [](const any_setting &) {
+    });
   }
 };
 
@@ -246,15 +276,23 @@ struct cpp_emitter {
     cpp_emitter &e;
     string tail;
 
-    scope(cpp_emitter &e, auto &&kv, auto &&name, auto &&tail) : e{e}, tail{tail} { e += kv + " "s + name + " {"; }
-    scope(cpp_emitter &e) : e{e} { e += "{"; }
-    ~scope() { e += "}" + tail; }
+    scope(cpp_emitter &e, auto &&kv, auto &&name, auto &&tail) : e{e}, tail{tail} {
+      e += kv + " "s + name + " {";
+    }
+    scope(cpp_emitter &e) : e{e} {
+      e += "{";
+    }
+    ~scope() {
+      e += "}" + tail;
+    }
   };
   struct ns : scope {
-    ns(cpp_emitter &e, auto &&name) : scope{e, "namespace", name, ""} {}
+    ns(cpp_emitter &e, auto &&name) : scope{e, "namespace", name, ""} {
+    }
   };
   struct stru : scope {
-    stru(cpp_emitter &e, auto &&name) : scope{e, "struct", name, ";"} {}
+    stru(cpp_emitter &e, auto &&name) : scope{e, "struct", name, ";"} {
+    }
   };
 
   string s;
@@ -264,14 +302,22 @@ struct cpp_emitter {
     add_line(s);
     return *this;
   }
-  void add_line(auto &&s) { this->s += s + "\n"s; }
+  void add_line(auto &&s) {
+    this->s += s + "\n"s;
+  }
   void include(const path &p) {
     auto fn = normalize_path_and_drive(p);
     s += "#include \"" + fn + "\"\n";
   }
-  auto namespace_(auto &&name) { return ns{*this, name}; }
-  auto struct_(auto &&name) { return stru{*this, name}; }
-  operator const string &() const { return s; }
+  auto namespace_(auto &&name) {
+    return ns{*this, name};
+  }
+  auto struct_(auto &&name) {
+    return stru{*this, name};
+  }
+  operator const string &() const {
+    return s;
+  }
 };
 
 struct cpp_emitter2 {
@@ -280,19 +326,30 @@ struct cpp_emitter2 {
     std::variant<string, other> s;
     int indent{};
 
-    line() : s{std::make_unique<cpp_emitter2>()} {}
-    line(const string &s) : s{s} {}
+    line() : s{std::make_unique<cpp_emitter2>()} {
+    }
+    line(const string &s) : s{s} {
+    }
     template <auto N>
-    line(const char (&s)[N]) : line{string{s}} {}
-    auto ptr() { return std::get<other>(s).get(); }
+    line(const char (&s)[N]) : line{string{s}} {
+    }
+    auto ptr() {
+      return std::get<other>(s).get();
+    }
     auto text(int parent_indent, const string &delim) const {
       string t;
       auto pi = parent_indent;
       while (pi--) {
         t += delim;
       }
-      return t +
-             visit(s, [](const string &s) { return s; }, [&](const auto &e) { return e->text(parent_indent, delim); });
+      return t + visit(
+                     s,
+                     [](const string &s) {
+                       return s;
+                     },
+                     [&](const auto &e) {
+                       return e->text(parent_indent, delim);
+                     });
     }
   };
 
@@ -300,15 +357,23 @@ struct cpp_emitter2 {
     cpp_emitter2 &e;
     string tail;
 
-    scope(cpp_emitter2 &e, auto &&kv, auto &&name, auto &&tail) : e{e}, tail{tail} { e += kv + " "s + name + " {"; }
-    scope(cpp_emitter2 &e) : e{e} { e += "{"; }
-    ~scope() { e += "}" + tail; }
+    scope(cpp_emitter2 &e, auto &&kv, auto &&name, auto &&tail) : e{e}, tail{tail} {
+      e += kv + " "s + name + " {";
+    }
+    scope(cpp_emitter2 &e) : e{e} {
+      e += "{";
+    }
+    ~scope() {
+      e += "}" + tail;
+    }
   };
   struct ns : scope {
-    ns(cpp_emitter2 &e, auto &&name) : scope{e, "namespace", name, ""} {}
+    ns(cpp_emitter2 &e, auto &&name) : scope{e, "namespace", name, ""} {
+    }
   };
   struct stru : scope {
-    stru(cpp_emitter2 &e, auto &&name) : scope{e, "struct", name, ";"} {}
+    stru(cpp_emitter2 &e, auto &&name) : scope{e, "struct", name, ";"} {
+    }
   };
 
   std::vector<line> lines;
@@ -318,7 +383,9 @@ struct cpp_emitter2 {
     add_line(s);
     return *this;
   }
-  void add_line(auto &&s) { lines.push_back(s); }
+  void add_line(auto &&s) {
+    lines.push_back(s);
+  }
   void include(const path &p) {
     auto fn = normalize_path_and_drive(p);
     add_line("#include \"" + fn + "\"\n");

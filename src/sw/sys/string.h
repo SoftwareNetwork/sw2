@@ -47,7 +47,7 @@ using namespace std::literals;
   return s;
 }
 
-std::string replace_all(std::string s, const std::string &pattern, const std::string &repl) {
+inline std::string replace_all(std::string s, const std::string &pattern, const std::string &repl) {
   size_t pos{};
   while ((pos = s.find(pattern, pos)) != -1) {
     s = s.substr(0, pos) + repl + s.substr(pos + pattern.size());
@@ -67,7 +67,7 @@ constexpr auto operator""_s() {
   return s;
 }
 
-string to_upper_copy(string in) {
+inline string to_upper_copy(string in) {
   std::transform(in.begin(), in.end(), in.begin(), ::toupper);
   return std::move(in);
 }

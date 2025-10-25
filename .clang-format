@@ -5,8 +5,8 @@ AllowShortIfStatementsOnASingleLine: false
 IndentCaseLabels: false
 ColumnLimit: 120
 AccessModifierOffset: -2
-AllowShortFunctionsOnASingleLine: true
-AllowShortLambdasOnASingleLine: true
+AllowShortFunctionsOnASingleLine: false
+AllowShortLambdasOnASingleLine: false
 
 AlignTrailingComments: true
 
@@ -20,3 +20,5 @@ AlwaysBreakTemplateDeclarations: Yes
 #SeparateDefinitionBlocks: Leave
 
 LineEnding: LF
+
+ReflowComments: false
